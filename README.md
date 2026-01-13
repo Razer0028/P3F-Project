@@ -1,4 +1,4 @@
-# edge-stack IaC
+# P3F-Project (edge-stack IaC)
 
 IaC workspace for the on-prem + VPS + EC2 failover stack.
 
