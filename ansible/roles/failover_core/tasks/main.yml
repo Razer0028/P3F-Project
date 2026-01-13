@@ -52,33 +52,108 @@
         - failover_aws_access_key_id | length > 0
         - failover_aws_secret_access_key | length > 0
 
-    - name: Write AWS credentials for failover
-      copy:
-        dest: "{{ failover_aws_credentials_path }}"
+    - name: Ensure AWS credentials file exists
+      file:
+        path: "{{ failover_aws_credentials_path }}"
+        state: touch
         owner: root
         group: root
         mode: "0600"
-        content: |
-          [{% if (failover_aws_profile | default('default')) == 'default' %}default{% else %}{{ failover_aws_profile }}{% endif %}]
-          aws_access_key_id={{ failover_aws_access_key_id }}
-          aws_secret_access_key={{ failover_aws_secret_access_key }}{% if failover_aws_session_token | length > 0 %}
-          aws_session_token={{ failover_aws_session_token }}{% endif %}
       when:
         - failover_aws_manage | default(false)
         - failover_aws_access_key_id | length > 0
         - failover_aws_secret_access_key | length > 0
       no_log: true
 
-    - name: Write AWS config for failover
-      copy:
-        dest: "{{ failover_aws_config_path }}"
+    - name: Write AWS access key for failover
+      ini_file:
+        path: "{{ failover_aws_credentials_path }}"
+        section: "{{ \"default\" if (failover_aws_profile | default(\"default\")) == \"default\" else failover_aws_profile }}"
+        option: aws_access_key_id
+        value: "{{ failover_aws_access_key_id }}"
+        mode: "0600"
+      when:
+        - failover_aws_manage | default(false)
+        - failover_aws_access_key_id | length > 0
+        - failover_aws_secret_access_key | length > 0
+      no_log: true
+
+    - name: Write AWS secret for failover
+      ini_file:
+        path: "{{ failover_aws_credentials_path }}"
+        section: "{{ \"default\" if (failover_aws_profile | default(\"default\")) == \"default\" else failover_aws_profile }}"
+        option: aws_secret_access_key
+        value: "{{ failover_aws_secret_access_key }}"
+        mode: "0600"
+      when:
+        - failover_aws_manage | default(false)
+        - failover_aws_access_key_id | length > 0
+        - failover_aws_secret_access_key | length > 0
+      no_log: true
+
+    - name: Write AWS session token for failover (optional)
+      ini_file:
+        path: "{{ failover_aws_credentials_path }}"
+        section: "{{ \"default\" if (failover_aws_profile | default(\"default\")) == \"default\" else failover_aws_profile }}"
+        option: aws_session_token
+        value: "{{ failover_aws_session_token }}"
+        mode: "0600"
+      when:
+        - failover_aws_manage | default(false)
+        - failover_aws_access_key_id | length > 0
+        - failover_aws_secret_access_key | length > 0
+        - failover_aws_session_token | length > 0
+      no_log: true
+
+    - name: Remove AWS session token when empty
+      ini_file:
+        path: "{{ failover_aws_credentials_path }}"
+        section: "{{ \"default\" if (failover_aws_profile | default(\"default\")) == \"default\" else failover_aws_profile }}"
+        option: aws_session_token
+        state: absent
+        mode: "0600"
+      when:
+        - failover_aws_manage | default(false)
+        - failover_aws_access_key_id | length > 0
+        - failover_aws_secret_access_key | length > 0
+        - failover_aws_session_token | length == 0
+      no_log: true
+
+    - name: Ensure AWS config file exists
+      file:
+        path: "{{ failover_aws_config_path }}"
+        state: touch
         owner: root
         group: root
         mode: "0600"
-        content: |
-          [{% if (failover_aws_profile | default('default')) == 'default' %}default{% else %}profile {{ failover_aws_profile }}{% endif %}]
-          region={{ failover_aws_region | default(failover_region) }}
-          output=json
+      when:
+        - failover_aws_manage | default(false)
+        - failover_aws_write_config | default(true)
+        - failover_aws_access_key_id | length > 0
+        - failover_aws_secret_access_key | length > 0
+      no_log: true
+
+    - name: Write AWS region for failover
+      ini_file:
+        path: "{{ failover_aws_config_path }}"
+        section: "{{ \"default\" if (failover_aws_profile | default(\"default\")) == \"default\" else \"profile \" ~ failover_aws_profile }}"
+        option: region
+        value: "{{ failover_aws_region | default(failover_region) }}"
+        mode: "0600"
+      when:
+        - failover_aws_manage | default(false)
+        - failover_aws_write_config | default(true)
+        - failover_aws_access_key_id | length > 0
+        - failover_aws_secret_access_key | length > 0
+      no_log: true
+
+    - name: Write AWS output format for failover
+      ini_file:
+        path: "{{ failover_aws_config_path }}"
+        section: "{{ \"default\" if (failover_aws_profile | default(\"default\")) == \"default\" else \"profile \" ~ failover_aws_profile }}"
+        option: output
+        value: json
+        mode: "0600"
       when:
         - failover_aws_manage | default(false)
         - failover_aws_write_config | default(true)
