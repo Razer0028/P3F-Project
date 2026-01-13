@@ -1,0 +1,26 @@
+---
+containers_manage: false
+containers_root: /srv/edge-stack
+containers_owner: edge
+containers_group: edge
+containers_manage_user: true
+containers_owner_uid: 1000
+containers_owner_gid: 1000
+containers_enabled: []
+containers_start: false
+
+steamcmd_dir: "{{ containers_root }}/steamcmd"
+steamcmd_owner: "{{ containers_owner }}"
+steamcmd_group: "{{ containers_group }}"
+steamcmd_tarball: "/opt/serveradmin/archives/steamcmd_linux.tar.gz"
+
+web_portal_discord_webhook: ""
+
+web_portal_admin_enable: false
+web_portal_admin_user: ""
+web_portal_admin_password: ""
+web_portal_admin_realm: "admin-panel"
+web_portal_admin_allow_cidrs: []
+web_portal_admin_deny_cidrs: []
+web_portal_admin_htdigest: ""
+containers_compose_cmd: "docker compose"

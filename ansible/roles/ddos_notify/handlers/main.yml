@@ -1,0 +1,6 @@
+---
+- name: Restart ddos notify
+  systemd:
+    name: "{{ ddos_notify_service_name }}"
+    state: restarted
+    daemon_reload: true

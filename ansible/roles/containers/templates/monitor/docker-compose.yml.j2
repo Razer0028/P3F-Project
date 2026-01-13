@@ -1,0 +1,23 @@
+version: "3.9"
+
+services:
+  player_monitor:
+    build:
+      context: .
+      args:
+        MONITOR_USER: "{{ containers_owner }}"
+        MONITOR_UID: "{{ containers_owner_uid | default(1000) }}"
+        MONITOR_GID: "{{ containers_owner_gid | default(1000) }}"
+    container_name: player_monitor
+    restart: always
+
+    volumes:
+      # player_monitor が状態を書き込む場所
+      - {{ containers_root }}/monitor/opt_serveradmin:/opt/serveradmin
+
+      # docker.sock（ホスト操作用）
+      - /var/run/docker.sock:/var/run/docker.sock
+
+    environment:
+      PYTHONUNBUFFERED: "1"
+      TZ: "{{ timezone }}"

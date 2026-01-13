@@ -1,0 +1,11 @@
+[Unit]
+Description=Suricata DDoS Notify Service
+After=network-online.target
+
+[Service]
+ExecStart=/usr/bin/python3 {{ ddos_notify_script_path }}
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

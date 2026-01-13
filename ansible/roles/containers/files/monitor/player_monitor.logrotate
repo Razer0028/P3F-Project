@@ -1,0 +1,10 @@
+/opt/serveradmin/logs/player_monitor.log {
+    daily
+    rotate 30
+    compress
+    missingok
+    notifempty
+    size 5M
+    copytruncate
+}
+

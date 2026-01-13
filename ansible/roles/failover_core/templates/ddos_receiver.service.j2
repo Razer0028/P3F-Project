@@ -1,0 +1,10 @@
+[Unit]
+Description=UDP DDoS Notification Listener
+After=network.target
+
+[Service]
+ExecStart={{ failover_ddos_receiver_script }}
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

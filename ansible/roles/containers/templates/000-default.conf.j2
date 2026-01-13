@@ -1,0 +1,50 @@
+<VirtualHost *:80>
+    ServerName localhost
+
+    DocumentRoot /var/www/html/public
+
+    <Directory /var/www/html/public>
+        AllowOverride All
+        Options FollowSymLinks
+        Require all granted
+    </Directory>
+
+    # ---- 管理画面 ----
+    Alias /admin /var/www/html/admin
+
+    <Directory /var/www/html/admin>
+        AllowOverride None
+        Options FollowSymLinks
+        Require all granted
+    </Directory>
+
+    # ---- アクセス元IP 制御（Directory ではなく Location で） ----
+{% set admin_auth_enabled = (web_portal_admin_enable | default(false)) or ((web_portal_admin_htdigest | default("") | length) > 0) %}
+    <Location /admin>
+{% if admin_auth_enabled %}
+        <RequireAll>
+{% for cidr in (web_portal_admin_deny_cidrs | default([])) %}
+            Require not ip {{ cidr }}
+{% endfor %}
+{% if (web_portal_admin_allow_cidrs | default([])) | length > 0 %}
+            <RequireAny>
+{% for cidr in (web_portal_admin_allow_cidrs | default([])) %}
+                Require ip {{ cidr }}
+{% endfor %}
+            </RequireAny>
+{% else %}
+            Require all denied
+{% endif %}
+            Require valid-user
+        </RequireAll>
+        AuthType Digest
+        AuthName "{{ web_portal_admin_realm | default('admin-panel') }}"
+        AuthUserFile /var/www/html/admin/.htdigest
+{% else %}
+        Require all denied
+{% endif %}
+    </Location>
+
+    ErrorLog ${APACHE_LOG_DIR}/error.log
+    CustomLog ${APACHE_LOG_DIR}/access.log combined
+</VirtualHost>

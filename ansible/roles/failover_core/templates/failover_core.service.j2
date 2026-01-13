@@ -1,0 +1,20 @@
+[Unit]
+Description=Failover Controller (EC2 + DNS + WG + DDoS)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+{% if (failover_aws_profile | default('default')) != 'default' %}
+Environment=AWS_PROFILE={{ failover_aws_profile }}
+{% endif %}
+ExecStart={{ failover_core_python }} {{ failover_core_script }}
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+OOMScoreAdjust=-1000
+
+[Install]
+WantedBy=multi-user.target

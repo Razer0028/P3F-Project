@@ -1,0 +1,85 @@
+---
+failover_core_manage: false
+failover_core_require_vars: true
+failover_core_enable: true
+failover_core_state: started
+failover_core_restart_on_change: true
+failover_core_update_cache: true
+
+failover_ddos_receiver_manage: true
+failover_ddos_receiver_enable: true
+failover_ddos_receiver_state: started
+
+failover_core_path: /opt/failover
+failover_core_script: /opt/failover/failover_core.py
+failover_core_python: /usr/bin/python3
+failover_core_service: /etc/systemd/system/failover_core.service
+failover_core_service_name: failover_core
+
+failover_ddos_receiver_script: /opt/failover/ddos_receiver.sh
+failover_ddos_receiver_service: /etc/systemd/system/ddos_receiver.service
+failover_ddos_receiver_service_name: ddos_receiver
+
+failover_state_dir: /var/lib/failover
+failover_ddos_log: /var/log/ddos_receiver.log
+
+failover_auto_failback: "no"
+failover_failback_request_file: /var/lib/failover/failback.request
+
+failover_udp_port: 9001
+failover_instance_id: ""
+failover_region: "ap-northeast-1"
+failover_ec2_ip: ""
+failover_cf_token: ""
+failover_cf_zone_id: ""
+failover_cf_record_id: ""
+failover_dns_record_name: ""
+failover_aws_manage: true
+failover_aws_profile: "default"
+failover_aws_access_key_id: ""
+failover_aws_secret_access_key: ""
+failover_aws_session_token: ""
+failover_aws_region: "{{ failover_region }}"
+failover_aws_dir: "/root/.aws"
+failover_aws_credentials_path: "{{ failover_aws_dir }}/credentials"
+failover_aws_config_path: "{{ failover_aws_dir }}/config"
+failover_aws_write_config: true
+
+failover_wg0: "wg0"
+failover_wg1: "wg1"
+failover_wg0_bfd_peer: "10.100.0.1"
+
+failover_vps_ip: ""
+failover_vps_health_port: 18080
+
+failover_player_json: "{{ containers_root }}/monitor/opt_serveradmin/status/current_players.json"
+failover_player_threshold: 25
+failover_player_check_interval: 60
+failover_player_low_duration: 1200
+
+failover_bfd_down_threshold: 5
+failover_vps_health_up_threshold: 5
+failover_startup_grace: 20
+failover_failback_grace: 10
+failover_bfd_grace: 30
+failover_attack_mode_timeout: 3600
+
+failover_game_ports:
+  - 25565
+  - 25575
+  - 19132
+  - 19133
+  - 2456
+  - 2457
+  - 26900
+  - 26901
+  - 26902
+
+failover_wg_handshake_wait: 3
+failover_post_switch_grace: 2
+
+failover_core_packages:
+  - awscli
+  - conntrack
+  - netcat-openbsd
+  - python3

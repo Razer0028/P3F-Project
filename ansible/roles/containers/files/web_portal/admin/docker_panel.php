@@ -1,0 +1,905 @@
+<?php
+session_start();
+$_SESSION['admin_auth'] = true;
+require_once __DIR__ . '/../public/scripts/portal_config.php';
+
+/* ========= 定数 ========= */
+const WL_PATH = '{{ containers_root }}/minecraft/data/whitelist.json';  // ← 修正済み
+
+function h($s){ return htmlspecialchars($s ?? '', ENT_QUOTES, 'UTF-8'); }
+
+/* CSRF */
+if (empty($_SESSION['csrf'])) {
+    $_SESSION['csrf'] = bin2hex(random_bytes(16));
+}
+$csrf = $_SESSION['csrf'];
+
+/* whitelist 読み込み */
+function wl_read(){
+    if (!is_file(WL_PATH)) return [];
+    $raw = file_get_contents(WL_PATH);
+    $arr = json_decode($raw, true);
+    return is_array($arr)? $arr : [];
+}
+
+/* whitelist 削除 */
+function wl_delete_player($name){
+    if (!preg_match('/^[A-Za-z0-9_]{3,16}$/', $name)) {
+        return "不正なプレイヤー名です";
+    }
+
+    $fp = fopen(WL_PATH,'c+');
+    if(!$fp) return "whitelist.jsonを開けません（権限を確認してください）";
+    if(!flock($fp,LOCK_EX)){ fclose($fp); return "ロックに失敗しました"; }
+
+    $cur  = stream_get_contents($fp);
+    $list = $cur ? json_decode($cur,true) : [];
+    if(!is_array($list)) $list = [];
+
+    $origCount = count($list);
+
+    $list = array_values(array_filter($list, function($row) use($name){
+        return !isset($row['name']) || strcasecmp($row['name'],$name)!==0;
+    }));
+
+    if (count($list) === $origCount) {
+        flock($fp,LOCK_UN); fclose($fp);
+        return "指定のプレイヤーは見つかりません";
+    }
+
+    ftruncate($fp,0); rewind($fp);
+    fwrite($fp,json_encode($list, JSON_PRETTY_PRINT|JSON_UNESCAPED_UNICODE));
+    fflush($fp);
+    flock($fp,LOCK_UN);
+    fclose($fp);
+
+    return null;
+}
+
+/* ===== POST ハンドリング ===== */
+if ($_SERVER['REQUEST_METHOD']==='POST' && ($_POST['mode'] ?? '')==='wl_delete') {
+
+    if (!hash_equals($_SESSION['csrf'], $_POST['csrf'] ?? '')) {
+        $_SESSION['flash'] = "CSRFトークンが無効です";
+    } elseif (!in_array('minecraft', portal_enabled_service_ids(portal_load_config()), true)) {
+        $_SESSION['flash'] = "Minecraft が無効なため操作できません";
+    } else {
+        $delName = trim($_POST['player'] ?? '');
+        $err = wl_delete_player($delName);
+        $_SESSION['flash'] = $err
+            ? "❌ 削除に失敗: $err"
+            : "✅ {$delName} をホワイトリストから削除しました";
+    }
+
+    header('Location: '.basename(__FILE__), true, 303);
+    exit;
+}
+
+/* ===== 以下：状態取得（元のコードから修正なし） ===== */
+
+$resultMsg = $_SESSION['flash'] ?? '';
+unset($_SESSION['flash']);
+
+$portalConfig = portal_load_config();
+$enabledIds = portal_enabled_service_ids($portalConfig);
+$minecraftEnabled = in_array('minecraft', $enabledIds, true);
+$playerMonitorEnabled = in_array('player_monitor', $enabledIds, true);
+
+$statusJson  = shell_exec('sudo /opt/serveradmin/bin/docker_manage.sh status 2>&1');
+$containers  = [];
+if ($statusJson) {
+    $decoded = json_decode($statusJson, true);
+    if (is_array($decoded)) $containers = $decoded;
+}
+
+$catalog = [];
+$catalogError = null;
+$catalogOutput = [];
+$catalogCode = 0;
+exec('sudo /opt/serveradmin/bin/docker_manage.sh catalog 2>&1', $catalogOutput, $catalogCode);
+if ($catalogCode === 0) {
+    $catalog = json_decode(implode("\n", $catalogOutput), true);
+    if (!is_array($catalog)) {
+        $catalog = [];
+        $catalogError = 'catalog JSON parse error';
+    }
+} else {
+    $catalogError = implode("\n", $catalogOutput);
+}
+
+$gameRows = [];
+$services = $portalConfig['services'] ?? [];
+foreach ($services as $serviceId => $service) {
+    if (!is_array($service) || ($service['type'] ?? '') !== 'game') {
+        continue;
+    }
+    $containerName = $service['container'] ?? '';
+    if (!is_string($containerName) || $containerName === '') {
+        continue;
+    }
+    $entry = $catalog[$containerName] ?? [];
+    $archivePath = is_array($entry) ? ($entry['archive'] ?? '') : '';
+    $gameRows[] = [
+        'id' => $serviceId,
+        'label' => $service['label'] ?? $serviceId,
+        'container' => $containerName,
+        'enabled' => in_array($serviceId, $enabledIds, true),
+        'archive' => $archivePath,
+        'archive_exists' => is_array($entry) ? (bool)($entry['archive_exists'] ?? false) : false,
+        'dir_exists' => is_array($entry) ? (bool)($entry['dir_exists'] ?? false) : false,
+    ];
+}
+
+exec('uptime', $uptimeOut);
+$uptimeText = implode("
+", $uptimeOut);
+$uptimeShort = null;
+if (preg_match('/up\s+([^,]+(?:,\s*\d+:\d+)?),\s+\d+\s+user/', $uptimeText, $m)) {
+    $uptimeShort = trim($m[1]);
+}
+$loadAverages = null;
+if (preg_match('/load average[s]?:\s*([0-9.]+)[, ]+([0-9.]+)[, ]+([0-9.]+)/', $uptimeText, $m)) {
+    $loadAverages = [floatval($m[1]), floatval($m[2]), floatval($m[3])];
+}
+$cpuCount = intval(trim((string)shell_exec('nproc 2>/dev/null')));
+if ($cpuCount <= 0) {
+    $cpuCount = 1;
+}
+$cpuLoadPercent = null;
+if ($loadAverages) {
+    $cpuLoadPercent = round(min(100, ($loadAverages[0] / $cpuCount) * 100), 1);
+}
+
+exec('free -h', $memOut);
+$memText = implode("
+", $memOut);
+exec('free -m', $memOutRaw);
+$memTotal = $memUsed = $memAvail = null;
+if (!empty($memOutRaw)) {
+    foreach ($memOutRaw as $line) {
+        if (preg_match('/^Mem:\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)/', $line, $m)) {
+            $memTotal = intval($m[1]);
+            $memUsed = intval($m[2]);
+            $memAvail = intval($m[6]);
+            break;
+        }
+    }
+}
+$memUsedPercent = null;
+$memUsedGb = $memTotalGb = null;
+if ($memTotal) {
+    $memUsedPercent = round(($memUsed / $memTotal) * 100, 1);
+    $memUsedGb = round($memUsed / 1024, 1);
+    $memTotalGb = round($memTotal / 1024, 1);
+}
+
+exec('df -h /', $diskOut);
+$diskText = implode("
+", $diskOut);
+exec('df -Pm /', $diskOutRaw);
+$diskUsedPercent = null;
+$diskUsedGb = $diskTotalGb = null;
+if (isset($diskOutRaw[1])) {
+    $parts = preg_split('/\s+/', trim($diskOutRaw[1]));
+    if (count($parts) >= 6) {
+        $diskTotalMb = intval($parts[1]);
+        $diskUsedMb = intval($parts[2]);
+        $diskUsedPercent = floatval(rtrim($parts[4], '%'));
+        $diskUsedGb = round($diskUsedMb / 1024, 1);
+        $diskTotalGb = round($diskTotalMb / 1024, 1);
+    }
+}
+
+$playerLogPath = '/opt/serveradmin/logs/player_monitor.log';
+$playerLog = '';
+if ($playerMonitorEnabled && is_readable($playerLogPath)) {
+    $tailOut = [];
+    exec('tail -n 30 ' . escapeshellarg($playerLogPath), $tailOut);
+    $playerLog = implode("
+", $tailOut);
+}
+
+$wlList = $minecraftEnabled ? wl_read() : [];
+
+/* カード表示順 */
+$displayOrder = [];
+foreach (portal_enabled_services($portalConfig) as $service) {
+    $containerName = $service['container'] ?? '';
+    if (!is_string($containerName) || $containerName === '') {
+        continue;
+    }
+    $displayOrder[$containerName] = [
+        'label' => $service['label'] ?? $containerName,
+        'icon' => $service['img'] ?? '/images/soldir.jpg',
+    ];
+}
+?>
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>サーバー運用コンソール</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap');
+
+:root{
+  --bg:#f3f6fb;
+  --bg-grad:radial-gradient(circle at 12% 12%,rgba(14,165,164,.2) 0%,transparent 55%),
+            radial-gradient(circle at 90% 0%,rgba(59,130,246,.18) 0%,transparent 55%),
+            linear-gradient(180deg,#f8fafc 0%,#eef2ff 100%);
+  --surface:#ffffff;
+  --surface-2:#f1f5f9;
+  --border:#e2e8f0;
+  --text:#0f172a;
+  --text-dim:#475569;
+  --accent:#0f766e;
+  --accent-2:#1d4ed8;
+  --accent-soft:#ccfbf1;
+  --danger:#b42318;
+  --danger-soft:#fee2e2;
+  --warn:#b54708;
+  --warn-soft:#ffedd5;
+  --ok:#15803d;
+  --ok-soft:#dcfce7;
+  --radius-lg:18px;
+  --radius-md:12px;
+  --radius-sm:8px;
+  --shadow:0 18px 44px rgba(15,23,42,.1);
+  --shadow-soft:0 10px 28px rgba(15,23,42,.08);
+  --space-xs:6px;
+  --space-sm:10px;
+  --space-md:14px;
+  --space-lg:18px;
+  --fz-11:11px;
+  --fz-12:12px;
+  --fz-13:13px;
+  --fz-14:14px;
+  --font-head:"Space Grotesk","Zen Kaku Gothic New",sans-serif;
+  --font-body:"Zen Kaku Gothic New","Space Grotesk",sans-serif;
+}
+
+*{box-sizing:border-box;-webkit-font-smoothing:antialiased;}
+body{
+  margin:0;
+  min-height:100vh;
+  font-family:var(--font-body);
+  color:var(--text);
+  background:var(--bg);
+  background-image:var(--bg-grad);
+  background-attachment:fixed;
+}
+
+.site-header{
+  position:sticky;
+  top:0;
+  z-index:100;
+  background:rgba(255,255,255,.88);
+  backdrop-filter:blur(12px);
+  border-bottom:1px solid var(--border);
+  padding:12px 16px;
+  display:flex;
+  flex-wrap:wrap;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:var(--space-sm);
+  font-size:var(--fz-12);
+}
+.brand-block{
+  display:flex;
+  align-items:flex-start;
+  gap:var(--space-sm);
+  min-width:0;
+}
+.brand-icon{
+  width:38px;
+  height:38px;
+  border-radius:12px;
+  background:linear-gradient(135deg,#0f766e 0%,#14b8a6 100%);
+  color:#fff;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-size:16px;
+  font-weight:700;
+  box-shadow:var(--shadow-soft);
+  flex-shrink:0;
+}
+.brand-texts{
+  display:flex;
+  flex-direction:column;
+  min-width:0;
+}
+.brand-title{
+  font-family:var(--font-head);
+  font-size:15px;
+  font-weight:700;
+  color:var(--text);
+}
+.brand-sub{
+  font-size:var(--fz-12);
+  color:var(--text-dim);
+  max-width:220px;
+}
+
+.header-right{
+  margin-left:auto;
+  min-width:0;
+  text-align:right;
+  display:flex;
+  flex-direction:column;
+  gap:var(--space-xs);
+  color:var(--text-dim);
+}
+.login-user{
+  font-weight:500;
+  color:var(--text);
+  font-size:var(--fz-12);
+}
+.header-links{
+  font-size:var(--fz-11);
+  display:flex;
+  flex-wrap:wrap;
+  justify-content:flex-end;
+  gap:var(--space-xs);
+}
+.header-links a{
+  color:var(--accent);
+  text-decoration:none;
+  transition:.15s ease;
+}
+.header-links a:hover{
+  color:#0f3d3a;
+}
+
+.result-box{
+  max-width:1280px;
+  margin:var(--space-md) auto 0;
+  padding:var(--space-sm) var(--space-md);
+  border-radius:var(--radius-md);
+  background:var(--accent-soft);
+  color:#0f3d3a;
+  border:1px solid rgba(15,118,110,.2);
+  box-shadow:var(--shadow-soft);
+  font-size:var(--fz-12);
+  line-height:1.5;
+  white-space:pre-wrap;
+  word-break:break-word;
+}
+.result-box:empty{display:none;}
+
+.main-wrap{
+  width:100%;
+  max-width:1280px;
+  margin:var(--space-lg) auto 48px;
+  padding:0 16px;
+  display:grid;
+  grid-template-columns:minmax(0,1fr);
+  align-items:start;
+  gap:var(--space-lg);
+}
+@media(min-width:1024px){
+  .main-wrap{grid-template-columns:minmax(0,2fr) minmax(0,1fr);}
+}
+
+.left-col{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(240px,1fr));
+  gap:var(--space-lg);
+}
+.right-col{
+  display:grid;
+  gap:var(--space-lg);
+}
+
+.card{
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:var(--radius-lg);
+  box-shadow:var(--shadow);
+  overflow:hidden;
+  display:flex;
+  flex-direction:column;
+  min-height:0;
+}
+.card-head{
+  padding:var(--space-md) var(--space-md) var(--space-sm);
+  display:flex;
+  gap:var(--space-sm);
+  align-items:center;
+  border-bottom:1px solid var(--border);
+  background:linear-gradient(120deg,rgba(15,118,110,.08),rgba(29,78,216,.06));
+}
+.iconbox{
+  width:44px;
+  height:44px;
+  border-radius:12px;
+  overflow:hidden;
+  border:1px solid var(--border);
+  background:#fff;
+  flex-shrink:0;
+}
+.iconbox img{width:100%;height:100%;object-fit:cover;}
+.head-texts{display:flex;flex-direction:column;min-width:0;}
+.head-title-row{
+  display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+  font-size:var(--fz-13);font-weight:600;
+}
+.head-sub{font-size:var(--fz-12);color:var(--text-dim);}
+.badge{
+  display:inline-flex;align-items:center;justify-content:center;
+  border-radius:999px;padding:4px 10px;font-size:var(--fz-11);font-weight:600;
+  border:1px solid transparent;background:var(--ok-soft);color:var(--ok);
+}
+.badge.stopped{background:var(--danger-soft);color:var(--danger);}
+
+.card-body{
+  padding:var(--space-md);
+  display:flex;
+  flex-direction:column;
+  gap:var(--space-md);
+  font-size:var(--fz-13);
+  color:var(--text);
+}
+.detail-box{
+  font-size:var(--fz-12);
+  line-height:1.5;
+  color:var(--text);
+  background:var(--surface-2);
+  border:1px solid var(--border);
+  border-radius:var(--radius-md);
+  padding:var(--space-sm) var(--space-md);
+  word-break:break-word;
+}
+
+.action-row{display:flex;flex-wrap:wrap;gap:var(--space-sm);}
+.action-group{display:flex;align-items:center;gap:var(--space-xs);flex-wrap:wrap;}
+.confirm-input{
+  background:#fff;border:1px solid rgba(180,35,24,.4);color:var(--text);
+  border-radius:var(--radius-sm);padding:8px 10px;font-size:var(--fz-12);min-width:90px;
+}
+.confirm-input::placeholder{color:var(--text-dim);}
+.action-note{font-size:var(--fz-11);color:var(--text-dim);}
+button.action-btn{
+  appearance:none;cursor:pointer;border-radius:var(--radius-md);padding:8px 12px;
+  font-size:var(--fz-12);font-weight:600;line-height:1.4;border:1px solid transparent;
+  background:var(--accent);color:#fff;box-shadow:var(--shadow-soft);transition:.15s ease;
+}
+button.action-btn:hover{filter:brightness(1.05);} 
+button.stop{background:var(--danger);} 
+button.build{background:var(--accent-2);} 
+button.delete{background:#7f1d1d;} 
+button.deploy{background:var(--accent-2);} 
+button.purge{background:#7f1d1d;} 
+button.action-btn:disabled{opacity:.5;cursor:not-allowed;filter:none;box-shadow:none;} 
+
+.table-wrap{overflow:auto;} 
+.catalog-table{
+  width:100%;
+  border-collapse:collapse;
+  font-size:var(--fz-12);
+}
+.catalog-table th,.catalog-table td{
+  border-bottom:1px solid var(--border);
+  padding:8px 6px;
+  text-align:left;
+  vertical-align:top;
+}
+.catalog-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center;} 
+button.action-btn.sm{padding:6px 10px;font-size:var(--fz-11);} 
+.catalog-sub{font-size:var(--fz-11);color:var(--text-dim);} 
+
+.section-block{display:flex;flex-direction:column;gap:var(--space-xs);} 
+.section-title{font-size:var(--fz-12);font-weight:600;color:var(--text);} 
+.section-desc{font-size:var(--fz-11);color:var(--text-dim);} 
+
+.mono-field{
+  background:var(--surface-2);
+  border:1px solid var(--border);
+  border-radius:var(--radius-md);
+  padding:var(--space-sm) var(--space-md);
+  font-size:var(--fz-11);
+  line-height:1.5;
+  color:#0f172a;
+  font-family:"Space Grotesk",ui-monospace,SFMono-Regular,Consolas,monospace;
+  white-space:pre-wrap;
+}
+.mono-field.log-scroll{max-height:180px;overflow:auto;}
+
+.stat-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(170px,1fr));
+  gap:12px;
+}
+.stat-card{
+  background:#fff;
+  border:1px solid var(--border);
+  border-radius:var(--radius-md);
+  padding:12px;
+  box-shadow:var(--shadow-soft);
+}
+.stat-label{
+  font-size:var(--fz-11);
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  color:var(--text-dim);
+}
+.stat-value{
+  font-size:15px;
+  font-weight:700;
+  margin-top:6px;
+}
+.stat-bar{
+  margin-top:8px;
+  height:6px;
+  background:var(--surface-2);
+  border-radius:999px;
+  overflow:hidden;
+}
+.stat-bar span{
+  display:block;
+  height:100%;
+  background:linear-gradient(90deg,#0f766e 0%,#1d4ed8 100%);
+}
+.stat-meta{
+  margin-top:6px;
+  font-size:var(--fz-11);
+  color:var(--text-dim);
+}
+
+.raw-details{
+  margin-top:12px;
+  border:1px solid var(--border);
+  border-radius:var(--radius-md);
+  padding:10px 12px;
+  background:var(--surface-2);
+}
+.raw-details summary{cursor:pointer;font-size:var(--fz-12);color:var(--accent);}
+.raw-grid{display:grid;gap:10px;margin-top:10px;}
+
+.wl-list{display:flex;flex-direction:column;gap:6px;} 
+.wl-row{
+  display:flex;align-items:center;justify-content:space-between;gap:8px;
+  padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius-md);background:#fff;
+}
+.small-btn{
+  appearance:none;cursor:pointer;border-radius:var(--radius-sm);padding:6px 10px;
+  font-size:var(--fz-11);font-weight:600;border:1px solid rgba(180,35,24,.4);
+  background:var(--danger-soft);color:var(--danger);
+}
+
+.page-bottom-space{height:40px;}
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="brand-block">
+    <div class="brand-icon">⚙️</div>
+    <div class="brand-texts">
+      <div class="brand-title">サーバー運用コンソール</div>
+      <div class="brand-sub">Container Orchestration / Internal Admin</div>
+    </div>
+  </div>
+
+  <div class="header-right">
+    <div class="login-user">ログイン中: <?= h($_SESSION['user_email']) ?></div>
+    <div class="header-links">
+      <a href="/admin/index.php">管理メニューへ戻る</a>
+    </div>
+  </div>
+</header>
+
+<div class="result-box"><?= h($resultMsg) ?></div>
+
+<main class="main-wrap">
+
+  <!-- LEFT: コンテナ群 -->
+  <section class="left-col">
+    <?php if (empty($displayOrder)): ?>
+    <div class="card">
+      <div class="card-head">
+        <div class="iconbox"><img src="/images/soldir.jpg" alt="No containers"></div>
+        <div class="head-texts">
+          <div class="head-title-row">
+            <span>対象コンテナなし</span>
+            <span class="badge stopped">未設定</span>
+          </div>
+          <div class="head-sub">portal_services.json を確認してください</div>
+        </div>
+      </div>
+    </div>
+    <?php endif; ?>
+    <?php foreach ($displayOrder as $cName => $meta):
+      $label  = $meta['label'];
+      $icon   = $meta['icon'];
+      $st     = $containers[$cName]['state']  ?? 'unknown';
+      $dt     = $containers[$cName]['detail'] ?? '';
+      $run    = ($st === 'running');
+      $bClass = $run ? 'badge running' : 'badge stopped';
+      $bText  = $run ? '稼働中' : '停止中';
+    ?>
+    <div class="card">
+      <div class="card-head">
+        <div class="iconbox"><img src="<?= h($icon) ?>" alt="<?= h($label) ?>"></div>
+        <div class="head-texts">
+          <div class="head-title-row">
+            <span><?= h($label) ?></span>
+            <span class="<?= $bClass ?>"><?= $bText ?></span>
+          </div>
+          <div class="head-sub"><?= h($cName) ?></div>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="section-block">
+          <div class="section-title">状態</div>
+          <div class="section-desc">コンテナの現在の稼働状況</div>
+          <div class="detail-box"><?= h($dt ?: '状態情報なし') ?></div>
+        </div>
+
+        <form class="action-row" method="post" action="/admin/docker_action.php">
+          <input type="hidden" name="csrf" value="<?= h($csrf) ?>">
+          <input type="hidden" name="container" value="<?= h($cName) ?>">
+          <div class="action-group">
+            <button class="action-btn" type="submit" name="action" value="start">起動</button>
+            <button class="action-btn stop" type="submit" name="action" value="stop">停止</button>
+            <button class="action-btn build" type="submit" name="action" value="build">ビルド</button>
+          </div>
+          <div class="action-group delete-group">
+            <input class="confirm-input" type="text" name="confirm" placeholder="削除" autocomplete="off">
+            <button class="action-btn delete" type="submit" name="action" value="delete">削除</button>
+          </div>
+        </form>
+        <div class="action-note">削除はコンテナを停止して削除します（ボリュームは削除しません）。</div>
+      </div>
+    </div>
+    <?php endforeach; ?>
+
+    <?php if (!empty($gameRows)): ?>
+    <div class="card">
+      <div class="card-head">
+        <div class="iconbox"><img src="/images/soldir.jpg" alt="Catalog"></div>
+        <div class="head-texts">
+          <div class="head-title-row">
+            <span>ゲームコンテナの導入/削除</span>
+          </div>
+          <div class="head-sub">アーカイブを展開してビルドします（削除は構成も消えます）</div>
+        </div>
+      </div>
+      <div class="card-body">
+        <?php if ($catalogError): ?>
+        <div class="detail-box">catalog 読み込みエラー: <?= h($catalogError) ?></div>
+        <?php endif; ?>
+
+        <div class="table-wrap">
+          <table class="catalog-table">
+            <thead>
+              <tr>
+                <th>ゲーム</th>
+                <th>アーカイブ</th>
+                <th>展開状態</th>
+                <th>有効</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody>
+            <?php foreach ($gameRows as $row):
+              $archiveLabel = $row['archive'] ? basename($row['archive']) : '未設定';
+              $archiveOk = $row['archive_exists'];
+              $dirOk = $row['dir_exists'];
+              $deployLabel = $dirOk ? '再展開+ビルド' : '展開+ビルド';
+              $enabledBadge = $row['enabled'] ? 'badge' : 'badge stopped';
+              $enabledText = $row['enabled'] ? '有効' : '無効';
+              $stateBadge = $dirOk ? 'badge' : 'badge stopped';
+              $stateText = $dirOk ? '展開済み' : '未展開';
+              $archiveText = $archiveOk ? $archiveLabel : '未配置';
+            ?>
+              <tr>
+                <td>
+                  <?= h($row['label']) ?>
+                  <div class="catalog-sub"><?= h($row['container']) ?></div>
+                </td>
+                <td><?= h($archiveText) ?></td>
+                <td><span class="<?= h($stateBadge) ?>"><?= h($stateText) ?></span></td>
+                <td><span class="<?= h($enabledBadge) ?>"><?= h($enabledText) ?></span></td>
+                <td>
+                  <div class="catalog-actions">
+                    <form method="post" action="/admin/docker_action.php">
+                      <input type="hidden" name="csrf" value="<?= h($csrf) ?>">
+                      <input type="hidden" name="container" value="<?= h($row['container']) ?>">
+                      <button class="action-btn deploy sm" type="submit" name="action" value="deploy" <?= $archiveOk ? '' : 'disabled' ?>>
+                        <?= h($deployLabel) ?>
+                      </button>
+                    </form>
+                    <form method="post" action="/admin/docker_action.php">
+                      <input type="hidden" name="csrf" value="<?= h($csrf) ?>">
+                      <input type="hidden" name="container" value="<?= h($row['container']) ?>">
+                      <input class="confirm-input" type="text" name="confirm" placeholder="削除" autocomplete="off">
+                      <button class="action-btn purge sm" type="submit" name="action" value="purge" <?= $dirOk ? '' : 'disabled' ?>>削除</button>
+                    </form>
+                  </div>
+                </td>
+              </tr>
+            <?php endforeach; ?>
+            </tbody>
+          </table>
+        </div>
+        <div class="action-note">アーカイブ未配置のゲームは「展開+ビルド」が無効です。</div>
+      </div>
+    </div>
+    <?php endif; ?>
+  </section>
+
+  <!-- RIGHT: 状況パネル -->
+  <section class="right-col">
+
+    <!-- サーバーリソース状況 -->
+    <?php if ($playerMonitorEnabled): ?>
+    <div class="card">
+      <div class="card-head">
+        <div class="iconbox"><img src="/images/soldir.jpg" alt="Server"></div>
+        <div class="head-texts">
+          <div class="head-title-row">
+            <span>サーバーリソース状況</span>
+          </div>
+          <div class="head-sub">CPU負荷 / Uptime / メモリ / ディスク</div>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="stat-grid">
+          <div class="stat-card">
+            <div class="stat-label">CPU Load</div>
+            <div class="stat-value">
+              <?php if ($loadAverages): ?>
+                <?= h(number_format($loadAverages[0], 2)) ?> / <?= h(number_format($loadAverages[1], 2)) ?> / <?= h(number_format($loadAverages[2], 2)) ?>
+              <?php else: ?>
+                n/a
+              <?php endif; ?>
+            </div>
+            <?php if ($cpuLoadPercent !== null): ?>
+              <div class="stat-bar"><span style="width: <?= h($cpuLoadPercent) ?>%"></span></div>
+              <div class="stat-meta"><?= h($cpuLoadPercent) ?>% / <?= h($cpuCount) ?> cores</div>
+            <?php else: ?>
+              <div class="stat-meta">CPU情報なし</div>
+            <?php endif; ?>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-label">Memory</div>
+            <div class="stat-value">
+              <?php if ($memTotalGb !== null): ?>
+                <?= h($memUsedGb) ?> GB / <?= h($memTotalGb) ?> GB
+              <?php else: ?>
+                n/a
+              <?php endif; ?>
+            </div>
+            <?php if ($memUsedPercent !== null): ?>
+              <div class="stat-bar"><span style="width: <?= h($memUsedPercent) ?>%"></span></div>
+              <div class="stat-meta"><?= h($memUsedPercent) ?>% used</div>
+            <?php else: ?>
+              <div class="stat-meta">メモリ情報なし</div>
+            <?php endif; ?>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-label">Disk /</div>
+            <div class="stat-value">
+              <?php if ($diskTotalGb !== null): ?>
+                <?= h($diskUsedGb) ?> GB / <?= h($diskTotalGb) ?> GB
+              <?php else: ?>
+                n/a
+              <?php endif; ?>
+            </div>
+            <?php if ($diskUsedPercent !== null): ?>
+              <div class="stat-bar"><span style="width: <?= h($diskUsedPercent) ?>%"></span></div>
+              <div class="stat-meta"><?= h($diskUsedPercent) ?>% used</div>
+            <?php else: ?>
+              <div class="stat-meta">ディスク情報なし</div>
+            <?php endif; ?>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-label">Uptime</div>
+            <div class="stat-value"><?= h($uptimeShort ?: 'n/a') ?></div>
+            <div class="stat-meta">最新更新: <?= h(date('H:i')) ?></div>
+          </div>
+        </div>
+
+        <details class="raw-details">
+          <summary>詳細ログを開く</summary>
+          <div class="raw-grid">
+            <div>
+              <div class="section-title">uptime</div>
+              <div class="mono-field"><?= h($uptimeText) ?></div>
+            </div>
+            <div>
+              <div class="section-title">free -h</div>
+              <div class="mono-field"><?= h($memText) ?></div>
+            </div>
+            <div>
+              <div class="section-title">df -h /</div>
+              <div class="mono-field"><?= h($diskText) ?></div>
+            </div>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <!-- 最近のプレイヤーログ -->
+    <div class="card">
+      <div class="card-head">
+        <div class="iconbox"><img src="/images/ark.png" alt="Logs"></div>
+        <div class="head-texts">
+          <div class="head-title-row">
+            <span>最近のプレイヤーログ (最新30行)</span>
+          </div>
+          <div class="head-sub"><?= h($playerLogPath) ?></div>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="section-block">
+          <div class="section-title">join / leave / auto-stop</div>
+          <div class="section-desc">player_monitor.py の記録</div>
+          <div class="mono-field log-scroll"><?= h($playerLog ?: "まだログがありません: {$playerLogPath}") ?></div>
+        </div>
+      </div>
+    </div>
+    <?php endif; ?>
+
+    <!-- Minecraft ホワイトリスト管理 -->
+    <?php if ($minecraftEnabled): ?>
+    <div class="card">
+      <div class="card-head">
+        <div class="iconbox"><img src="/images/minecraft.png" alt="Whitelist"></div>
+        <div class="head-texts">
+          <div class="head-title-row">
+            <span>Minecraft ホワイトリスト管理</span>
+          </div>
+          <div class="head-sub"><?= h(WL_PATH) ?> の内容（名前のみ表示）</div>
+        </div>
+      </div>
+      <div class="card-body">
+
+        <div class="section-block">
+          <div class="section-title">登録プレイヤー</div>
+          <div class="section-desc">
+            荒らし・明らかな迷惑行為があった場合のみ削除してください。<br>
+            UUID等はここでは表示しません（内部では保持）。
+          </div>
+
+          <div class="wl-list">
+            <?php
+            $shown = 0;
+            foreach ($wlList as $row):
+                $pname = $row['name'] ?? '';
+                if ($pname==='') continue;
+                $shown++;
+            ?>
+            <div class="wl-row">
+              <div class="wl-name"><?= h($pname) ?></div>
+              <form method="post" style="margin:0;" onsubmit="return confirm('<?= h($pname) ?> を削除しますか？');">
+                <input type="hidden" name="mode" value="wl_delete">
+                <input type="hidden" name="csrf" value="<?= h($csrf) ?>">
+                <input type="hidden" name="player" value="<?= h($pname) ?>">
+                <button class="small-btn" type="submit">削除</button>
+              </form>
+            </div>
+            <?php endforeach; ?>
+            <?php if ($shown===0): ?>
+            <div class="wl-empty">まだ登録がありません</div>
+            <?php endif; ?>
+          </div>
+        </div>
+
+      </div>
+    </div>
+    <?php endif; ?>
+
+  </section>
+</main>
+
+<div class="page-bottom-space"></div>
+
+</body>
+</html>

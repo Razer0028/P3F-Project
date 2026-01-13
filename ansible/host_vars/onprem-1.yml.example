@@ -1,0 +1,53 @@
+# Example Ansible Vault file for on-prem (encrypt with ansible-vault)
+# ansible-vault edit ~/.config/edge-stack/ansible/host_vars/onprem-1.yml
+
+# Failover core
+failover_instance_id: "i-xxxxxxxxxxxx"
+failover_region: "YOUR_REGION" # e.g. ap-northeast-1
+failover_ec2_ip: "EC2_PUBLIC_IP"
+failover_vps_ip: "VPS_PUBLIC_IP"
+failover_cf_token: "REPLACE_ME"
+failover_cf_zone_id: "REPLACE_ME"
+failover_cf_record_id: "REPLACE_ME"
+failover_dns_record_name: "game.YOUR_DOMAIN"
+failover_auto_failback: "no"
+failover_core_state: started
+failover_core_enable: true
+failover_aws_manage: true
+failover_aws_profile: "default"
+failover_aws_access_key_id: "REPLACE_ME"
+failover_aws_secret_access_key: "REPLACE_ME"
+failover_aws_session_token: ""
+
+# Web portal admin
+web_portal_admin_user: "admin"
+web_portal_admin_password: "REPLACE_ME"
+
+# WireGuard
+wireguard_primary: "wg0"
+wireguard_raw_configs:
+  - name: "wg0"
+    content: |
+      [Interface]
+      Address = 10.100.0.2/32
+      PrivateKey = REPLACE_ME
+      DNS = 8.8.8.8
+
+      [Peer]
+      PublicKey = REPLACE_ME
+      AllowedIPs = 0.0.0.0/0
+      Endpoint = VPS_PUBLIC_IP:51820
+      PersistentKeepalive = 25
+
+  - name: "wg1"
+    content: |
+      [Interface]
+      Address = 10.100.0.2/32
+      PrivateKey = REPLACE_ME
+      DNS = 8.8.8.8
+
+      [Peer]
+      PublicKey = REPLACE_ME
+      AllowedIPs = 0.0.0.0/0
+      Endpoint = EC2_PUBLIC_IP:51820
+      PersistentKeepalive = 25

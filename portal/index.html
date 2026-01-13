@@ -1,0 +1,2327 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>edge-stack Setup Portal</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body data-lang="en">
+    <div class="backdrop"></div>
+    <header class="hero">
+      <div>
+        <div class="lang-switch">
+          <label>
+            <span class="lang-en">Language</span>
+            <span class="lang-ja">言語</span>
+            <select id="lang-select">
+              <option value="en">English</option>
+              <option value="ja">日本語</option>
+            </select>
+          </label>
+        </div>
+        <p class="kicker">
+          <span class="lang-en">Local/LAN Setup Portal</span>
+          <span class="lang-ja">ローカル/LAN セットアップポータル</span>
+        </p>
+        <h1>
+          <span class="lang-en">edge-stack Launch Pad</span>
+          <span class="lang-ja">edge-stack セットアップランチパッド</span>
+        </h1>
+        <p class="lede">
+          <span class="lang-en">
+            This page runs locally and never sends data anywhere. Use it to
+            gather values, generate config files, and follow the setup checklist.
+          </span>
+          <span class="lang-ja">
+            このページはローカルで動作し、入力内容は外部に送信しません。値の整理、
+            設定ファイル生成、手順確認に使ってください。
+          </span>
+        </p>
+      </div>
+      <div class="alert">
+        <h2>
+          <span class="lang-en">Safety</span>
+          <span class="lang-ja">安全に使うために</span>
+        </h2>
+        <ul>
+          <li>
+            <span class="lang-en">Keep this portal on a trusted LAN only.</span>
+            <span class="lang-ja">信頼できるLAN内のみで使用してください。</span>
+          </li>
+          <li>
+            <span class="lang-en">Avoid pasting secrets unless you trust the machine.</span>
+            <span class="lang-ja">信頼できる端末以外で秘密情報を入力しないでください。</span>
+          </li>
+          <li>
+            <span class="lang-en">Delete the portal after setup if you do not need it.</span>
+            <span class="lang-ja">不要になったら portal/ を削除してください。</span>
+          </li>
+        </ul>
+      </div>
+    </header>
+
+    <nav class="page-nav" aria-label="Portal pages">
+      <button type="button" class="page-tab" data-page="intro">
+        <span class="lang-en">Overview</span>
+        <span class="lang-ja">概要</span>
+      </button>
+      <button type="button" class="page-tab" data-page="plan">
+        <span class="lang-en">Plan</span>
+        <span class="lang-ja">計画</span>
+      </button>
+      <button type="button" class="page-tab" data-page="configure">
+        <span class="lang-en">Configure</span>
+        <span class="lang-ja">設定</span>
+      </button>
+      <button type="button" class="page-tab" data-page="outputs">
+        <span class="lang-en">Outputs</span>
+        <span class="lang-ja">出力</span>
+      </button>
+    </nav>
+
+    <main class="layout">
+      <section class="panel steps" data-page="intro">
+        <h2>
+          <span class="lang-en">Setup Roadmap</span>
+          <span class="lang-ja">セットアップ全体像</span>
+        </h2>
+        <ol>
+          <li>
+            <span class="lang-en">Provision VPS and EC2 instances, record IPs, and ensure SSH works.</span>
+            <span class="lang-ja">VPS/EC2を用意し、IPを控えてSSH接続を確認します。</span>
+          </li>
+          <li>
+            <span class="lang-en">Prepare Cloudflare zone + nameserver change, then API token.</span>
+            <span class="lang-ja">Cloudflareゾーン作成とNS変更後、APIトークンを用意します。</span>
+          </li>
+          <li>
+            <span class="lang-en">Design WireGuard IPs and generate keys for each host.</span>
+            <span class="lang-ja">WireGuardのIP設計と鍵生成を行います。</span>
+          </li>
+          <li>
+            <span class="lang-en">Fill Ansible Vault files with secrets and config blocks.</span>
+            <span class="lang-ja">Ansible Vaultに秘密情報や設定を入力します。</span>
+          </li>
+          <li>
+            <span class="lang-en">Apply with Ansible tags, validate, then enable failover.</span>
+            <span class="lang-ja">Ansibleで反映→検証→フェイルオーバー有効化。</span>
+          </li>
+        </ol>
+        <div class="links">
+          <a href="https://dash.cloudflare.com/" target="_blank" rel="noreferrer">
+            <span class="lang-en">Cloudflare Dashboard</span>
+            <span class="lang-ja">Cloudflare ダッシュボード</span>
+          </a>
+          <a href="https://console.aws.amazon.com/" target="_blank" rel="noreferrer">
+            <span class="lang-en">AWS Console</span>
+            <span class="lang-ja">AWS コンソール</span>
+          </a>
+          <a href="https://www.wireguard.com/" target="_blank" rel="noreferrer">
+            <span class="lang-en">WireGuard Docs</span>
+            <span class="lang-ja">WireGuard 公式ドキュメント</span>
+          </a>
+        </div>
+      </section>
+
+      <section class="panel docs-panel" data-page="intro">
+        <h2>
+          <span class="lang-en">Documentation & Status</span>
+          <span class="lang-ja">ドキュメントと進捗</span>
+        </h2>
+        <p class="note">
+          <span class="lang-en">Read the detailed project guide (Japanese) from here.</span>
+          <span class="lang-ja">詳細なプロジェクトガイド（日本語）はこちら。</span>
+        </p>
+        <ul>
+          <li>
+            <span class="lang-en">Overview, current progress, and full IaC feature list.</span>
+            <span class="lang-ja">構成概要・進捗率・IaC機能一覧を掲載。</span>
+          </li>
+          <li>
+            <span class="lang-en">Ansible/Terraform steps and operational checks.</span>
+            <span class="lang-ja">Ansible/Terraform手順と運用チェック。</span>
+          </li>
+          <li>
+            <span class="lang-en">Reference for reports and handover notes.</span>
+            <span class="lang-ja">レポート/引き継ぎ向けの参照。</span>
+          </li>
+        </ul>
+        <div class="links">
+          <a href="docs.html">
+            <span class="lang-en">Open Docs (JA)</span>
+            <span class="lang-ja">ドキュメントを開く</span>
+          </a>
+        </div>
+      </section>
+
+
+      <section class="panel quickstart" data-page="intro">
+        <h2>
+          <span class="lang-en">GUI Quick Start (Recommended)</span>
+          <span class="lang-ja">GUIクイックスタート（推奨）</span>
+        </h2>
+        <ol>
+          <li>
+            <span class="lang-en">Start the portal with <code>make portal</code> or <code>make portal-lan</code>, copy the token, and paste it into the Portal token fields.</span>
+            <span class="lang-ja"><code>make portal</code> または <code>make portal-lan</code> で起動し、トークンを控えて各トークン欄に貼り付けます。</span>
+          </li>
+          <li>
+            <span class="lang-en">Fill Project Inputs, click Generate files, then use Save all to server.</span>
+            <span class="lang-ja">入力フォーム→ファイル生成→「サーバーに保存」を実行。</span>
+          </li>
+          <li>
+            <span class="lang-en">Create the vault password file once on the portal host.</span>
+            <span class="lang-ja">ポータルホストでVaultパスワードファイルを作成します。</span>
+          </li>
+          <li>
+            <span class="lang-en">Upload SSH private keys (VPS/EC2) if needed.</span>
+            <span class="lang-ja">必要ならSSH秘密鍵（VPS/EC2）をアップロード。</span>
+          </li>
+          <li>
+            <span class="lang-en">Fill vault secrets (onprem/vps/ec2) with <code>ansible-vault edit</code>.</span>
+            <span class="lang-ja"><code>ansible-vault edit</code> でVault秘密情報を入力。</span>
+          </li>
+          <li>
+            <span class="lang-en">Run Preflight Check and fix any missing items.</span>
+            <span class="lang-ja">事前チェックを実行し、未設定を補完。</span>
+          </li>
+          <li>
+            <span class="lang-en">Run tasks in order: Ansible base → vps → ec2 → onprem, then validate.</span>
+            <span class="lang-ja">Ansible base → vps → ec2 → onprem の順で実行し、最後に検証。</span>
+          </li>
+        </ol>
+        <p class="note">
+          <span class="lang-en">If you do not use EC2/Terraform, skip the Terraform inputs and actions.</span>
+          <span class="lang-ja">EC2/Terraformを使わない場合はTerraform関連を省略できます。</span>
+        </p>
+        <pre><code>make portal
+# or
+make portal-lan</code></pre>
+        <pre><code>mkdir -p ~/.config/edge-stack
+chmod 700 ~/.config/edge-stack
+printf "%s\n" "YOUR_VAULT_PASSWORD" > ~/.config/edge-stack/vault_pass
+chmod 600 ~/.config/edge-stack/vault_pass</code></pre>
+      </section>
+
+      <section class="panel templates" data-page="plan">
+        <h2>
+          <span class="lang-en">Topology Templates</span>
+          <span class="lang-ja">構成テンプレート</span>
+        </h2>
+        <p class="note">
+          <span class="lang-en">Pick a template to set the recommended checkboxes. This does not overwrite IPs or keys.</span>
+          <span class="lang-ja">テンプレートを選ぶと推奨のチェックが入ります。IPや鍵は上書きしません。</span>
+        </p>
+        <div class="template-grid">
+          <button type="button" class="template-card" data-template="single">
+            <div class="template-title">
+              <span class="lang-en">On-prem only</span>
+              <span class="lang-ja">オンプレのみ</span>
+            </div>
+            <div class="template-desc">
+              <span class="lang-en">Single host with Docker + web portal.</span>
+              <span class="lang-ja">1台構成。DockerとWebポータルだけを導入。</span>
+            </div>
+            <div class="template-meta">
+              <span class="pill">1 node</span>
+            </div>
+          </button>
+          <button type="button" class="template-card" data-template="dual">
+            <div class="template-title">
+              <span class="lang-en">On-prem + VPS</span>
+              <span class="lang-ja">オンプレ + VPS</span>
+            </div>
+            <div class="template-desc">
+              <span class="lang-en">WireGuard + edge filtering on VPS.</span>
+              <span class="lang-ja">VPSでWireGuardと防御を有効化。</span>
+            </div>
+            <div class="template-meta">
+              <span class="pill">2 nodes</span>
+            </div>
+          </button>
+          <button type="button" class="template-card" data-template="full">
+            <div class="template-title">
+              <span class="lang-en">On-prem + VPS + EC2</span>
+              <span class="lang-ja">オンプレ + VPS + EC2</span>
+            </div>
+            <div class="template-desc">
+              <span class="lang-en">Failover-ready setup with full security stack.</span>
+              <span class="lang-ja">フェイルオーバーまで含むフル構成。</span>
+            </div>
+            <div class="template-meta">
+              <span class="pill">3 nodes</span>
+            </div>
+          </button>
+        </div>
+        <div id="template_status" class="status" aria-live="polite"></div>
+      </section>
+
+      <section class="panel guided" data-page="plan">
+        <h2>
+          <span class="lang-en">Guided Implementation (Step-by-step)</span>
+          <span class="lang-ja">手順通り実装（ガイド付き）</span>
+        </h2>
+        <p class="note">
+          <span class="lang-en">Follow the steps in order. The next step unlocks only after the current step is complete.</span>
+          <span class="lang-ja">順番通りに進めます。完了したステップの次だけが解除されます。</span>
+        </p>
+        <div class="guided-options">
+          <label class="inline">
+            <input id="plan_onprem" type="checkbox" checked />
+            <span class="lang-en">On-prem</span>
+            <span class="lang-ja">オンプレ</span>
+          </label>
+          <label class="inline">
+            <input id="plan_vps" type="checkbox" checked />
+            <span class="lang-en">VPS</span>
+            <span class="lang-ja">VPS</span>
+          </label>
+          <label class="inline">
+            <input id="plan_ec2" type="checkbox" checked />
+            <span class="lang-en">EC2</span>
+            <span class="lang-ja">EC2</span>
+          </label>
+          <label class="inline">
+            <input id="plan_cloudflared" type="checkbox" />
+            <span class="lang-en">Cloudflared (VPS)</span>
+            <span class="lang-ja">Cloudflared（VPS）</span>
+          </label>
+          <label class="inline">
+            <input id="plan_portctl" type="checkbox" />
+            <span class="lang-en">Portctl (VPS)</span>
+            <span class="lang-ja">Portctl（VPS）</span>
+          </label>
+          <label class="inline">
+            <input id="plan_terraform" type="checkbox" />
+            <span class="lang-en">Terraform (EC2)</span>
+            <span class="lang-ja">Terraform（EC2）</span>
+          </label>
+          <label class="inline">
+            <input id="plan_cloudflare" type="checkbox" />
+            <span class="lang-en">Terraform (Cloudflare)</span>
+            <span class="lang-ja">Terraform（Cloudflare）</span>
+          </label>
+        </div>
+        <div class="guided-grid">
+          <div class="guided-step" id="guided_step_preflight">
+            <div class="guided-header">
+              <span class="step-label">Step 1</span>
+              <h3>
+                <span class="lang-en">Portal token + Preflight</span>
+                <span class="lang-ja">トークン入力 + 事前チェック</span>
+              </h3>
+            </div>
+            <p class="note">
+              <span class="lang-en">Paste the portal token in the token fields and run the check.</span>
+              <span class="lang-ja">各トークン欄に貼り付けてチェックを実行します。</span>
+            </p>
+            <div class="actions">
+              <button type="button" id="guided_preflight">
+                <span class="lang-en">Run preflight</span>
+                <span class="lang-ja">事前チェック</span>
+              </button>
+            </div>
+            <div id="guided_status_preflight" class="status" aria-live="polite"></div>
+          </div>
+
+          <div class="guided-step" id="guided_step_save">
+            <div class="guided-header">
+              <span class="step-label">Step 2</span>
+              <h3>
+                <span class="lang-en">Generate + Save files</span>
+                <span class="lang-ja">ファイル生成 + サーバー保存</span>
+              </h3>
+            </div>
+            <p class="note">
+              <span class="lang-en">Generate the outputs and save them into the repo.</span>
+              <span class="lang-ja">生成結果をサーバーへ保存します。</span>
+            </p>
+            <div class="actions">
+              <button type="button" id="guided_save">
+                <span class="lang-en">Generate + Save</span>
+                <span class="lang-ja">生成して保存</span>
+              </button>
+            </div>
+            <div id="guided_status_save" class="status" aria-live="polite"></div>
+          </div>
+
+          <div class="guided-step" id="guided_step_vault_pass">
+            <div class="guided-header">
+              <span class="step-label">Step 3</span>
+              <h3>
+                <span class="lang-en">Vault password file</span>
+                <span class="lang-ja">Vaultパスワード</span>
+              </h3>
+            </div>
+            <p class="note">
+              <span class="lang-en">Create <code>~/.config/edge-stack/vault_pass</code> on the portal host.</span>
+              <span class="lang-ja">ポータルホストに <code>~/.config/edge-stack/vault_pass</code> を作成します。</span>
+            </p>
+            <div class="actions">
+              <button type="button" id="guided_check_vault">
+                <span class="lang-en">Recheck</span>
+                <span class="lang-ja">再チェック</span>
+              </button>
+            </div>
+            <div id="guided_status_vault" class="status" aria-live="polite"></div>
+          </div>
+
+          <div class="guided-step" id="guided_step_keys">
+            <div class="guided-header">
+              <span class="step-label">Step 4</span>
+              <h3>
+                <span class="lang-en">SSH keys</span>
+                <span class="lang-ja">SSH鍵</span>
+              </h3>
+            </div>
+            <p class="note">
+              <span class="lang-en">Upload or place the SSH private keys required for each host.</span>
+              <span class="lang-ja">対象ホスト分の秘密鍵を配置/アップロードします。</span>
+            </p>
+            <div class="actions">
+              <button type="button" id="guided_check_keys">
+                <span class="lang-en">Recheck</span>
+                <span class="lang-ja">再チェック</span>
+              </button>
+            </div>
+            <div id="guided_status_keys" class="status" aria-live="polite"></div>
+          </div>
+
+          <div class="guided-step" id="guided_step_vault_files">
+            <div class="guided-header">
+              <span class="step-label">Step 5</span>
+              <h3>
+                <span class="lang-en">Vault secrets (host_vars)</span>
+                <span class="lang-ja">Vault秘密情報（host_vars）</span>
+              </h3>
+            </div>
+            <p class="note">
+              <span class="lang-en">Fill the host_vars files with secrets via <code>ansible-vault edit</code>.</span>
+              <span class="lang-ja"><code>ansible-vault edit</code> でhost_varsに秘密情報を入力します。</span>
+            </p>
+            <div class="actions">
+              <button type="button" id="guided_check_vault_files">
+                <span class="lang-en">Recheck</span>
+                <span class="lang-ja">再チェック</span>
+              </button>
+            </div>
+            <div id="guided_status_vault_files" class="status" aria-live="polite"></div>
+          </div>
+
+          <div class="guided-step" id="guided_step_tf_cf">
+            <div class="guided-header">
+              <span class="step-label">Step 6</span>
+              <h3>
+                <span class="lang-en">Terraform apply (Cloudflare)</span>
+                <span class="lang-ja">Terraform適用（Cloudflare）</span>
+              </h3>
+            </div>
+            <p class="note">
+              <span class="lang-en">Runs <code>terraform init</code> then <code>apply</code> for Cloudflare.</span>
+              <span class="lang-ja"><code>terraform init</code> の後に Cloudflare 側を <code>apply</code>。</span>
+            </p>
+            <div class="actions">
+              <button type="button" id="guided_tf_cf_apply">
+                <span class="lang-en">Run Terraform (CF)</span>
+                <span class="lang-ja">Terraform実行（CF）</span>
+              </button>
+            </div>
+            <div id="guided_status_tf_cf" class="status" aria-live="polite"></div>
+          </div>
+
+          <div class="guided-step" id="guided_step_tf">
+            <div class="guided-header">
+              <span class="step-label">Step 7</span>
+              <h3>
+                <span class="lang-en">Terraform apply (EC2)</span>
+                <span class="lang-ja">Terraform適用（EC2）</span>
+              </h3>
+            </div>
+            <p class="note">
+              <span class="lang-en">Runs <code>terraform init</code> then <code>apply</code>.</span>
+              <span class="lang-ja"><code>terraform init</code> の後に <code>apply</code> を実行。</span>
+            </p>
+            <div class="actions">
+              <button type="button" id="guided_tf_apply">
+                <span class="lang-en">Run Terraform</span>
+                <span class="lang-ja">Terraform実行</span>
+              </button>
+            </div>
+            <div id="guided_status_tf" class="status" aria-live="polite"></div>
+          </div>
+
+          <div class="guided-step" id="guided_step_ansible_base">
+            <div class="guided-header">
+              <span class="step-label">Step 8</span>
+              <h3>
+                <span class="lang-en">Ansible base</span>
+                <span class="lang-ja">Ansible base</span>
+              </h3>
+            </div>
+            <div class="actions">
+              <button type="button" id="guided_ansible_base">base</button>
+            </div>
+            <div id="guided_status_ansible_base" class="status" aria-live="polite"></div>
+          </div>
+
+          <div class="guided-step" id="guided_step_ansible_vps">
+            <div class="guided-header">
+              <span class="step-label">Step 9</span>
+              <h3>
+                <span class="lang-en">Ansible vps</span>
+                <span class="lang-ja">Ansible vps</span>
+              </h3>
+            </div>
+            <div class="actions">
+              <button type="button" id="guided_ansible_vps">vps</button>
+            </div>
+            <div id="guided_status_ansible_vps" class="status" aria-live="polite"></div>
+          </div>
+
+          
+          <div class="guided-step" id="guided_step_ansible_portctl">
+            <div class="guided-header">
+              <span class="step-label">Step 10</span>
+              <h3>
+                <span class="lang-en">Ansible portctl</span>
+                <span class="lang-ja">Ansible portctl</span>
+              </h3>
+            </div>
+            <div class="actions">
+              <button type="button" id="guided_ansible_portctl">portctl</button>
+            </div>
+            <div id="guided_status_ansible_portctl" class="status" aria-live="polite"></div>
+          </div>
+
+          <div class="guided-step" id="guided_step_ansible_cloudflared">
+            <div class="guided-header">
+              <span class="step-label">Step 11</span>
+              <h3>
+                <span class="lang-en">Ansible cloudflared</span>
+                <span class="lang-ja">Ansible cloudflared</span>
+              </h3>
+            </div>
+            <div class="actions">
+              <button type="button" id="guided_ansible_cloudflared">cloudflared</button>
+            </div>
+            <div id="guided_status_ansible_cloudflared" class="status" aria-live="polite"></div>
+          </div>
+
+          <div class="guided-step" id="guided_step_ansible_ec2">
+            <div class="guided-header">
+              <span class="step-label">Step 12</span>
+              <h3>
+                <span class="lang-en">Ansible ec2</span>
+                <span class="lang-ja">Ansible ec2</span>
+              </h3>
+            </div>
+            <div class="actions">
+              <button type="button" id="guided_ansible_ec2">ec2</button>
+            </div>
+            <div id="guided_status_ansible_ec2" class="status" aria-live="polite"></div>
+          </div>
+
+          <div class="guided-step" id="guided_step_ansible_onprem">
+            <div class="guided-header">
+              <span class="step-label">Step 13</span>
+              <h3>
+                <span class="lang-en">Ansible on-prem</span>
+                <span class="lang-ja">Ansible on-prem</span>
+              </h3>
+            </div>
+            <div class="actions">
+              <button type="button" id="guided_ansible_onprem">onprem</button>
+            </div>
+            <div id="guided_status_ansible_onprem" class="status" aria-live="polite"></div>
+          </div>
+
+          <div class="guided-step" id="guided_step_validate">
+            <div class="guided-header">
+              <span class="step-label">Step 14</span>
+              <h3>
+                <span class="lang-en">Validate</span>
+                <span class="lang-ja">検証</span>
+              </h3>
+            </div>
+            <div class="actions">
+              <button type="button" id="guided_validate">make validate</button>
+            </div>
+            <div id="guided_status_validate" class="status" aria-live="polite"></div>
+          </div>
+        </div>
+        <div class="actions">
+          <button type="button" id="guided_reset">
+            <span class="lang-en">Reset progress</span>
+            <span class="lang-ja">進捗リセット</span>
+          </button>
+        </div>
+      </section>
+
+      <section class="panel custom" data-page="plan">
+        <h2>
+          <span class="lang-en">Custom Implementation (Pick Only What You Need)</span>
+          <span class="lang-ja">カスタム実装（必要なものだけ実行）</span>
+        </h2>
+        <p class="note">
+          <span class="lang-en">Select the actions you want to run. They will execute in order from top to bottom.</span>
+          <span class="lang-ja">実行したい操作だけ選択できます。上から順に実行されます。</span>
+        </p>
+        <div class="custom-grid">
+          <label class="custom-item"><input type="checkbox" data-action="tf-init" />Terraform init</label>
+          <label class="custom-item"><input type="checkbox" data-action="tf-plan" />Terraform plan</label>
+          <label class="custom-item"><input type="checkbox" data-action="tf-apply" />Terraform apply</label>
+          <label class="custom-item"><input type="checkbox" data-action="tf-destroy" />Terraform destroy</label>
+          <label class="custom-item"><input type="checkbox" data-action="tf-cf-init" />Terraform CF init</label>
+          <label class="custom-item"><input type="checkbox" data-action="tf-cf-plan" />Terraform CF plan</label>
+          <label class="custom-item"><input type="checkbox" data-action="tf-cf-apply" />Terraform CF apply</label>
+          <label class="custom-item"><input type="checkbox" data-action="tf-cf-destroy" />Terraform CF destroy</label>
+          <label class="custom-item"><input type="checkbox" data-action="ansible-base" />Ansible base</label>
+          <label class="custom-item"><input type="checkbox" data-action="ansible-vps" />Ansible vps</label>
+          <label class="custom-item"><input type="checkbox" data-action="ansible-portctl" />Ansible portctl</label>
+          <label class="custom-item"><input type="checkbox" data-action="ansible-cloudflared" />Ansible cloudflared</label>
+          <label class="custom-item"><input type="checkbox" data-action="ansible-ec2" />Ansible ec2</label>
+          <label class="custom-item"><input type="checkbox" data-action="ansible-onprem" />Ansible on-prem</label>
+          <label class="custom-item"><input type="checkbox" data-action="ansible-vps-check" />Ansible vps check</label>
+          <label class="custom-item"><input type="checkbox" data-action="validate" />make validate</label>
+        </div>
+        <label class="custom-confirm">
+          <span class="lang-en">Confirm word (apply/destroy)</span>
+          <span class="lang-ja">確認ワード（apply/destroy）</span>
+          <input id="custom_confirm" type="text" placeholder="Type APPLY or DESTROY" data-placeholder-en="Type APPLY or DESTROY" data-placeholder-ja="APPLY または DESTROY を入力" />
+        </label>
+        <div class="actions">
+          <button type="button" id="custom_run">
+            <span class="lang-en">Run selected</span>
+            <span class="lang-ja">選択した操作を実行</span>
+          </button>
+          <button type="button" id="custom_clear">
+            <span class="lang-en">Clear</span>
+            <span class="lang-ja">クリア</span>
+          </button>
+        </div>
+        <div id="custom_status" class="status" aria-live="polite"></div>
+        <textarea id="custom_log" rows="8" readonly></textarea>
+
+        <details class="guide-card tips">
+          <summary>
+            <span class="lang-en">Usage tips</span>
+            <span class="lang-ja">使い方のヒント</span>
+          </summary>
+          <ul>
+            <li>
+              <span class="lang-en">The portal token is required for Save/Run/Preflight.</span>
+              <span class="lang-ja">保存/実行/事前チェックはポータルトークン必須です。</span>
+            </li>
+            <li>
+              <span class="lang-en">Confirm words: APPLY for tf-apply, DESTROY for tf-destroy.</span>
+              <span class="lang-ja">確認ワード: applyはAPPLY、destroyはDESTROY。</span>
+            </li>
+            <li>
+              <span class="lang-en">Job logs are stored under <code>tmp/portal_jobs</code>.</span>
+              <span class="lang-ja">ジョブログは <code>tmp/portal_jobs</code> に保存されます。</span>
+            </li>
+            <li>
+              <span class="lang-en">If you skip EC2, you can ignore Terraform inputs and actions.</span>
+              <span class="lang-ja">EC2を使わない場合はTerraform関連を省略できます。</span>
+            </li>
+            <li>
+              <span class="lang-en">Container selection writes <code>containers_enabled</code>. Edit <code>/opt/serveradmin/config/portal_services.json</code> for hostnames/visibility.</span>
+              <span class="lang-ja"><code>containers_enabled</code> が反映されます。ホスト名/公開設定は <code>/opt/serveradmin/config/portal_services.json</code> を編集。</span>
+            </li>
+          </ul>
+        </details>
+      </section>
+
+      <section class="panel guide" data-page="plan">
+        <h2>
+          <span class="lang-en">Detailed Implementation (Manual Steps)</span>
+          <span class="lang-ja">手動作業の詳細手順</span>
+        </h2>
+        <p class="note">
+          <span class="lang-en">
+            Use this checklist for the steps that cannot be automated. Keep secrets
+            in Ansible Vault files and avoid exposing the portal publicly.
+          </span>
+          <span class="lang-ja">
+            自動化できない手順をまとめています。秘密情報はAnsible Vaultに保存し、
+            ポータルはLAN内でのみ使用してください。
+          </span>
+        </p>
+        <div class="guide-grid">
+          <details class="guide-card">
+            <summary>
+              <span class="lang-en">VPS provisioning</span>
+              <span class="lang-ja">VPSの準備</span>
+            </summary>
+            <ol>
+              <li>
+                <span class="lang-en">Deploy a Debian/Ubuntu VPS with a static public IP.</span>
+                <span class="lang-ja">Debian/UbuntuのVPSを作成し固定IPを確保。</span>
+              </li>
+              <li>
+                <span class="lang-en">Open SSH (22), WireGuard UDP (ex: 51820), and game ports.</span>
+                <span class="lang-ja">SSH(22)、WireGuard(例:51820)、ゲームポートを開放。</span>
+              </li>
+              <li>
+                <span class="lang-en">Install updates and ensure SSH key auth works.</span>
+                <span class="lang-ja">アップデートを適用しSSH鍵認証を確認。</span>
+              </li>
+              <li>
+                <span class="lang-en">Confirm UFW is installed and default deny is set.</span>
+                <span class="lang-ja">UFWを導入しデフォルト拒否を設定。</span>
+              </li>
+              <li>
+                <span class="lang-en">If provider firewall is enabled, disable it or align rules to avoid conflicts with UFW.</span>
+                <span class="lang-ja">プロバイダFWが有効なら無効化、またはUFWと競合しないようルールを合わせる。</span>
+              </li>
+            </ol>
+          </details>
+
+          <details class="guide-card">
+            <summary>
+              <span class="lang-en">EC2 provisioning (Terraform or manual)</span>
+              <span class="lang-ja">EC2の準備（Terraform/手動）</span>
+            </summary>
+            <ol>
+              <li>
+                <span class="lang-en">Choose VPC mode: auto (Terraform creates VPC/IGW/public subnet) or custom (set CIDRs/AZ).</span>
+                <span class="lang-ja">VPCモードを選択（自動=VPC/IGW/公開サブネット作成、カスタム=CIDR/AZ指定）。</span>
+              </li>
+              <li>
+                <span class="lang-en">Prepare a KeyPair: use existing or create from a public key.</span>
+                <span class="lang-ja">KeyPairを用意（既存を使う/公開鍵から作成）。</span>
+              </li>
+              <li>
+                <span class="lang-en">Select region, AMI, and instance type.</span>
+                <span class="lang-ja">リージョン/AMI/インスタンスタイプを選択。</span>
+              </li>
+              <li>
+                <span class="lang-en">Security Group: allow SSH from admin CIDR only.</span>
+                <span class="lang-ja">SGは管理者CIDRのみSSH許可。</span>
+              </li>
+              <li>
+                <span class="lang-en">Allow WireGuard UDP and game ports as needed.</span>
+                <span class="lang-ja">WireGuardとゲーム用ポートを開放。</span>
+              </li>
+              <li>
+                <span class="lang-en">Disable source/dest check if EC2 routes traffic.</span>
+                <span class="lang-ja">EC2が中継するならsource/dest checkを無効化。</span>
+              </li>
+              <li>
+                <span class="lang-en">Attach an Elastic IP if you need a stable IP.</span>
+                <span class="lang-ja">固定IPが必要ならEIPを付与。</span>
+              </li>
+            </ol>
+            <p class="note">
+              <span class="lang-en">
+                If using Terraform, set these in terraform.tfvars and run
+                terraform init/apply.
+              </span>
+              <span class="lang-ja">
+                Terraformを使う場合はterraform.tfvarsに設定し、init/applyを実行。
+              </span>
+            </p>
+          </details>
+
+          <details class="guide-card">
+            <summary>
+              <span class="lang-en">Cloudflare DNS setup</span>
+              <span class="lang-ja">Cloudflare DNS設定</span>
+            </summary>
+            <ol>
+              <li>
+                <span class="lang-en">Create a zone in Cloudflare (via Terraform).</span>
+                <span class="lang-ja">Cloudflareのゾーンを作成（Terraform）。</span>
+              </li>
+              <li>
+                <span class="lang-en">Update nameservers at your registrar to Cloudflare.</span>
+                <span class="lang-ja">レジストラ側でネームサーバーをCloudflareに変更。</span>
+              </li>
+              <li>
+                <span class="lang-en">Create an API token with Zone:Read + DNS:Edit.</span>
+                <span class="lang-ja">Zone:Read + DNS:Edit のAPIトークンを作成。</span>
+              </li>
+              <li>
+                <span class="lang-en">Apply terraform-cloudflare and copy outputs into Vault.</span>
+                <span class="lang-ja">terraform-cloudflare を適用し、出力をVaultへ転記。</span>
+              </li>
+            </ol>
+            <pre><code>curl -s -H "Authorization: Bearer $CF_TOKEN" "https://api.cloudflare.com/client/v4/zones?name=YOUR_DOMAIN"
+curl -s -H "Authorization: Bearer $CF_TOKEN" "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records?type=A&name=game.YOUR_DOMAIN"</code></pre>
+            <p class="note">
+              <span class="lang-en">
+                Set CLOUDFLARE_API_TOKEN in the shell and run terraform-cloudflare
+                before using failover_core. Copy zone/record IDs into Vault.
+              </span>
+              <span class="lang-ja">
+                CLOUDFLARE_API_TOKEN を環境変数で指定し、
+                terraform-cloudflare を適用してから failover_core を使います。
+                ゾーンID/レコードIDはVaultへ転記します。
+              </span>
+            </p>
+            <p class="note">
+              <span class="lang-en">
+                If you delete/recreate the game record (ex: CNAME→A), the record ID changes.
+                Re-fetch and update failover_cf_record_id in Vault.
+              </span>
+              <span class="lang-ja">
+                gameレコードを削除・再作成（例: CNAME→A）するとIDが変わります。
+                再取得してVaultの failover_cf_record_id を更新してください。
+              </span>
+            </p>
+          </details>
+
+          <details class="guide-card">
+            <summary>
+              <span class="lang-en">WireGuard plan</span>
+              <span class="lang-ja">WireGuard設計</span>
+            </summary>
+            <ol>
+              <li>
+                <span class="lang-en">Design subnets (ex: wg0=10.100.0.0/24, wg1=10.101.0.0/24).</span>
+                <span class="lang-ja">サブネット設計（例: wg0=10.100.0.0/24）。</span>
+              </li>
+              <li>
+                <span class="lang-en">Generate keys on each host.</span>
+                <span class="lang-ja">各ホストで鍵を生成。</span>
+              </li>
+              <li>
+                <span class="lang-en">Set AllowedIPs for each peer and endpoints on VPS/EC2.</span>
+                <span class="lang-ja">AllowedIPs/Endpointを設定。</span>
+              </li>
+              <li>
+                <span class="lang-en">Do not bring up wg0 and wg1 at the same time.</span>
+                <span class="lang-ja">wg0とwg1は同時に有効化しない。</span>
+              </li>
+            </ol>
+            <pre><code>umask 077
+wg genkey | tee privatekey | wg pubkey > publickey</code></pre>
+            <p class="note">
+              <span class="lang-en">Helper: run <code>./scripts/wireguard_wizard.sh</code> to generate keys and a Vault snippet.</span>
+              <span class="lang-ja">補助: <code>./scripts/wireguard_wizard.sh</code> で鍵とVaultスニペットを生成できます。</span>
+            </p>
+          </details>
+
+          <details class="guide-card">
+            <summary>
+              <span class="lang-en">FRR/BFD (VPS only)</span>
+              <span class="lang-ja">FRR/BFD（VPSのみ）</span>
+            </summary>
+            <ol>
+              <li>
+                <span class="lang-en">Prepare frr_config_content and frr_daemons_content.</span>
+                <span class="lang-ja">frr_config_content/frr_daemons_content を用意。</span>
+              </li>
+              <li>
+                <span class="lang-en">Match BFD peer IPs with WireGuard interfaces.</span>
+                <span class="lang-ja">BFDのpeer IPをWireGuardに合わせる。</span>
+              </li>
+              <li>
+                <span class="lang-en">Validate with vtysh and check BFD peer status.</span>
+                <span class="lang-ja">vtyshでBFD状態を確認。</span>
+              </li>
+            </ol>
+            <pre><code>vtysh -c "show bfd peers"</code></pre>
+          </details>
+
+          <details class="guide-card">
+            <summary>
+              <span class="lang-en">Suricata (VPS and EC2)</span>
+              <span class="lang-ja">Suricata（VPS/EC2）</span>
+            </summary>
+            <ol>
+              <li>
+                <span class="lang-en">Place custom rules content in a known path.</span>
+                <span class="lang-ja">カスタムルールを所定のパスに配置。</span>
+              </li>
+              <li>
+                <span class="lang-en">Set suricata_custom_rules_path in vault.</span>
+                <span class="lang-ja">suricata_custom_rules_path をVaultに設定。</span>
+              </li>
+              <li>
+                <span class="lang-en">Test config before enabling IPS mode.</span>
+                <span class="lang-ja">IPS有効化前に設定テスト。</span>
+              </li>
+            </ol>
+            <pre><code>suricata -T -c /etc/suricata/suricata.yaml -S /etc/suricata/rules/custom.rules</code></pre>
+          </details>
+
+          <details class="guide-card">
+            <summary>
+              <span class="lang-en">Cloudflared (VPS)</span>
+              <span class="lang-ja">Cloudflared（VPS）</span>
+            </summary>
+            <ol>
+              <li>
+                <span class="lang-en">Login and create a tunnel.</span>
+                <span class="lang-ja">ログインしてトンネル作成。</span>
+              </li>
+              <li>
+                <span class="lang-en">Route DNS to the tunnel.</span>
+                <span class="lang-ja">DNSをトンネルへ紐付け。</span>
+              </li>
+              <li>
+                <span class="lang-en">Store config.yml and credentials.json in vault.</span>
+                <span class="lang-ja">config.yml/credentials.json をVaultに保存。</span>
+              </li>
+            </ol>
+            <pre><code>cloudflared tunnel login
+cloudflared tunnel create my-tunnel
+cloudflared tunnel route dns my-tunnel site.YOUR_DOMAIN</code></pre>
+          </details>
+
+          <details class="guide-card">
+            <summary>
+              <span class="lang-en">Failover core (on-prem)</span>
+              <span class="lang-ja">Failover core（オンプレ）</span>
+            </summary>
+            <ol>
+              <li>
+                <span class="lang-en">Fill failover_* variables in onprem-1.yml (vault).</span>
+                <span class="lang-ja">onprem-1.yml に failover_* を設定。</span>
+              </li>
+              <li>
+                <span class="lang-en">Keep failover_core_state=stopped until ready to test.</span>
+                <span class="lang-ja">テストまでfailover_core_state=stoppedにする。</span>
+              </li>
+              <li>
+                <span class="lang-en">Set failover_auto_failback=yes only if desired.</span>
+                <span class="lang-ja">必要な場合のみfailover_auto_failback=yes。</span>
+              </li>
+            </ol>
+          </details>
+
+          <details class="guide-card">
+            <summary>
+              <span class="lang-en">Backups (on-prem)</span>
+              <span class="lang-ja">バックアップ（オンプレ）</span>
+            </summary>
+            <ol>
+              <li>
+                <span class="lang-en">Mount NAS to /mnt/nas and confirm read/write.</span>
+                <span class="lang-ja">/mnt/nas にマウントし読み書き確認。</span>
+              </li>
+              <li>
+                <span class="lang-en">Enable backup_full_enabled or backup_games_enabled.</span>
+                <span class="lang-ja">backup_full_enabled / backup_games_enabled を設定。</span>
+              </li>
+              <li>
+                <span class="lang-en">Confirm cron with backup_games_cron.</span>
+                <span class="lang-ja">backup_games_cron の設定を確認。</span>
+              </li>
+            </ol>
+          </details>
+
+          <details class="guide-card">
+            <summary>
+              <span class="lang-en">Containers & Web portal</span>
+              <span class="lang-ja">コンテナ & Webポータル</span>
+            </summary>
+            <ol>
+              <li>
+                <span class="lang-en">Pick enabled containers in Project Inputs and save to group vars.</span>
+                <span class="lang-ja">Project Inputsで有効コンテナを選択して保存。</span>
+              </li>
+              <li>
+                <span class="lang-en">Run Ansible on-prem with containers_manage=true.</span>
+                <span class="lang-ja">containers_manage=trueでオンプレに適用。</span>
+              </li>
+              <li>
+                <span class="lang-en">Edit <code>/opt/serveradmin/config/portal_services.json</code> for hostnames, ports, and public flags.</span>
+                <span class="lang-ja"><code>/opt/serveradmin/config/portal_services.json</code> でホスト名/ポート/公開設定を編集。</span>
+              </li>
+              <li>
+                <span class="lang-en">Optional: set <code><containers_root>/web/.env</code> for <code>DISCORD_WEBHOOK_URL</code>.</span>
+                <span class="lang-ja">任意: <code><containers_root>/web/.env</code> に <code>DISCORD_WEBHOOK_URL</code> を設定。</span>
+              </li>
+              <li>
+                <span class="lang-en">Start containers with docker compose.</span>
+                <span class="lang-ja">docker composeで起動。</span>
+              </li>
+            </ol>
+            <pre><code>cd <containers_root>/web
+docker compose up -d --build</code></pre>
+          </details>
+
+          <details class="guide-card">
+            <summary>
+              <span class="lang-en">Validation</span>
+              <span class="lang-ja">検証</span>
+            </summary>
+            <ol>
+              <li>
+                <span class="lang-en">Run make validate from the repo root.</span>
+                <span class="lang-ja">リポジトリ直下で make validate を実行。</span>
+              </li>
+              <li>
+                <span class="lang-en">Check wg show, systemctl status, and logs.</span>
+                <span class="lang-ja">wg show / systemctl status / ログを確認。</span>
+              </li>
+              <li>
+                <span class="lang-en">Run a controlled failover test.</span>
+                <span class="lang-ja">フェイルオーバー試験を実施。</span>
+              </li>
+            </ol>
+            <pre><code>make validate
+wg show
+systemctl status failover_core</code></pre>
+          </details>
+        </div>
+      </section>
+
+
+      <section class="panel plan" data-page="configure">
+        <h2>
+          <span class="lang-en">Portal Execution Model</span>
+          <span class="lang-ja">ポータル実行モデル</span>
+        </h2>
+        <p class="note">
+          <span class="lang-en">
+            This section describes how the portal runs most steps safely.
+          </span>
+          <span class="lang-ja">
+            ここでは、ポータルが安全に手順を実行する仕組みを説明します。
+          </span>
+        </p>
+        <div class="guide-grid">
+          <details class="guide-card">
+            <summary>
+              <span class="lang-en">Execution flow</span>
+              <span class="lang-ja">実行フロー</span>
+            </summary>
+            <ol>
+              <li>
+                <span class="lang-en">Start the portal and copy the upload token from the terminal.</span>
+                <span class="lang-ja">ポータル起動時に表示されるトークンを控えます。</span>
+              </li>
+              <li>
+                <span class="lang-en">Submit an action (Terraform/Ansible/Validate) from the UI.</span>
+                <span class="lang-ja">UIからTerraform/Ansible/検証を実行します。</span>
+              </li>
+              <li>
+                <span class="lang-en">The server validates inputs, queues a job, and returns a job ID.</span>
+                <span class="lang-ja">サーバーが入力検証し、ジョブをキューに積みます。</span>
+              </li>
+              <li>
+                <span class="lang-en">The UI polls job status and shows logs.</span>
+                <span class="lang-ja">UIが進捗を監視し、ログを表示します。</span>
+              </li>
+            </ol>
+          </details>
+
+          <details class="guide-card">
+            <summary>
+              <span class="lang-en">Allowed actions (whitelist)</span>
+              <span class="lang-ja">実行可能アクション（ホワイトリスト）</span>
+            </summary>
+            <ul>
+              <li>
+                <span class="lang-en">Terraform: init / plan / apply / destroy</span>
+                <span class="lang-ja">Terraform: init / plan / apply / destroy</span>
+              </li>
+              <li>
+                <span class="lang-en">Ansible: run with tags + target host</span>
+                <span class="lang-ja">Ansible: タグと対象ホストを指定して実行</span>
+              </li>
+              <li>
+                <span class="lang-en">Validate: make validate</span>
+                <span class="lang-ja">検証: make validate</span>
+              </li>
+              <li>
+                <span class="lang-en">Vault file generation (optional)</span>
+                <span class="lang-ja">Vaultファイル生成（任意）</span>
+              </li>
+            </ul>
+          </details>
+
+          <details class="guide-card">
+            <summary>
+              <span class="lang-en">Safety controls</span>
+              <span class="lang-ja">安全対策</span>
+            </summary>
+            <ul>
+              <li>
+                <span class="lang-en">LAN-only access + token authentication.</span>
+                <span class="lang-ja">LAN限定アクセス + トークン認証。</span>
+              </li>
+              <li>
+                <span class="lang-en">Fixed working directory and allowed arguments only.</span>
+                <span class="lang-ja">作業ディレクトリ固定、引数は許可制。</span>
+              </li>
+              <li>
+                <span class="lang-en">Two-step confirmation for destructive actions.</span>
+                <span class="lang-ja">破壊的操作は二重確認。</span>
+              </li>
+              <li>
+                <span class="lang-en">Logs stored per job and shown in the UI.</span>
+                <span class="lang-ja">ジョブログを保存してUIに表示。</span>
+              </li>
+            </ul>
+          </details>
+
+          <details class="guide-card">
+            <summary>
+              <span class="lang-en">Example API endpoints</span>
+              <span class="lang-ja">想定API例</span>
+            </summary>
+            <pre><code>POST /api/terraform/init
+POST /api/terraform/plan
+POST /api/terraform/apply
+POST /api/terraform/destroy
+POST /api/ansible/run
+POST /api/validate
+GET  /api/jobs/&lt;job_id&gt;
+GET  /api/jobs/&lt;job_id&gt;/logs</code></pre>
+          </details>
+
+          <details class="guide-card">
+            <summary>
+              <span class="lang-en">Manual-only items</span>
+              <span class="lang-ja">手動が残る項目</span>
+            </summary>
+            <ul>
+              <li>
+                <span class="lang-en">VPS purchase/provisioning (provider UI)</span>
+                <span class="lang-ja">VPSの契約/作成（プロバイダUI）</span>
+              </li>
+              <li>
+                <span class="lang-en">Cloudflare token issuance</span>
+                <span class="lang-ja">Cloudflareトークン発行</span>
+              </li>
+              <li>
+                <span class="lang-en">Domain registration</span>
+                <span class="lang-ja">ドメイン登録</span>
+              </li>
+            </ul>
+          </details>
+        </div>
+      </section>
+
+
+      <section class="panel run" data-page="configure">
+        <h2>
+          <span class="lang-en">Run Tasks (Safe Mode)</span>
+          <span class="lang-ja">タスク実行（安全モード）</span>
+        </h2>
+        <p class="note">
+          <span class="lang-en">
+            All actions are whitelisted. Destructive actions require a confirm word.
+          </span>
+          <span class="lang-ja">
+            実行可能な操作はホワイトリストに限定しています。
+            破壊的操作は確認ワードが必要です。
+          </span>
+        </p>
+        <div class="upload-grid">
+          <label>
+            <span class="lang-en">Portal token</span>
+            <span class="lang-ja">ポータルトークン</span>
+            <input
+              id="run_token"
+              type="text"
+              placeholder="Paste the token shown in terminal"
+              data-placeholder-en="Paste the token shown in terminal"
+              data-placeholder-ja="端末に表示されたトークンを貼り付け"
+            />
+          </label>
+          <label>
+            <span class="lang-en">Confirm word (apply/destroy)</span>
+            <span class="lang-ja">確認ワード（apply/destroy）</span>
+            <input
+              id="run_confirm"
+              type="text"
+              placeholder="Type APPLY or DESTROY"
+              data-placeholder-en="Type APPLY or DESTROY"
+              data-placeholder-ja="APPLY または DESTROY を入力"
+            />
+          </label>
+        </div>
+        <label class="inline">
+          <input id="cleanup_auto" type="checkbox" checked />
+          <span class="lang-en">Cleanup secrets after successful runs</span>
+          <span class="lang-ja">成功後に秘密情報を削除</span>
+        </label>
+        <div class="actions">
+          <button type="button" id="cleanup_now">
+            <span class="lang-en">Cleanup secrets now</span>
+            <span class="lang-ja">秘密情報を削除</span>
+          </button>
+        </div>
+        <div id="cleanup_status" class="status" aria-live="polite"></div>
+
+        <div class="run-grid">
+          <div>
+            <h3>Terraform</h3>
+            <div class="actions">
+              <button type="button" class="run-action" data-action="tf-init">init</button>
+              <button type="button" class="run-action" data-action="tf-plan">plan</button>
+              <button type="button" class="run-action danger" data-action="tf-apply">apply</button>
+              <button type="button" class="run-action danger" data-action="tf-destroy">destroy</button>
+            </div>
+          </div>
+          <div>
+            <h3>Terraform (Cloudflare)</h3>
+            <div class="actions">
+              <button type="button" class="run-action" data-action="tf-cf-init">init</button>
+              <button type="button" class="run-action" data-action="tf-cf-plan">plan</button>
+              <button type="button" class="run-action danger" data-action="tf-cf-apply">apply</button>
+              <button type="button" class="run-action danger" data-action="tf-cf-destroy">destroy</button>
+            </div>
+          </div>
+          <div>
+            <h3>Ansible</h3>
+            <div class="actions">
+              <button type="button" class="run-action" data-action="ansible-base">base</button>
+              <button type="button" class="run-action" data-action="ansible-cloudflared">cloudflared</button>
+              <button type="button" class="run-action" data-action="ansible-vps">vps</button>
+              <button type="button" class="run-action" data-action="ansible-ec2">ec2</button>
+              <button type="button" class="run-action" data-action="ansible-onprem">onprem</button>
+              <button type="button" class="run-action" data-action="ansible-vps-check">vps check</button>
+            </div>
+          </div>
+          <div>
+            <h3>Validation</h3>
+            <div class="actions">
+              <button type="button" class="run-action" data-action="validate">make validate</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="output-block">
+          <div class="output-header">
+            <h3>
+              <span class="lang-en">Job Status</span>
+              <span class="lang-ja">ジョブ状況</span>
+            </h3>
+          </div>
+          <div id="run_status" class="status" aria-live="polite"></div>
+          <textarea id="run_log" rows="8" readonly></textarea>
+        </div>
+      </section>
+
+
+      <section class="panel status" data-page="configure">
+        <h2>
+          <span class="lang-en">Preflight Check</span>
+          <span class="lang-ja">事前チェック</span>
+        </h2>
+        <p class="note">
+          <span class="lang-en">Uses the portal token to confirm local files, keys, and tools.</span>
+          <span class="lang-ja">ポータルトークンでローカルファイル/鍵/ツールの状態を確認します。</span>
+        </p>
+        <div class="actions">
+          <button type="button" id="check_status">
+            <span class="lang-en">Run check</span>
+            <span class="lang-ja">チェック実行</span>
+          </button>
+        </div>
+        <div id="status_message" class="status" aria-live="polite"></div>
+        <ul id="status_list" class="status-list"></ul>
+      </section>
+
+      <section class="panel form" data-page="configure">
+        <h2>
+          <span class="lang-en">Project Inputs</span>
+          <span class="lang-ja">入力フォーム</span>
+        </h2>
+        <div id="input_warnings" class="input-warnings" aria-live="polite"></div>
+        <form id="setup-form" autocomplete="off">
+          <div class="form-tabs" role="tablist" aria-label="Setup form sections">
+            <button type="button" class="form-tab" data-form-section="basics">
+              <span class="lang-en">Basics</span>
+              <span class="lang-ja">基本</span>
+            </button>
+            <button type="button" class="form-tab" data-form-section="cloud">
+              <span class="lang-en">Cloud</span>
+              <span class="lang-ja">クラウド</span>
+            </button>
+            <button type="button" class="form-tab" data-form-section="ssh">
+              <span class="lang-en">SSH</span>
+              <span class="lang-ja">SSH</span>
+            </button>
+            <button type="button" class="form-tab" data-form-section="services">
+              <span class="lang-en">Services</span>
+              <span class="lang-ja">サービス</span>
+            </button>
+            <button type="button" class="form-tab" data-form-section="admin">
+              <span class="lang-en">Admin</span>
+              <span class="lang-ja">管理</span>
+            </button>
+            <button type="button" class="form-tab" data-form-section="backup">
+              <span class="lang-en">Backup</span>
+              <span class="lang-ja">バックアップ</span>
+            </button>
+            <button type="button" class="form-tab" data-form-section="terraform">
+              <span class="lang-en">Terraform</span>
+              <span class="lang-ja">Terraform</span>
+            </button>
+          </div>
+          <div class="form-section" data-form-section="basics">
+            <fieldset>
+                        <legend>
+                          <span class="lang-en">Project</span>
+                          <span class="lang-ja">プロジェクト</span>
+                        </legend>
+                        <label>
+                          <span class="lang-en">Project name</span>
+                          <span class="lang-ja">プロジェクト名</span>
+                          <input id="project_name" type="text" value="edge-stack" />
+                        </label>
+                        <label>
+                          <span class="lang-en">Timezone</span>
+                          <span class="lang-ja">タイムゾーン</span>
+                          <input id="timezone" type="text" value="Asia/Tokyo" placeholder="Asia/Tokyo" />
+                        </label>
+                        </fieldset>
+
+            <fieldset>
+                        <legend>
+                          <span class="lang-en">Hosts</span>
+                          <span class="lang-ja">ホスト</span>
+                        </legend>
+                        <label>
+                          <span class="lang-en">On-prem IP</span>
+                          <span class="lang-ja">オンプレIP</span>
+                          <input
+                            id="onprem_ip"
+                            type="text"
+                            value=""
+                            placeholder="192.0.2.10"
+                            data-placeholder-en="192.0.2.10"
+                            data-placeholder-ja="192.0.2.10"
+                          />
+                        </label>
+                        <label>
+                          <span class="lang-en">VPS public IP</span>
+                          <span class="lang-ja">VPSパブリックIP</span>
+                          <input
+                            id="vps_ip"
+                            type="text"
+                            value=""
+                            placeholder="198.51.100.10"
+                            data-placeholder-en="198.51.100.10"
+                            data-placeholder-ja="198.51.100.10"
+                          />
+                        </label>
+                        <label>
+                          <span class="lang-en">EC2 public IP</span>
+                          <span class="lang-ja">EC2パブリックIP</span>
+                          <input
+                            id="ec2_ip"
+                            type="text"
+                            value=""
+                            placeholder="203.0.113.10"
+                            data-placeholder-en="203.0.113.10"
+                            data-placeholder-ja="203.0.113.10"
+                          />
+                        </label>
+                        <label>
+                          <span class="lang-en">On-prem user</span>
+                          <span class="lang-ja">オンプレユーザー</span>
+                          <input id="onprem_user" type="text" value="root" />
+                        </label>
+                        <label>
+                          <span class="lang-en">VPS user</span>
+                          <span class="lang-ja">VPSユーザー</span>
+                          <input id="vps_user" type="text" value="root" />
+                        </label>
+                        <label>
+                          <span class="lang-en">EC2 user</span>
+                          <span class="lang-ja">EC2ユーザー</span>
+                          <input id="ec2_user" type="text" value="admin" />
+                        </label>
+                        </fieldset>
+
+          </div>
+
+          <div class="form-section" data-form-section="cloud">
+            <fieldset>
+                        <legend>
+                          <span class="lang-en">Cloudflare</span>
+                          <span class="lang-ja">Cloudflare</span>
+                        </legend>
+                        <p class="note">
+                          <span class="lang-en">Saved tokens are used for Terraform (CLOUDFLARE_API_TOKEN). You can also set it manually.</span>
+                          <span class="lang-ja">保存したトークンはTerraformで使用します（CLOUDFLARE_API_TOKEN）。手動設定も可能です。</span>
+                        </p>
+                        <label>
+                          <span class="lang-en">Cloudflare API token</span>
+                          <span class="lang-ja">Cloudflare APIトークン</span>
+                          <input id="cf_api_token" type="password" value="" placeholder="API token" />
+                        </label>
+                        <label>
+                          <span class="lang-en">Cloudflare token file</span>
+                          <span class="lang-ja">Cloudflare トークンファイル</span>
+                          <input id="cf_api_token_file" type="file" accept=".txt,.token,text/plain" />
+                        </label>
+                        <div class="actions">
+                          <button type="button" id="cf_api_token_save">
+                            <span class="lang-en">Save token</span>
+                            <span class="lang-ja">トークンを保存</span>
+                          </button>
+                        </div>
+                        <div id="cf_api_token_status" class="status" aria-live="polite"></div>
+                        <p class="note">
+                          <span class="lang-en">Example: zone=YOUR_DOMAIN, web=www.YOUR_DOMAIN (VPS), sub.YOUR_DOMAIN (EC2), game=game.YOUR_DOMAIN (A record, DNS only).</span>
+                          <span class="lang-ja">例: zone=YOUR_DOMAIN, Web=www.YOUR_DOMAIN(VPS), sub.YOUR_DOMAIN(EC2), game=game.YOUR_DOMAIN(Aレコード/DNS only)。</span>
+                        </p>
+                        <label>
+                          <span class="lang-en">Account ID</span>
+                          <span class="lang-ja">アカウントID</span>
+                          <input id="cf_account_id" type="text" value="" />
+                        </label>
+                        <label>
+                          <span class="lang-en">Zone name (YOUR_DOMAIN)</span>
+                          <span class="lang-ja">ゾーン名（YOUR_DOMAIN）</span>
+                          <input id="cf_zone_name" type="text" value="" />
+                        </label>
+                        <label>
+                          <span class="lang-en">Zone mode</span>
+                          <span class="lang-ja">ゾーンモード</span>
+                          <select id="cf_zone_mode">
+                            <option value="create">create</option>
+                            <option value="existing">existing</option>
+                          </select>
+                        </label>
+                        <label>
+                          <span class="lang-en">Zone plan</span>
+                          <span class="lang-ja">ゾーンプラン</span>
+                          <input id="cf_zone_plan" type="text" value="free" />
+                        </label>
+                        <label>
+                          <span class="lang-en">Zone type</span>
+                          <span class="lang-ja">ゾーンタイプ</span>
+                          <select id="cf_zone_type">
+                            <option value="full">full</option>
+                            <option value="partial">partial</option>
+                          </select>
+                        </label>
+                        <label class="inline">
+                          <input id="cf_manage_failover_record" type="checkbox" />
+                          <span class="lang-en">Create failover A record</span>
+                          <span class="lang-ja">フェイルオーバー用Aレコードを作成</span>
+                        </label>
+                        <label>
+                          <span class="lang-en">Failover record name</span>
+                          <span class="lang-ja">フェイルオーバー用レコード名</span>
+                          <input id="cf_failover_record_name" type="text" value="" placeholder="game.YOUR_DOMAIN" />
+                        </label>
+                        <label>
+                          <span class="lang-en">Failover record initial IP</span>
+                          <span class="lang-ja">フェイルオーバー初期IP</span>
+                          <input
+                            id="cf_failover_record_value"
+                            type="text"
+                            value=""
+                            placeholder="YOUR_FAILOVER_IP"
+                            data-placeholder-en="YOUR_FAILOVER_IP"
+                            data-placeholder-ja="YOUR_FAILOVER_IP"
+                          />
+                        </label>
+                        <label class="inline">
+                          <input id="cf_failover_record_proxied" type="checkbox" />
+                          <span class="lang-en">Proxy failover record</span>
+                          <span class="lang-ja">フェイルオーバーをProxy</span>
+                        </label>
+                        <label>
+                          <span class="lang-en">Failover TTL (1=auto)</span>
+                          <span class="lang-ja">フェイルオーバーTTL（1=auto）</span>
+                          <input id="cf_failover_record_ttl" type="text" value="1" />
+                        </label>
+                        <label class="inline">
+                          <input id="cf_manage_tunnels" type="checkbox" />
+                          <span class="lang-en">Create tunnels + DNS (VPS/EC2)</span>
+                          <span class="lang-ja">トンネルとDNSを作成（VPS/EC2）</span>
+                        </label>
+                        <label>
+                          <span class="lang-en">VPS tunnel name</span>
+                          <span class="lang-ja">VPSトンネル名</span>
+                          <input
+                            id="cf_vps_tunnel_name"
+                            type="text"
+                            value=""
+                            placeholder="YOUR_VPS_TUNNEL"
+                            data-placeholder-en="YOUR_VPS_TUNNEL"
+                            data-placeholder-ja="YOUR_VPS_TUNNEL"
+                          />
+                        </label>
+                        <label>
+                          <span class="lang-en">VPS tunnel hostname</span>
+                          <span class="lang-ja">VPSトンネルホスト名</span>
+                          <input id="cf_vps_hostname" type="text" value="" placeholder="www.YOUR_DOMAIN" />
+                        </label>
+                        <label>
+                          <span class="lang-en">EC2 tunnel name</span>
+                          <span class="lang-ja">EC2トンネル名</span>
+                          <input
+                            id="cf_ec2_tunnel_name"
+                            type="text"
+                            value=""
+                            placeholder="YOUR_EC2_TUNNEL"
+                            data-placeholder-en="YOUR_EC2_TUNNEL"
+                            data-placeholder-ja="YOUR_EC2_TUNNEL"
+                          />
+                        </label>
+                        <label>
+                          <span class="lang-en">EC2 tunnel hostname</span>
+                          <span class="lang-ja">EC2トンネルホスト名</span>
+                          <input id="cf_ec2_hostname" type="text" value="" placeholder="sub.YOUR_DOMAIN" />
+                        </label>
+                        <label class="inline">
+                          <input id="cf_tunnel_proxied" type="checkbox" checked />
+                          <span class="lang-en">Proxy tunnel DNS records</span>
+                          <span class="lang-ja">トンネルDNSをProxy</span>
+                        </label>
+                        <label>
+                          <span class="lang-en">Tunnel TTL (1=auto)</span>
+                          <span class="lang-ja">トンネルTTL（1=auto）</span>
+                          <input id="cf_tunnel_ttl" type="text" value="1" />
+                        </label>
+                        </fieldset>
+
+            <fieldset>
+                        <legend>
+                          <span class="lang-en">Cloudflared (Vault)</span>
+                          <span class="lang-ja">Cloudflared（Vault）</span>
+                        </legend>
+                        <p class="note">
+                          <span class="lang-en">Paste tunnel ID and credentials JSON. Hostnames use Cloudflare settings above.</span>
+                          <span class="lang-ja">トンネルIDとcredentials JSONを入力します。ホスト名は上のCloudflare設定を使います。</span>
+                        </p>
+                        <label>
+                          <span class="lang-en">VPS tunnel ID</span>
+                          <span class="lang-ja">VPS トンネルID</span>
+                          <input id="cf_vps_tunnel_id" type="text" value="" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" />
+                        </label>
+                        <label>
+                          <span class="lang-en">VPS origin service</span>
+                          <span class="lang-ja">VPS 転送先サービス</span>
+                          <input id="cf_vps_origin" type="text" value="http://10.100.0.2:80" />
+                        </label>
+                        <label>
+                          <span class="lang-en">VPS credentials JSON</span>
+                          <span class="lang-ja">VPS credentials JSON</span>
+                          <textarea id="cf_vps_credentials" rows="4" placeholder="AccountTag/TunnelSecret/TunnelID JSON"></textarea>
+                        </label>
+                        <label>
+                          <span class="lang-en">EC2 tunnel ID</span>
+                          <span class="lang-ja">EC2 トンネルID</span>
+                          <input id="cf_ec2_tunnel_id" type="text" value="" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" />
+                        </label>
+                        <label>
+                          <span class="lang-en">EC2 origin service</span>
+                          <span class="lang-ja">EC2 転送先サービス</span>
+                          <input id="cf_ec2_origin" type="text" value="http://10.100.0.2:80" />
+                        </label>
+                        <label>
+                          <span class="lang-en">EC2 credentials JSON</span>
+                          <span class="lang-ja">EC2 credentials JSON</span>
+                          <textarea id="cf_ec2_credentials" rows="4" placeholder="AccountTag/TunnelSecret/TunnelID JSON"></textarea>
+                        </label>
+                        </fieldset>
+
+          </div>
+
+          <div class="form-section" data-form-section="ssh">
+            <fieldset>
+                        <legend>
+                          <span class="lang-en">SSH Keys</span>
+                          <span class="lang-ja">SSH鍵</span>
+                        </legend>
+                        <p class="note">
+                          <span class="lang-en">Keys are stored under ~/.ssh (portal user, often /root/.ssh). Enter only the file name.</span>
+                          <span class="lang-ja">鍵は ~/.ssh（ポータル実行ユーザー、通常は /root/.ssh）に保存されます。鍵名だけ入力してください。</span>
+                        </p>
+                        <label>
+                          <span class="lang-en">On-prem key name</span>
+                          <span class="lang-ja">オンプレ鍵名</span>
+                          <input id="onprem_key_name" type="text" value="onprem_ed25519" placeholder="onprem_ed25519" />
+                        </label>
+                        <label>
+                          <span class="lang-en">VPS key name</span>
+                          <span class="lang-ja">VPS鍵名</span>
+                          <input id="vps_key_name" type="text" value="vps_ed25519" placeholder="vps_ed25519" />
+                        </label>
+                        <label>
+                          <span class="lang-en">EC2 key name</span>
+                          <span class="lang-ja">EC2鍵名</span>
+                          <input id="ec2_key_name" type="text" value="ec2_key.pem" placeholder="ec2_key.pem" />
+                        </label>
+                        </fieldset>
+
+            <fieldset>
+              <legend>
+                <span class="lang-en">SSH Key Upload</span>
+                <span class="lang-ja">SSH鍵アップロード</span>
+              </legend>
+              <p class="note">
+                <span class="lang-en">
+                  Use the upload token shown when the portal starts. Uploads overwrite ~/.ssh/&lt;key name&gt;.
+                </span>
+                <span class="lang-ja">
+                  ポータル起動時に表示されるトークンを入力してください。アップロードすると ~/.ssh/&lt;鍵名&gt; を上書きします。
+                </span>
+              </p>
+              <p class="note">
+                <span class="lang-en">If the key has a passphrase, it will be added to ssh-agent.</span>
+                <span class="lang-ja">パスフレーズ付きの場合は ssh-agent に登録します。</span>
+              </p>
+              <div class="upload-grid">
+                <label>
+                  <span class="lang-en">Target key</span>
+                  <span class="lang-ja">対象鍵</span>
+                  <select id="upload_target">
+                    <option value="onprem">On-prem (onprem_ed25519)</option>
+                    <option value="vps">VPS (vps_ed25519)</option>
+                    <option value="ec2">EC2 (ec2_key.pem)</option>
+                  </select>
+                </label>
+                <label>
+                  <span class="lang-en">Key name (from SSH keys section)</span>
+                  <span class="lang-ja">鍵名（SSH鍵の設定から）</span>
+                  <input id="upload_key_name" type="text" value="" placeholder="auto" />
+                </label>
+                <label>
+                  <span class="lang-en">Private key file</span>
+                  <span class="lang-ja">秘密鍵ファイル</span>
+                  <input id="upload_file" type="file" />
+                </label>
+                <label>
+                  <span class="lang-en">Passphrase (optional)</span>
+                  <span class="lang-ja">パスフレーズ（任意）</span>
+                  <input
+                    id="upload_passphrase"
+                    type="password"
+                    value=""
+                    placeholder="optional"
+                    data-placeholder-en="optional"
+                    data-placeholder-ja="任意"
+                  />
+                </label>
+                <label>
+                  <span class="lang-en">Upload token</span>
+                  <span class="lang-ja">アップロードトークン</span>
+                  <input
+                    id="upload_token"
+                    type="text"
+                    placeholder="Paste the token shown in terminal"
+                    data-placeholder-en="Paste the token shown in terminal"
+                    data-placeholder-ja="端末に表示されたトークンを貼り付け"
+                  />
+                </label>
+                <div class="actions">
+                  <button type="button" id="upload_button">
+                    <span class="lang-en">Upload key</span>
+                    <span class="lang-ja">鍵をアップロード</span>
+                  </button>
+                </div>
+                <div id="upload_status" class="status" aria-live="polite"></div>
+              </div>
+            </fieldset>
+
+          </div>
+
+          <div class="form-section" data-form-section="services">
+            <fieldset>
+                        <legend>
+                          <span class="lang-en">Core Services</span>
+                          <span class="lang-ja">基盤サービス</span>
+                        </legend>
+                        <p class="note">
+                          <span class="lang-en">Enable only what you plan to deploy. Missing secrets will fail Ansible.</span>
+                          <span class="lang-ja">必要なものだけ有効化してください。秘密情報が不足するとAnsibleが失敗します。</span>
+                        </p>
+                        <label class="inline">
+                          <input id="enable_wireguard" type="checkbox" />
+                          <span class="lang-en">WireGuard</span>
+                          <span class="lang-ja">WireGuard</span>
+                        </label>
+                        <label class="inline">
+                          <input id="enable_failover" type="checkbox" />
+                          <span class="lang-en">Failover core</span>
+                          <span class="lang-ja">フェイルオーバー制御</span>
+                        </label>
+                        <label class="inline">
+                          <input id="enable_frr" type="checkbox" />
+                          <span class="lang-en">FRR / BFD</span>
+                          <span class="lang-ja">FRR / BFD</span>
+                        </label>
+                        <label class="inline">
+                          <input id="enable_suricata" type="checkbox" />
+                          <span class="lang-en">Suricata IDS/IPS</span>
+                          <span class="lang-ja">Suricata IDS/IPS</span>
+                        </label>
+                        <label class="inline">
+                          <input id="enable_cloudflared" type="checkbox" />
+                          <span class="lang-en">Cloudflared</span>
+                          <span class="lang-ja">Cloudflared</span>
+                        </label>
+                        <label class="inline">
+                          <input id="enable_portctl" type="checkbox" />
+                          <span class="lang-en">Port forward portal (VPS)</span>
+                          <span class="lang-ja">ポートフォワード管理（VPS）</span>
+                        </label>
+                      </fieldset>
+
+            <fieldset>
+                        <legend>
+                          <span class="lang-en">Notifications</span>
+                          <span class="lang-ja">通知</span>
+                        </legend>
+                        <p class="note">
+                          <span class="lang-en">Shared Discord webhook used by DDoS and game portal notifications.</span>
+                          <span class="lang-ja">DDoS通知とゲームポータル通知で共通のDiscord Webhookを使います。</span>
+                        </p>
+                        <label>
+                          <span class="lang-en">Discord webhook (global)</span>
+                          <span class="lang-ja">Discord Webhook（共通）</span>
+                          <input id="discord_webhook" type="text" value="" placeholder="https://discord.com/api/webhooks/..." />
+                        </label>
+                        </fieldset>
+
+            <fieldset>
+                        <legend>
+                          <span class="lang-en">DDoS notify (VPS)</span>
+                          <span class="lang-ja">DDoS通知（VPS）</span>
+                        </legend>
+                        <p class="note">
+                          <span class="lang-en">Optional. Watches Suricata alerts on the VPS and sends UDP notifications. Uses the global Discord webhook if set.</span>
+                          <span class="lang-ja">任意設定。VPSのSuricataアラートを監視し、UDP通知します。Discordは共通Webhookを使用します。</span>
+                        </p>
+                        <label class="inline">
+                          <input id="ddos_notify_enable" type="checkbox" />
+                          <span class="lang-en">Enable DDoS notify</span>
+                          <span class="lang-ja">DDoS通知を有効化</span>
+                        </label>
+                        <div id="ddos_notify_fields">
+                          <label>
+                            <span class="lang-en">Primary notify IP</span>
+                            <span class="lang-ja">通知先IP（Primary）</span>
+                            <input id="ddos_notify_primary_ip" type="text" value="" placeholder="10.100.0.2" />
+                          </label>
+                          <label>
+                            <span class="lang-en">Fallback notify IP (optional)</span>
+                            <span class="lang-ja">通知先IP（Fallback・任意）</span>
+                            <input id="ddos_notify_fallback_ip" type="text" value="" placeholder="optional" />
+                          </label>
+                          <label>
+                            <span class="lang-en">DDoS signatures (comma separated, optional)</span>
+                            <span class="lang-ja">DDoS署名（カンマ区切り・任意）</span>
+                            <textarea id="ddos_notify_signatures" rows="3" placeholder="DoS ICMP Flood detected, DDoS UDP Flood (aggregate)"></textarea>
+                          </label>
+                        </div>
+                      </fieldset>
+
+            <fieldset>
+                        <legend>
+                          <span class="lang-en">Ports (SG/UFW/Forwarding)</span>
+                          <span class="lang-ja">ポート設定（SG/UFW/転送）</span>
+                        </legend>
+                        <p class="note">
+                          <span class="lang-en">Defaults: SSH 22/tcp and WireGuard 51820/udp are always allowed.</span>
+                          <span class="lang-ja">デフォルト: SSH 22/tcp と WireGuard 51820/udp は常に許可します。</span>
+                        </p>
+                        <div class="port-grid">
+                          <label class="inline">
+                            <input id="port_game_minecraft" type="checkbox" />
+                            <span class="lang-en">Minecraft (TCP 25565)</span>
+                            <span class="lang-ja">Minecraft（TCP 25565）</span>
+                          </label>
+                          <label class="inline">
+                            <input id="port_game_bedrock" type="checkbox" />
+                            <span class="lang-en">Minecraft Bedrock (UDP 19132/19133)</span>
+                            <span class="lang-ja">Minecraft Bedrock（UDP 19132/19133）</span>
+                          </label>
+                          <label class="inline">
+                            <input id="port_game_valheim" type="checkbox" />
+                            <span class="lang-en">Valheim (UDP 2456-2458)</span>
+                            <span class="lang-ja">Valheim（UDP 2456-2458）</span>
+                          </label>
+                          <label class="inline">
+                            <input id="port_game_7dtd" type="checkbox" />
+                            <span class="lang-en">7 Days to Die (UDP 26900-26902)</span>
+                            <span class="lang-ja">7 Days to Die（UDP 26900-26902）</span>
+                          </label>
+                        </div>
+                        <label>
+                          <span class="lang-en">Additional TCP ports (comma)</span>
+                          <span class="lang-ja">追加TCPポート（カンマ区切り）</span>
+                          <input id="allowed_tcp_ports" type="text" value="" placeholder="25565,25575" />
+                        </label>
+                        <label>
+                          <span class="lang-en">Additional UDP ports (comma)</span>
+                          <span class="lang-ja">追加UDPポート（カンマ区切り）</span>
+                          <input id="allowed_udp_ports" type="text" value="" placeholder="2456,2457,2458" />
+                        </label>
+                        <label class="inline">
+                          <input id="port_forward_enable" type="checkbox" checked />
+                          <span class="lang-en">Apply port forwarding rules (VPS)</span>
+                          <span class="lang-ja">ポート転送ルールを適用（VPS）</span>
+                        </label>
+                        <label>
+                          <span class="lang-en">Forward destination IP</span>
+                          <span class="lang-ja">転送先IP</span>
+                          <input id="port_forward_dest_ip" type="text" value="10.100.0.2" placeholder="10.100.0.2" />
+                        </label>
+                        <label>
+                          <span class="lang-en">Custom forward rules (one per line)</span>
+                          <span class="lang-ja">カスタム転送ルール（1行1ルール）</span>
+                          <textarea id="port_forward_custom" rows="4" placeholder="tcp 25565 25565"></textarea>
+                        </label>
+                        <p class="note">
+                          <span class="lang-en">Format: protocol ext_port dest_port (e.g. tcp 25565 25565, udp 2456 2456).</span>
+                          <span class="lang-ja">形式: プロトコル 外部ポート 宛先ポート（例: tcp 25565 25565、udp 2456 2456）。</span>
+                        </p>
+                      </fieldset>
+
+            <fieldset>
+                        <legend>
+                          <span class="lang-en">Containers</span>
+                          <span class="lang-ja">コンテナ</span>
+                        </legend>
+                        <p class="note">
+                          <span class="lang-en">Choose which containers to deploy on the on-prem host.</span>
+                          <span class="lang-ja">オンプレに導入するコンテナを選択します。</span>
+                        </p>
+                        <label>
+                          <span class="lang-en">Containers root</span>
+                          <span class="lang-ja">コンテナ配置先</span>
+                          <input id="containers_root" type="text" value="/srv/edge-stack" />
+                        </label>
+                        <label>
+                          <span class="lang-en">Containers owner</span>
+                          <span class="lang-ja">コンテナ所有ユーザー</span>
+                          <input id="containers_owner" type="text" value="edge" />
+                        </label>
+                        <label>
+                          <span class="lang-en">Containers group</span>
+                          <span class="lang-ja">コンテナ所有グループ</span>
+                          <input id="containers_group" type="text" value="edge" />
+                        </label>
+                        <label class="inline">
+                          <input id="containers_manage_user" type="checkbox" checked />
+                          <span class="lang-en">Create owner user/group automatically</span>
+                          <span class="lang-ja">ユーザー/グループを自動作成</span>
+                        </label>
+                        <label class="inline">
+                          <input id="enable_minecraft" type="checkbox" checked />
+                          <span class="lang-en">Minecraft</span>
+                          <span class="lang-ja">Minecraft</span>
+                        </label>
+                        <label class="inline">
+                          <input id="enable_valheim" type="checkbox" checked />
+                          <span class="lang-en">Valheim</span>
+                          <span class="lang-ja">Valheim</span>
+                        </label>
+                        <label class="inline">
+                          <input id="enable_7dtd" type="checkbox" checked />
+                          <span class="lang-en">7 Days to Die</span>
+                          <span class="lang-ja">7 Days to Die</span>
+                        </label>
+                        <label class="inline">
+                          <input id="enable_web_portal" type="checkbox" checked disabled />
+                          <span class="lang-en">Web portal</span>
+                          <span class="lang-ja">Webポータル</span>
+                        </label>
+                        <label class="inline">
+                          <input id="enable_player_monitor" type="checkbox" checked />
+                          <span class="lang-en">Player monitor</span>
+                          <span class="lang-ja">プレイヤーモニタ</span>
+                        </label>
+                        <label class="inline">
+                          <input id="containers_start" type="checkbox" />
+                          <span class="lang-en">Auto start containers after deploy</span>
+                          <span class="lang-ja">適用後にコンテナを自動起動</span>
+                        </label>
+                      </fieldset>
+
+          </div>
+
+          <div class="form-section" data-form-section="admin">
+            <fieldset>
+                        <legend>
+                          <span class="lang-en">Admin panel (game servers)</span>
+                          <span class="lang-ja">管理者画面（ゲームサーバー）</span>
+                        </legend>
+                        <p class="note">
+                          <span class="lang-en">Admin auth is required. Allow list must include your WG/LAN CIDRs; empty = no access.</span>
+                          <span class="lang-ja">管理者認証は必須です。WG/LAN のCIDRを許可リストに入れてください。空のままだとアクセス不可です。</span>
+                        </p>
+                        <p class="note">
+                          <span class="lang-en">LAN CIDRs are auto-detected on the portal host when you run the status check.</span>
+                          <span class="lang-ja">LANのCIDRはステータス確認時にポータル側で自動検出されます。</span>
+                        </p>
+                        <label class="inline">
+                          <input id="web_portal_admin_enable" type="checkbox" checked disabled />
+                          <span class="lang-en">Admin auth required</span>
+                          <span class="lang-ja">管理者認証（必須）</span>
+                        </label>
+                        <label>
+                          <span class="lang-en">Admin login</span>
+                          <span class="lang-ja">ログイン名</span>
+                          <input id="web_portal_admin_user" type="text" value="admin" />
+                        </label>
+                        <label>
+                          <span class="lang-en">Admin password</span>
+                          <span class="lang-ja">パスワード</span>
+                          <input id="web_portal_admin_password" type="password" value="" autocomplete="new-password" />
+                        </label>
+                        <label>
+                          <span class="lang-en">Allow CIDRs</span>
+                          <span class="lang-ja">許可CIDR</span>
+                          <input
+                            id="web_portal_admin_allow_cidrs"
+                            type="text"
+                            value=""
+                            placeholder="10.100.0.0/24,192.168.1.0/24"
+                            data-placeholder-en="10.100.0.0/24,192.168.1.0/24"
+                            data-placeholder-ja="10.100.0.0/24,192.168.1.0/24"
+                          />
+                        </label>
+                        <label>
+                          <span class="lang-en">Block CIDRs</span>
+                          <span class="lang-ja">拒否CIDR</span>
+                          <input id="web_portal_admin_deny_cidrs" type="text" value="" />
+                        </label>
+                      </fieldset>
+
+          </div>
+
+          <div class="form-section" data-form-section="backup">
+            <fieldset>
+                        <legend>
+                          <span class="lang-en">Backups</span>
+                          <span class="lang-ja">バックアップ</span>
+                        </legend>
+                        <label class="inline">
+                          <input id="backup_full_enabled" type="checkbox" />
+                          <span class="lang-en">Enable full backup</span>
+                          <span class="lang-ja">フルバックアップを有効化</span>
+                        </label>
+                        <label class="inline">
+                          <input id="backup_games_enabled" type="checkbox" checked />
+                          <span class="lang-en">Enable game backup</span>
+                          <span class="lang-ja">ゲームデータバックアップを有効化</span>
+                        </label>
+                        <label>
+                          <span class="lang-en">Game backup cron</span>
+                          <span class="lang-ja">ゲームバックアップcron</span>
+                          <input id="backup_games_cron" type="text" value="0 * * * *" />
+                        </label>
+                      </fieldset>
+
+          </div>
+
+          <div class="form-section" data-form-section="terraform">
+            <fieldset>
+                        <legend>
+                          <span class="lang-en">Terraform (EC2)</span>
+                          <span class="lang-ja">Terraform（EC2）</span>
+                        </legend>
+                        <label>
+                          <span class="lang-en">AWS region</span>
+                          <span class="lang-ja">AWSリージョン</span>
+                          <input
+                            id="aws_region"
+                            type="text"
+                            value="ap-northeast-1"
+                            placeholder="ap-northeast-1"
+                            data-placeholder-en="ap-northeast-1"
+                            data-placeholder-ja="ap-northeast-1"
+                          />
+                        </label>
+                        <label>
+                          <span class="lang-en">AWS profile</span>
+                          <span class="lang-ja">AWSプロファイル</span>
+                          <input
+                            id="aws_profile"
+                            type="text"
+                            value="default"
+                            placeholder="default"
+                            data-placeholder-en="default"
+                            data-placeholder-ja="default"
+                          />
+                        </label>
+                        <div>
+                          <label>
+                            <span class="lang-en">AWS access key CSV</span>
+                            <span class="lang-ja">AWSアクセスキーCSV</span>
+                            <input id="aws_credentials_file" type="file" accept=".csv,text/csv" />
+                          </label>
+                          <p class="note">
+                            <span class="lang-en">Imports CSV and writes ~/.aws/credentials + config for the selected profile.</span>
+                            <span class="lang-ja">CSVを取り込み、選択したプロファイルで ~/.aws/credentials と config に保存します。</span>
+                          </p>
+                          <div class="actions">
+                            <button type="button" id="aws_credentials_button">
+                              <span class="lang-en">Import AWS CSV</span>
+                              <span class="lang-ja">AWS CSVを取り込む</span>
+                            </button>
+                          </div>
+                          <div id="aws_credentials_status" class="status" aria-live="polite"></div>
+                        </div>
+                        <label>
+                          <span class="lang-en">VPC mode</span>
+                          <span class="lang-ja">VPCモード</span>
+                          <select id="vpc_mode">
+                            <option value="auto">Auto (自動)</option>
+                            <option value="custom">Custom (カスタム)</option>
+                          </select>
+                        </label>
+                        <p class="note">
+                          <span class="lang-en">Auto uses 10.20.0.0/16 (VPC) and 10.20.10.0/24 (public subnet).</span>
+                          <span class="lang-ja">自動設定は VPC=10.20.0.0/16、Public Subnet=10.20.10.0/24 を使用します。</span>
+                        </p>
+                        <div id="vpc_custom_fields" hidden>
+                          <label>
+                            <span class="lang-en">VPC CIDR</span>
+                            <span class="lang-ja">VPC CIDR</span>
+                            <input id="vpc_cidr" type="text" placeholder="10.20.0.0/16" data-placeholder-en="10.20.0.0/16" data-placeholder-ja="10.20.0.0/16" />
+                          </label>
+                          <label>
+                            <span class="lang-en">Public subnet CIDR</span>
+                            <span class="lang-ja">Public Subnet CIDR</span>
+                            <input id="public_subnet_cidr" type="text" placeholder="10.20.10.0/24" data-placeholder-en="10.20.10.0/24" data-placeholder-ja="10.20.10.0/24" />
+                          </label>
+                          <label>
+                            <span class="lang-en">Public subnet AZ (optional)</span>
+                            <span class="lang-ja">Public Subnet AZ（任意）</span>
+                            <input id="public_subnet_az" type="text" placeholder="ap-northeast-1a" data-placeholder-en="ap-northeast-1a" data-placeholder-ja="ap-northeast-1a" />
+                          </label>
+                        </div>
+                        <label>
+                          <span class="lang-en">AMI mode</span>
+                          <span class="lang-ja">AMIモード</span>
+                          <select id="ami_mode">
+                            <option value="manual">Manual (AMI ID)</option>
+                            <option value="auto" selected>Auto (Filter)</option>
+                          </select>
+                        </label>
+                        <div id="ami_manual_fields" hidden>
+                          <label>
+                            <span class="lang-en">AMI ID</span>
+                            <span class="lang-ja">AMI ID</span>
+                            <input id="ami_id" type="text" placeholder="ami-xxxxxxxx" data-placeholder-en="ami-xxxxxxxx" data-placeholder-ja="ami-xxxxxxxx" />
+                          </label>
+                        </div>
+                        <div id="ami_auto_fields">
+                          <label>
+                            <span class="lang-en">AMI owners (comma)</span>
+                            <span class="lang-ja">AMIオーナー（カンマ区切り）</span>
+                            <input
+                              id="ami_owners"
+                              type="text"
+                              value="136693071363"
+                              placeholder="YOUR_AMI_OWNER"
+                              data-placeholder-en="YOUR_AMI_OWNER"
+                              data-placeholder-ja="YOUR_AMI_OWNER"
+                            />
+                          </label>
+                          <label>
+                            <span class="lang-en">AMI name filter</span>
+                            <span class="lang-ja">AMI名フィルタ</span>
+                            <input
+                              id="ami_name_filter"
+                              type="text"
+                              value="debian-13-arm64-*"
+                              placeholder="YOUR_AMI_NAME_PATTERN"
+                              data-placeholder-en="YOUR_AMI_NAME_PATTERN"
+                              data-placeholder-ja="YOUR_AMI_NAME_PATTERN"
+                            />
+                          </label>
+                          <label>
+                            <span class="lang-en">AMI architecture</span>
+                            <span class="lang-ja">AMIアーキテクチャ</span>
+                            <input
+                              id="ami_architecture"
+                              type="text"
+                              value="arm64"
+                              placeholder="arm64"
+                              data-placeholder-en="arm64"
+                              data-placeholder-ja="arm64"
+                            />
+                          </label>
+                          <label>
+                            <span class="lang-en">AMI virtualization type</span>
+                            <span class="lang-ja">AMI仮想化タイプ</span>
+                            <input
+                              id="ami_virtualization_type"
+                              type="text"
+                              value="hvm"
+                              placeholder="hvm"
+                              data-placeholder-en="hvm"
+                              data-placeholder-ja="hvm"
+                            />
+                          </label>
+                          <label>
+                            <span class="lang-en">AMI root device type</span>
+                            <span class="lang-ja">AMIルートデバイスタイプ</span>
+                            <input
+                              id="ami_root_device_type"
+                              type="text"
+                              value="ebs"
+                              placeholder="ebs"
+                              data-placeholder-en="ebs"
+                              data-placeholder-ja="ebs"
+                            />
+                          </label>
+                        </div>
+                        <label>
+                          <span class="lang-en">Instance type</span>
+                          <span class="lang-ja">インスタンスタイプ</span>
+                          <input id="instance_type" type="text" value="t4g.medium" />
+                        </label>
+                        <label>
+                          <span class="lang-en">Key pair name</span>
+                          <span class="lang-ja">キーペア名</span>
+                          <input id="key_name" type="text" value="edge-stack-key" placeholder="edge-stack-key" data-placeholder-en="edge-stack-key" data-placeholder-ja="edge-stack-key" />
+                        </label>
+            <label>
+              <span class="lang-en">Key pair mode</span>
+              <span class="lang-ja">キーペアモード</span>
+              <select id="key_pair_mode">
+                <option value="auto" selected>Auto (Generate)</option>
+                <option value="existing">Use existing KeyPair (既存)</option>
+                <option value="create">Create from public key (作成)</option>
+              </select>
+            </label>
+            <div id="key_pair_auto_fields" hidden>
+              <p class="note">
+                <span class="lang-en">Auto generates ~/.ssh/&lt;EC2 key name&gt; and fills the public key for Terraform.</span>
+                <span class="lang-ja">自動生成で ~/.ssh/&lt;EC2鍵名&gt; を作成し、Terraform用の公開鍵を埋めます。</span>
+              </p>
+              <p class="note">
+                <span class="lang-en">Requires the portal token (Run Tasks token).</span>
+                <span class="lang-ja">ポータルトークン（タスク実行のトークン）が必要です。</span>
+              </p>
+              <p class="note">
+                <span class="lang-en">VPS keys still need to be uploaded manually.</span>
+                <span class="lang-ja">VPSの鍵は別途アップロードが必要です。</span>
+              </p>
+              <label>
+                <span class="lang-en">EC2 key passphrase (optional)</span>
+                <span class="lang-ja">EC2鍵パスフレーズ（任意）</span>
+                <input
+                  id="ec2_key_passphrase"
+                  type="password"
+                  value=""
+                  placeholder="optional"
+                  data-placeholder-en="optional"
+                  data-placeholder-ja="任意"
+                />
+              </label>
+              <div class="actions">
+                <button type="button" id="ec2_key_generate">
+                  <span class="lang-en">Generate EC2 key pair</span>
+                  <span class="lang-ja">EC2鍵を自動生成</span>
+                </button>
+              </div>
+              <div id="ec2_key_status" class="status" aria-live="polite"></div>
+            </div>
+            <div id="key_pair_public_fields" hidden>
+              <label>
+                <span class="lang-en">Key pair public key</span>
+                <span class="lang-ja">キーペア公開鍵</span>
+                            <textarea
+                              id="key_pair_public_key"
+                              rows="2"
+                              placeholder="ssh-ed25519 AAAA... user@host"
+                              data-placeholder-en="ssh-ed25519 AAAA... user@host"
+                              data-placeholder-ja="ssh-ed25519 AAAA... user@host"
+                            ></textarea>
+                          </label>
+                        </div>
+                        <label>
+                          <span class="lang-en">Instance name</span>
+                          <span class="lang-ja">インスタンス名</span>
+                          <input
+                            id="instance_name"
+                            type="text"
+                            value=""
+                            placeholder="ec2-edge"
+                            data-placeholder-en="ec2-edge"
+                            data-placeholder-ja="ec2-edge"
+                          />
+                        </label>
+                        <label class="inline">
+                          <input id="associate_eip" type="checkbox" checked />
+                          <span class="lang-en">Attach Elastic IP</span>
+                          <span class="lang-ja">Elastic IPを付与</span>
+                        </label>
+                        <label class="inline">
+                          <input id="source_dest_check" type="checkbox" />
+                          <span class="lang-en">Enable source/dest check (routing off)</span>
+                          <span class="lang-ja">source/dest check有効（中継しない）</span>
+                        </label>
+                        <label>
+                          <span class="lang-en">Allowed SSH CIDRs (comma)</span>
+                          <span class="lang-ja">SSH許可CIDR（カンマ区切り）</span>
+                          <input
+                            id="allowed_ssh_cidrs"
+                            type="text"
+                            value=""
+                            placeholder="YOUR_ADMIN_CIDR"
+                            data-placeholder-en="YOUR_ADMIN_CIDR"
+                            data-placeholder-ja="YOUR_ADMIN_CIDR"
+                          />
+                        </label>
+                        </fieldset>
+
+          </div>
+
+<div class="actions">
+            <button type="button" id="generate">
+              <span class="lang-en">Generate files</span>
+              <span class="lang-ja">ファイル生成</span>
+            </button>
+          </div>
+        </form>
+      </section>
+
+      <section class="panel outputs" data-page="outputs">
+        <h2>
+          <span class="lang-en">Generated Outputs</span>
+          <span class="lang-ja">生成結果</span>
+        </h2>
+        <p class="note">
+          <span class="lang-en">Generate files first, then save them into the config directory (default: ~/.config/edge-stack).</span>
+          <span class="lang-ja">先にファイル生成を行い、設定ディレクトリ（既定: ~/.config/edge-stack）に保存します。</span>
+        </p>
+        <div class="actions">
+          <button type="button" id="save_all">
+            <span class="lang-en">Save all to server</span>
+            <span class="lang-ja">サーバーに保存</span>
+          </button>
+        </div>
+        <div id="save_status" class="status" aria-live="polite"></div>
+
+        <div class="output-block">
+          <div class="output-header">
+            <h3>ansible/hosts.ini</h3>
+            <button class="download" data-target="inventory" data-filename="hosts.ini">
+              <span class="lang-en">Download</span>
+              <span class="lang-ja">ダウンロード</span>
+            </button>
+          </div>
+          <textarea id="inventory" rows="10" readonly></textarea>
+        </div>
+        <div class="output-block">
+          <div class="output-header">
+            <h3>ansible/group_vars/all.yml</h3>
+            <button class="download" data-target="groupvars" data-filename="all.yml">
+              <span class="lang-en">Download</span>
+              <span class="lang-ja">ダウンロード</span>
+            </button>
+          </div>
+          <textarea id="groupvars" rows="12" readonly></textarea>
+        </div>
+        <div class="output-block">
+          <div class="output-header">
+            <h3>terraform/terraform.tfvars</h3>
+            <button class="download" data-target="tfvars" data-filename="terraform.tfvars">
+              <span class="lang-en">Download</span>
+              <span class="lang-ja">ダウンロード</span>
+            </button>
+          </div>
+          <textarea id="tfvars" rows="12" readonly></textarea>
+        </div>
+        <div class="output-block">
+          <div class="output-header">
+            <h3>terraform-cloudflare/terraform.tfvars</h3>
+            <button class="download" data-target="tfvars_cf" data-filename="terraform-cloudflare.tfvars">
+              <span class="lang-en">Download</span>
+              <span class="lang-ja">ダウンロード</span>
+            </button>
+          </div>
+          <textarea id="tfvars_cf" rows="12" readonly></textarea>
+        </div>
+        <div class="output-block">
+          <div class="output-header">
+            <h3>secrets_checklist.txt</h3>
+            <button class="download" data-target="checklist" data-filename="secrets_checklist.txt">
+              <span class="lang-en">Download</span>
+              <span class="lang-ja">ダウンロード</span>
+            </button>
+          </div>
+          <textarea id="checklist" rows="12" readonly></textarea>
+        </div>
+        <div class="output-block">
+          <div class="output-header">
+            <h3>admin_vault_snippet.txt</h3>
+            <button class="download" data-target="admin_vault" data-filename="admin_vault_snippet.txt">
+              <span class="lang-en">Download</span>
+              <span class="lang-ja">ダウンロード</span>
+            </button>
+          </div>
+          <textarea id="admin_vault" rows="8" readonly></textarea>
+        </div>
+        <div class="output-block">
+          <div class="output-header">
+            <h3>failover_aws_vault_snippet.txt</h3>
+            <button class="download" data-target="failover_aws_vault" data-filename="failover_aws_vault_snippet.txt">
+              <span class="lang-en">Download</span>
+              <span class="lang-ja">ダウンロード</span>
+            </button>
+          </div>
+          <textarea id="failover_aws_vault" rows="8" readonly></textarea>
+        </div>
+        <div class="output-block">
+          <div class="output-header">
+            <h3>ddos_vps_vault_snippet.txt</h3>
+            <button class="download" data-target="ddos_vps_vault" data-filename="ddos_vps_vault_snippet.txt">
+              <span class="lang-en">Download</span>
+              <span class="lang-ja">ダウンロード</span>
+            </button>
+          </div>
+          <textarea id="ddos_vps_vault" rows="10" readonly></textarea>
+        </div>
+<div class="output-block">
+          <div class="output-header">
+            <h3>cloudflared_vps_vault_snippet.txt</h3>
+            <button class="download" data-target="cloudflared_vps_vault" data-filename="cloudflared_vps_vault_snippet.txt">
+              <span class="lang-en">Download</span>
+              <span class="lang-ja">ダウンロード</span>
+            </button>
+          </div>
+          <textarea id="cloudflared_vps_vault" rows="10" readonly></textarea>
+        </div>
+        <div class="output-block">
+          <div class="output-header">
+            <h3>cloudflared_ec2_vault_snippet.txt</h3>
+            <button class="download" data-target="cloudflared_ec2_vault" data-filename="cloudflared_ec2_vault_snippet.txt">
+              <span class="lang-en">Download</span>
+              <span class="lang-ja">ダウンロード</span>
+            </button>
+          </div>
+          <textarea id="cloudflared_ec2_vault" rows="10" readonly></textarea>
+        </div>
+        <div class="output-block">
+          <div class="output-header">
+            <h3>next_steps.txt</h3>
+            <button class="download" data-target="nextsteps" data-filename="next_steps.txt">
+              <span class="lang-en">Download</span>
+              <span class="lang-ja">ダウンロード</span>
+            </button>
+          </div>
+          <textarea id="nextsteps" rows="12" readonly></textarea>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <p>
+        <span class="lang-en">
+          Local portal only. If you expose it to a LAN, restrict the port with a firewall.
+          If you do not need it after setup, delete the <code>portal/</code> directory.
+        </span>
+        <span class="lang-ja">
+          ローカル専用です。LAN公開時はファイアウォールで制限してください。
+          使い終わったら <code>portal/</code> を削除してください。
+        </span>
+      </p>
+    </footer>
+
+    <script src="app.js"></script>
+  </body>
+</html>

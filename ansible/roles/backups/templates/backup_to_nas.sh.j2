@@ -1,0 +1,23 @@
+#!/bin/bash
+set -euo pipefail
+
+DEST="{{ backup_root }}"
+LOG_FILE="{{ backup_full_log }}"
+
+if ! mountpoint -q "{{ nas_mount }}"; then
+  echo "$(date +%Y-%m-%d %H:%M:%S) [backup_full] ERROR: {{ nas_mount }} is not mounted" >> "$LOG_FILE"
+  exit 1
+fi
+
+mkdir -p "$DEST"
+
+ionice -c3 nice -n 19 rsync -aAXH --delete \
+  --exclude=/dev/* \
+  --exclude=/proc/* \
+  --exclude=/sys/* \
+  --exclude=/tmp/* \
+  --exclude=/run/* \
+  --exclude=/mnt/* \
+  --exclude=/media/* \
+  --exclude=/lost+found \
+  / "$DEST/" >> "$LOG_FILE" 2>&1

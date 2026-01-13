@@ -1,0 +1,39 @@
+# ディレクトリ一覧の禁止
+Options -Indexes
+# 意図しないコンテンツネゴシを無効化（これで -f 判定が安定）
+Options -MultiViews
+
+DirectoryIndex index.php index.html
+RewriteEngine On
+
+# ✅ 画像・静的資産は絶対にリライトしない（最上位で除外）
+RewriteCond %{REQUEST_URI} ^/(images|thumb|thumb_resized|css|js|fonts|assets)/ [NC]
+RewriteRule ^ - [L]
+
+# .php 省略（admin/以下は除外）
+RewriteCond %{REQUEST_URI} !^/scripts/admin [NC]
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME}.php -f
+RewriteRule ^(.+)$ $1.php [L]
+
+# 機密系の遮断
+<FilesMatch "^(\.env|\.git|\.aws|composer\.json|composer\.lock|docker-compose.*)$">
+  Require all denied
+</FilesMatch>
+
+<Files ".htaccess">
+  Require all denied
+</Files>
+
+RedirectMatch 403 ^/(phpmyadmin|pmd|sql|backup|config|media|core|src|app|vendor|logs)(/.*)?$
+
+# PHP実行（拡張子保護）
+<FilesMatch "\.php$">
+  SetHandler application/x-httpd-php
+</FilesMatch>
+
+# JSON直アクセス禁止（必要ならここは維持）
+<FilesMatch "\.json$">
+  Require all denied
+</FilesMatch>

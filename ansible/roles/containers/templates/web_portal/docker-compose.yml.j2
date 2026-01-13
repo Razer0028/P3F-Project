@@ -1,0 +1,30 @@
+version: "3.9"
+
+services:
+  web:
+    build: .
+    container_name: web_portal
+    restart: always
+
+    ports:
+      - "8082:80"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+    environment:
+      LANG: ja_JP.UTF-8
+      LC_ALL: ja_JP.UTF-8
+      DISCORD_WEBHOOK_URL: "${DISCORD_WEBHOOK_URL}"
+
+    volumes:
+      - ./public:/var/www/html/public
+      - ./admin:/var/www/html/admin
+
+      - {{ containers_root }}/minecraft:{{ containers_root }}/minecraft
+      - {{ containers_root }}/valheim_server:{{ containers_root }}/valheim_server
+      - {{ containers_root }}/7dtd_server:{{ containers_root }}/7dtd_server
+      # player_monitor の状態（これだけでOK）
+      - {{ containers_root }}/monitor/opt_serveradmin:/opt/serveradmin:ro
+      - {{ containers_root }}/monitor/opt_serveradmin/config/portal_services.json:/opt/serveradmin/config/portal_services.json
+
+      - /var/run/docker.sock:/var/run/docker.sock

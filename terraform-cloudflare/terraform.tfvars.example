@@ -1,0 +1,22 @@
+# Cloudflare account/zone
+cf_account_id = "YOUR_ACCOUNT_ID"
+cf_zone_name  = "YOUR_DOMAIN"
+cf_zone_mode  = "create" # create or existing
+cf_zone_plan  = "free"
+cf_zone_type  = "full"
+
+# Failover DNS record (A)
+cf_manage_failover_record = true
+cf_failover_record_name   = "game.YOUR_DOMAIN"
+cf_failover_record_value  = "YOUR_FAILOVER_IP"
+cf_failover_record_proxied = false
+cf_failover_record_ttl     = 1
+
+# Tunnel records (CNAME -> cfargotunnel)
+cf_manage_tunnels = true
+cf_vps_tunnel_name = "YOUR_VPS_TUNNEL"
+cf_vps_hostname    = "www.YOUR_DOMAIN"
+cf_ec2_tunnel_name = "YOUR_EC2_TUNNEL"
+cf_ec2_hostname    = "sub.YOUR_DOMAIN"
+cf_tunnel_proxied  = true
+cf_tunnel_ttl      = 1

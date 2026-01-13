@@ -1,0 +1,193 @@
+---
+- name: Cloudflared configuration
+  when: cloudflared_manage | default(false)
+  block:
+    - name: Check for cloudflared binary
+      command: command -v cloudflared
+      register: cloudflared_binary
+      changed_when: false
+      failed_when: false
+
+    - name: Install cloudflared when missing
+      when: cloudflared_install_if_missing | default(false) and cloudflared_binary.rc != 0
+      block:
+        - name: Install cloudflared package
+          apt:
+            name: "{{ cloudflared_packages }}"
+            state: present
+            update_cache: "{{ cloudflared_update_cache | default(true) }}"
+            cache_valid_time: "{{ (cloudflared_update_cache | default(true)) | ternary(3600, omit) }}"
+      rescue:
+        - name: Set cloudflared download architecture
+          set_fact:
+            cloudflared_download_arch: "{{ 'arm64' if ansible_architecture in ['aarch64', 'arm64'] else 'amd64' if ansible_architecture in ['x86_64', 'amd64'] else '' }}"
+
+        - name: Fail on unsupported architecture
+          fail:
+            msg: "Unsupported architecture for cloudflared download: {{ ansible_architecture }}"
+          when: cloudflared_download_arch | length == 0
+
+        - name: Ensure curl is available
+          apt:
+            name: curl
+            state: present
+            update_cache: true
+
+        - name: Download cloudflared deb
+          command: >-
+            curl -fL --retry 3 --retry-delay 2
+            --output /tmp/cloudflared-linux-{{ cloudflared_download_arch }}.deb
+            https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-{{ cloudflared_download_arch }}.deb
+          args:
+            creates: "/tmp/cloudflared-linux-{{ cloudflared_download_arch }}.deb"
+
+        - name: Install cloudflared deb
+          apt:
+            deb: "/tmp/cloudflared-linux-{{ cloudflared_download_arch }}.deb"
+            state: present
+
+    - name: Ensure /etc/cloudflared exists
+      file:
+        path: /etc/cloudflared
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Read existing config metadata
+      stat:
+        path: "{{ cloudflared_config_path }}"
+      register: cloudflared_config_stat
+
+    - name: Read existing credentials metadata
+      stat:
+        path: "{{ cloudflared_credentials_path }}"
+      register: cloudflared_credentials_stat
+      when: cloudflared_credentials_path | length > 0
+
+    - name: Read existing cert metadata
+      stat:
+        path: "{{ cloudflared_cert_path }}"
+      register: cloudflared_cert_stat
+      when: cloudflared_cert_path | length > 0
+
+    - name: Warn when config exists and overwrite is disabled
+      debug:
+        msg: "Existing {{ cloudflared_config_path }} found; set cloudflared_allow_overwrite: true to replace"
+      when: cloudflared_config_stat.stat.exists and not (cloudflared_allow_overwrite | default(false))
+
+    - name: Warn when credentials exists and overwrite is disabled
+      debug:
+        msg: "Existing {{ cloudflared_credentials_path }} found; set cloudflared_allow_overwrite: true to replace"
+      when: cloudflared_credentials_path | length > 0 and cloudflared_credentials_stat.stat.exists and not (cloudflared_allow_overwrite | default(false))
+
+    - name: Warn when cert exists and overwrite is disabled
+      debug:
+        msg: "Existing {{ cloudflared_cert_path }} found; set cloudflared_allow_overwrite: true to replace"
+      when: cloudflared_cert_path | length > 0 and cloudflared_cert_stat.stat.exists and not (cloudflared_allow_overwrite | default(false))
+
+    - name: Validate cloudflared variables
+      assert:
+        that:
+          - cloudflared_config_content | length > 0
+        fail_msg: "cloudflared_config_content must be set"
+      when: cloudflared_require_vars | default(false)
+
+    - name: Deploy cloudflared config
+      copy:
+        dest: "{{ cloudflared_config_path }}"
+        content: "{{ cloudflared_config_content }}"
+        owner: root
+        group: root
+        mode: "0644"
+        force: "{{ cloudflared_allow_overwrite | default(false) }}"
+        backup: "{{ cloudflared_allow_overwrite | default(false) }}"
+      when: cloudflared_config_content | length > 0
+      notify: Restart cloudflared
+
+    - name: Ensure cloudflared credentials directory
+      file:
+        path: "{{ cloudflared_credentials_path | dirname }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+      when: cloudflared_credentials_path | length > 0
+
+    - name: Deploy cloudflared credentials
+      copy:
+        dest: "{{ cloudflared_credentials_path }}"
+        content: "{{ cloudflared_credentials_content }}"
+        owner: root
+        group: root
+        mode: "0600"
+        force: "{{ cloudflared_allow_overwrite | default(false) }}"
+        backup: "{{ cloudflared_allow_overwrite | default(false) }}"
+      when: cloudflared_credentials_path | length > 0 and (cloudflared_credentials_content | length > 0)
+      notify: Restart cloudflared
+
+    - name: Ensure cloudflared cert directory
+      file:
+        path: "{{ cloudflared_cert_path | dirname }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+      when: cloudflared_cert_path | length > 0
+
+    - name: Deploy cloudflared cert
+      copy:
+        dest: "{{ cloudflared_cert_path }}"
+        content: "{{ cloudflared_cert_content }}"
+        owner: root
+        group: root
+        mode: "0600"
+        force: "{{ cloudflared_allow_overwrite | default(false) }}"
+        backup: "{{ cloudflared_allow_overwrite | default(false) }}"
+      when: cloudflared_cert_path | length > 0 and (cloudflared_cert_content | length > 0)
+      notify: Restart cloudflared
+
+    - name: Check cloudflared unit override
+      stat:
+        path: "/etc/systemd/system/{{ cloudflared_service_name }}.service"
+      register: cloudflared_unit_override
+
+    - name: Check cloudflared system unit
+      stat:
+        path: "/lib/systemd/system/{{ cloudflared_service_name }}.service"
+      register: cloudflared_unit_system
+
+    - name: Create cloudflared systemd unit when missing
+      copy:
+        dest: "/etc/systemd/system/{{ cloudflared_service_name }}.service"
+        content: |
+          [Unit]
+          Description=cloudflared tunnel
+          After=network-online.target
+          Wants=network-online.target
+
+          [Service]
+          Type=simple
+          ExecStart={{ cloudflared_binary_path }} --config {{ cloudflared_config_path }} tunnel run
+          Restart=on-failure
+          RestartSec=5s
+
+          [Install]
+          WantedBy=multi-user.target
+        owner: root
+        group: root
+        mode: "0644"
+      when: not cloudflared_unit_override.stat.exists and not cloudflared_unit_system.stat.exists
+      register: cloudflared_unit_created
+
+    - name: Reload systemd after unit change
+      systemd:
+        daemon_reload: true
+      when: cloudflared_unit_created is defined and cloudflared_unit_created.changed
+
+    - name: Ensure cloudflared service state
+      systemd:
+        name: "{{ cloudflared_service_name }}"
+        enabled: "{{ cloudflared_enable_service | default(true) }}"
+        state: "{{ cloudflared_service_state }}"
+      when: cloudflared_manage_service | default(false)

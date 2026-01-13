@@ -1,0 +1,18 @@
+---
+- name: Restart portctl
+  systemd:
+    name: "{{ portctl_service_name }}"
+    state: restarted
+  when: portctl_manage_service | default(false) and portctl_restart_on_change | default(false)
+
+- name: Restart portctl web
+  systemd:
+    name: "{{ portctl_web_service_name }}"
+    state: restarted
+  when: portctl_manage_service | default(false) and portctl_restart_on_change | default(false) and portctl_enable_web_wg | default(true)
+
+- name: Restart portctl web local
+  systemd:
+    name: "{{ portctl_web_local_service_name }}"
+    state: restarted
+  when: portctl_manage_service | default(false) and portctl_restart_on_change | default(false) and portctl_enable_web_local | default(true)

@@ -1,0 +1,35 @@
+---
+ddos_notify_manage: false
+ddos_notify_manage_service: true
+ddos_notify_service_state: started
+ddos_notify_service_name: ddos_watch
+
+ddos_notify_script_path: /opt/ddos_notify/ddos_watch_udp.py
+ddos_notify_config_dir: /opt/ddos_notify
+ddos_notify_unit_path: /etc/systemd/system/ddos_watch.service
+
+ddos_notify_eve_log: /var/log/suricata/eve.json
+ddos_notify_primary_ip: ""
+ddos_notify_fallback_ip: ""
+ddos_notify_port: 9001
+
+ddos_notify_health_port: 18080
+
+ddos_notify_cooldown: 300
+ddos_notify_global_cooldown: 60
+ddos_notify_udp_retry_count: 3
+ddos_notify_udp_retry_delay: 0.5
+
+ddos_notify_discord_webhook: ""
+ddos_notify_discord_cooldown: 300
+ddos_notify_user_agent: "curl/8.0"
+
+ddos_notify_server_label: "VPS"
+
+ddos_notify_signatures:
+  - "DoS ICMP Flood detected"
+  - "DoS TCP SYN Flood detected"
+  - "DoS UDP Flood detected"
+  - "DDoS ICMP Flood (aggregate)"
+  - "DDoS UDP Flood (aggregate)"
+  - "DDoS TCP SYN Flood (aggregate)"

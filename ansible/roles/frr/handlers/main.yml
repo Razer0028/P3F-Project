@@ -1,0 +1,6 @@
+---
+- name: Restart frr
+  systemd:
+    name: "{{ frr_service_name }}"
+    state: restarted
+  when: frr_restart_on_change | default(false)

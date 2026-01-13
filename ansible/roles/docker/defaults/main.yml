@@ -1,0 +1,19 @@
+---
+docker_manage: false
+docker_manage_service: true
+docker_install_if_missing: true
+docker_update_cache: true
+docker_restart_on_change: true
+
+docker_packages:
+  - docker.io
+  - docker-compose-plugin
+  - docker-buildx-plugin
+
+docker_users: []
+
+docker_manage_daemon_config: false
+docker_daemon_config: {}
+
+docker_daemon_config_path: /etc/docker/daemon.json
+docker_service_name: docker

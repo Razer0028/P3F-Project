@@ -1,0 +1,3 @@
+---
+# Public defaults: keep on-prem features disabled until enabled via host_vars.
+# For a full-stack test profile, copy onprem.full.yml to onprem.yml.

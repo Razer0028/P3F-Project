@@ -1,0 +1,124 @@
+---
+- name: Ensure base packages are installed
+  apt:
+    name:
+      - ca-certificates
+      - curl
+      - wget
+      - git
+      - rsync
+      - jq
+      - python3
+      - python3-apt
+      - chrony
+    state: present
+    update_cache: "{{ base_update_cache | default(true) }}"
+    cache_valid_time: "{{ (base_update_cache | default(true)) | ternary(3600, omit) }}"
+
+- name: Set timezone
+  timezone:
+    name: "{{ timezone }}"
+
+- name: Ensure /usr/sbin is in PATH for login shells
+  lineinfile:
+    path: /etc/profile
+    line: export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+    insertafter: EOF
+    create: false
+
+- name: Ensure journald keeps logs on disk
+  lineinfile:
+    path: /etc/systemd/journald.conf
+    regexp: ^Storage=
+    line: Storage=persistent
+
+- name: Restart systemd-journald
+  service:
+    name: systemd-journald
+    state: restarted
+
+- name: Ensure resolvconf is installed (optional)
+  apt:
+    name:
+      - resolvconf
+    state: present
+    update_cache: "{{ base_update_cache | default(true) }}"
+    cache_valid_time: "{{ (base_update_cache | default(true)) | ternary(3600, omit) }}"
+  when: resolvconf_manage | default(false)
+
+- name: Configure resolvconf head (optional)
+  copy:
+    dest: /etc/resolvconf/resolv.conf.d/head
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # Managed by IaC: set explicit resolvers (systemd-resolved not present)
+      {% for ns in (resolvconf_nameservers | default([])) %}
+      nameserver {{ ns }}
+      {% endfor %}
+  register: resolvconf_head
+  when: resolvconf_manage | default(false)
+
+- name: Check resolvconf original entry
+  stat:
+    path: /etc/resolvconf/resolv.conf.d/original
+  register: resolvconf_original
+  when: resolvconf_manage | default(false)
+
+- name: Remove resolvconf original symlink
+  file:
+    path: /etc/resolvconf/resolv.conf.d/original
+    state: absent
+  when:
+    - resolvconf_manage | default(false)
+    - resolvconf_original.stat.islnk | default(false)
+
+- name: Configure resolvconf original file
+  copy:
+    dest: /etc/resolvconf/resolv.conf.d/original
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # Managed by IaC: original resolv.conf stub
+      {% for ns in (resolvconf_nameservers | default([])) %}
+      nameserver {{ ns }}
+      {% endfor %}
+  register: resolvconf_original_file
+  when: resolvconf_manage | default(false)
+
+- name: Ensure /etc/resolv.conf points to resolvconf
+  file:
+    src: /run/resolvconf/resolv.conf
+    dest: /etc/resolv.conf
+    state: link
+    force: true
+  when: resolvconf_manage | default(false)
+
+- name: Update resolvconf
+  command: resolvconf -u
+  when:
+    - resolvconf_manage | default(false)
+    - (resolvconf_head is defined and resolvconf_head.changed) or
+      (resolvconf_original_file is defined and resolvconf_original_file.changed)
+
+- name: Enable IPv4 forwarding (optional)
+  sysctl:
+    name: net.ipv4.ip_forward
+    value: "{{ sysctl_forward_ipv4 | default('1') }}"
+    sysctl_file: /etc/sysctl.d/99-forward.conf
+    state: present
+    reload: true
+  when: sysctl_forward_manage | default(false)
+
+- name: Enable IPv6 forwarding (optional)
+  sysctl:
+    name: net.ipv6.conf.all.forwarding
+    value: "{{ sysctl_forward_ipv6 }}"
+    sysctl_file: /etc/sysctl.d/99-forward.conf
+    state: present
+    reload: true
+  when:
+    - sysctl_forward_manage | default(false)
+    - sysctl_forward_ipv6 is defined

@@ -1,0 +1,43 @@
+---
+- name: "Base configuration"
+  hosts: all
+  become: true
+  roles:
+    - role: base
+      tags:
+        - base
+
+- name: "On-prem services"
+  hosts: onprem
+  become: true
+  roles:
+    - wireguard
+    - docker
+    - containers
+    - failover_core
+    - backups
+
+- name: "VPS edge services"
+  hosts: vps
+  become: true
+  roles:
+    - wireguard
+    - frr
+    - suricata
+    - ddos_notify
+    - role: cloudflared
+      tags:
+        - cloudflared
+    - role: portctl
+      tags:
+        - portctl
+
+- name: "EC2 edge services"
+  hosts: ec2
+  become: true
+  roles:
+    - wireguard
+    - role: cloudflared
+      tags:
+        - cloudflared
+    - suricata

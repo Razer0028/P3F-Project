@@ -1,0 +1,6 @@
+{
+    "name": "takai/authdemo",
+    "require": {
+        "google/apiclient": "^2.0"
+    }
+}

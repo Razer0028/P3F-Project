@@ -1,0 +1,16 @@
+---
+role_ec2: true
+wireguard_manage: true
+suricata_manage: true
+suricata_manage_service: true
+suricata_interface: "ens5"
+resolvconf_manage: true
+resolvconf_nameservers:
+  - 1.1.1.1
+  - 8.8.8.8
+sysctl_forward_manage: true
+cloudflared_manage: true
+cloudflared_require_vars: true
+cloudflared_manage_service: true
+cloudflared_restart_on_change: true
+cloudflared_install_if_missing: true

@@ -1,0 +1,14 @@
+[Unit]
+Description=Port Forward Web UI (VPN)
+After=portctl.service {{ portctl_wg_service }}
+Requires=portctl.service
+
+[Service]
+Type=simple
+WorkingDirectory={{ portctl_web_root }}
+ExecStart=/usr/bin/php -S {{ portctl_web_wg_bind }}:{{ portctl_web_port }} -t {{ portctl_web_root }}
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,8 @@
+Defaults:www-data !requiretty
+
+Cmnd_Alias DOCKER_INSPECT = /usr/bin/docker inspect -f *
+Cmnd_Alias DOCKER_PS      = /usr/bin/docker ps *, /usr/bin/docker ps
+Cmnd_Alias DOCKER_MANAGE  = /opt/serveradmin/bin/docker_manage.sh *
+Cmnd_Alias GAME_ADMIN     = /opt/serveradmin/bin/game_admin.sh *
+
+www-data ALL=(root) NOPASSWD: DOCKER_INSPECT, DOCKER_PS, DOCKER_MANAGE, GAME_ADMIN

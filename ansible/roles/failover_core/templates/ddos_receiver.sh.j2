@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+FLAG="{{ failover_state_dir }}/ddos.flag"
+LOG="{{ failover_ddos_log }}"
+PORT={{ failover_udp_port }}
+
+mkdir -p "{{ failover_state_dir }}"
+
+nc -u -lk ${PORT} | while read msg; do
+    echo "$(date +%Y-%m-%d %H:%M:%S)  [DDOS] $msg" | tee -a "$LOG"
+    echo "1" > "$FLAG"
+done

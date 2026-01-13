@@ -1,0 +1,30 @@
+---
+- name: Backup configuration
+  when: backups_manage | default(false)
+  block:
+    - name: Install backup script (full)
+      template:
+        src: backup_to_nas.sh.j2
+        dest: "{{ backup_full_script }}"
+        owner: root
+        group: root
+        mode: "0755"
+      when: backup_full_enabled | default(false)
+
+    - name: Install backup script (games)
+      template:
+        src: backup_games_to_nas.sh.j2
+        dest: "{{ backup_games_script }}"
+        owner: root
+        group: root
+        mode: "0755"
+      when: backup_games_enabled | default(true)
+
+    - name: Install game backup cron
+      template:
+        src: backup_games.cron.j2
+        dest: /etc/cron.d/backup_games
+        owner: root
+        group: root
+        mode: "0644"
+      when: backup_games_enabled | default(true)

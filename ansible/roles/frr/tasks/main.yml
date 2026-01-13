@@ -1,0 +1,94 @@
+---
+- name: FRR configuration
+  when: frr_manage | default(false)
+  block:
+    - name: Check for FRR binary
+      command: "{{ frr_binary_path }} --version"
+      register: frr_binary
+      changed_when: false
+      failed_when: false
+
+    - name: Install FRR packages when missing
+      apt:
+        name: "{{ frr_packages }}"
+        state: present
+        update_cache: "{{ frr_update_cache | default(true) }}"
+        cache_valid_time: "{{ (frr_update_cache | default(true)) | ternary(3600, omit) }}"
+      when: frr_install_if_missing | default(true) and frr_binary.rc != 0
+
+    - name: Ensure /etc/frr exists
+      file:
+        path: /etc/frr
+        state: directory
+        owner: "{{ frr_owner_default }}"
+        group: "{{ frr_group_default }}"
+        mode: "0750"
+
+    - name: Read existing frr.conf metadata
+      stat:
+        path: "{{ frr_conf_path }}"
+      register: frr_conf_stat
+
+    - name: Read existing daemons metadata
+      stat:
+        path: "{{ frr_daemons_path }}"
+      register: frr_daemons_stat
+
+    - name: Select frr.conf owner/group
+      set_fact:
+        frr_conf_owner: "{{ frr_conf_stat.stat.pw_name | default(frr_owner_default) }}"
+        frr_conf_group: "{{ frr_conf_stat.stat.gr_name | default(frr_group_default) }}"
+
+    - name: Select daemons owner/group
+      set_fact:
+        frr_daemons_owner: "{{ frr_daemons_stat.stat.pw_name | default(frr_daemons_owner_default) }}"
+        frr_daemons_group: "{{ frr_daemons_stat.stat.gr_name | default(frr_daemons_group_default) }}"
+
+    - name: Warn when frr.conf exists and overwrite is disabled
+      debug:
+        msg: "Existing {{ frr_conf_path }} found; set frr_allow_overwrite: true to replace"
+      when: frr_conf_stat.stat.exists and not (frr_allow_overwrite | default(false))
+
+    - name: Warn when daemons exists and overwrite is disabled
+      debug:
+        msg: "Existing {{ frr_daemons_path }} found; set frr_allow_overwrite: true to replace"
+      when: frr_daemons_stat.stat.exists and not (frr_allow_overwrite | default(false))
+
+    - name: Validate FRR config variables
+      assert:
+        that:
+          - frr_config_content | length > 0
+          - frr_daemons_content | length > 0
+        fail_msg: "frr_config_content and frr_daemons_content must be set"
+      when: frr_require_vars | default(false)
+
+    - name: Deploy frr.conf
+      copy:
+        dest: "{{ frr_conf_path }}"
+        content: "{{ frr_config_content }}"
+        owner: "{{ frr_conf_owner }}"
+        group: "{{ frr_conf_group }}"
+        mode: "0640"
+        force: "{{ frr_allow_overwrite | default(false) }}"
+        backup: "{{ frr_allow_overwrite | default(false) }}"
+      when: frr_config_content | length > 0
+      notify: Restart frr
+
+    - name: Deploy daemons
+      copy:
+        dest: "{{ frr_daemons_path }}"
+        content: "{{ frr_daemons_content }}"
+        owner: "{{ frr_daemons_owner }}"
+        group: "{{ frr_daemons_group }}"
+        mode: "0640"
+        force: "{{ frr_allow_overwrite | default(false) }}"
+        backup: "{{ frr_allow_overwrite | default(false) }}"
+      when: frr_daemons_content | length > 0
+      notify: Restart frr
+
+    - name: Ensure FRR service state
+      systemd:
+        name: "{{ frr_service_name }}"
+        enabled: "{{ frr_enable_service | default(true) }}"
+        state: "{{ frr_service_state }}"
+      when: frr_manage_service | default(false)

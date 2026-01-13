@@ -1,0 +1,670 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+import socket
+import time
+import subprocess
+import os
+import json
+import threading
+import logging
+import sys
+import urllib.request
+import urllib.error
+
+UDP_PORT = {{ failover_udp_port }}
+
+INSTANCE_ID = {{ failover_instance_id | tojson }}
+REGION = {{ failover_region | tojson }}
+EC2_IP = {{ failover_ec2_ip | tojson }}
+
+CF_TOKEN = {{ failover_cf_token | tojson }}
+CF_ZONE_ID = {{ failover_cf_zone_id | tojson }}
+CF_RECORD_ID = {{ failover_cf_record_id | tojson }}
+DNS_RECORD_NAME = {{ failover_dns_record_name | tojson }}
+
+WG0 = {{ failover_wg0 | tojson }}
+WG1 = {{ failover_wg1 | tojson }}
+WG0_BFD_PEER = {{ failover_wg0_bfd_peer | tojson }}
+
+VPS_IP = {{ failover_vps_ip | tojson }}
+VPS_HEALTH_PORT = {{ failover_vps_health_port }}
+VPS_HEALTH_URL = "http://" + VPS_IP + ":" + str(VPS_HEALTH_PORT) + "/health"
+
+PLAYER_JSON = {{ failover_player_json | tojson }}
+PLAYER_THRESHOLD = {{ failover_player_threshold }}
+PLAYER_CHECK_INTERVAL = {{ failover_player_check_interval }}
+PLAYER_LOW_DURATION = {{ failover_player_low_duration }}
+
+BFD_DOWN_THRESHOLD = {{ failover_bfd_down_threshold }}
+VPS_HEALTH_UP_THRESHOLD = {{ failover_vps_health_up_threshold }}
+STARTUP_GRACE = {{ failover_startup_grace }}
+FAILBACK_GRACE = {{ failover_failback_grace }}
+BFD_GRACE = {{ failover_bfd_grace }}
+ATTACK_MODE_TIMEOUT = {{ failover_attack_mode_timeout }}
+
+GAME_PORTS = {{ failover_game_ports | tojson }}
+WG_HANDSHAKE_WAIT = {{ failover_wg_handshake_wait }}
+POST_SWITCH_GRACE = {{ failover_post_switch_grace }}
+
+# Failback policy: set to "yes" to enable automatic failback to VPS.
+AUTO_FAILBACK = {{ failover_auto_failback | tojson }}
+FAILBACK_REQUEST_FILE = {{ failover_failback_request_file | tojson }}
+
+attack_mode = False
+attack_reason = None
+attack_time = 0.0
+on_failover = False
+wg0_down_since = None
+vps_health_up_since = None
+low_player_since = None
+failback_grace_until = 0.0
+script_start_time = 0.0
+failback_ready_notice = False
+
+prev_bfd_down = None
+prev_ec2_state = None
+prev_vps_health = None
+
+ec2_state_cache = "unknown"
+ec2_state_cache_time = 0.0
+EC2_CACHE_TTL = 5
+
+wg_lock = threading.Lock()
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="[%(asctime)s] [FAILOVER] %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+    handlers=[logging.StreamHandler(sys.stdout)]
+)
+
+def log(msg):
+    logging.info(msg)
+
+def log_err(msg):
+    logging.error(msg)
+
+def run(cmd, timeout=10):
+    try:
+        result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=timeout)
+        return result.stdout.strip()
+    except:
+        return ""
+
+def run_rc(cmd, timeout=3):
+    try:
+        result = subprocess.run(cmd, shell=True, capture_output=True, timeout=timeout)
+        return result.returncode
+    except:
+        return 1
+
+def clear_conntrack():
+    for port in GAME_PORTS:
+        run("conntrack -D -p tcp --dport " + str(port) + " 2>/dev/null", 3)
+        run("conntrack -D -p tcp --sport " + str(port) + " 2>/dev/null", 3)
+        run("conntrack -D -p udp --dport " + str(port) + " 2>/dev/null", 3)
+        run("conntrack -D -p udp --sport " + str(port) + " 2>/dev/null", 3)
+    run("conntrack -F 2>/dev/null", 3)
+    log("Conntrack cleared")
+
+def flush_routing_cache():
+    run("ip route flush cache 2>/dev/null", 3)
+    log("Routing cache flushed")
+
+def wait_wg_handshake(dev):
+    log("Waiting for " + dev + " handshake (" + str(WG_HANDSHAKE_WAIT) + "s)")
+    time.sleep(WG_HANDSHAKE_WAIT)
+    out = run("wg show " + dev + " latest-handshakes", 3)
+    if out:
+        log(dev + " handshake confirmed")
+        return True
+    log(dev + " handshake pending")
+    return False
+
+def wg_is_active(dev):
+    if run_rc("systemctl is-active --quiet wg-quick@" + dev, 2) == 0:
+        return True
+    if dev in run("wg show 2>/dev/null", 2):
+        return True
+    if dev + ":" in run("ip link show 2>/dev/null", 2):
+        return True
+    return False
+
+def wg_force_down(dev):
+    run("systemctl stop wg-quick@" + dev + " 2>/dev/null", 5)
+    run("ip link set " + dev + " down 2>/dev/null", 2)
+    run("ip link delete " + dev + " 2>/dev/null", 2)
+    for _ in range(20):
+        if not wg_is_active(dev):
+            return True
+        time.sleep(0.1)
+    return not wg_is_active(dev)
+
+def auto_failback_enabled():
+    return str(AUTO_FAILBACK).strip().lower() in ("1", "yes", "true", "on")
+
+def failback_request_pending():
+    return os.path.exists(FAILBACK_REQUEST_FILE)
+
+def consume_failback_request():
+    try:
+        os.remove(FAILBACK_REQUEST_FILE)
+        return True
+    except FileNotFoundError:
+        return False
+    except Exception as e:
+        log_err("Failback request cleanup failed: " + str(e))
+        return True
+
+def wg_start_safe(dev):
+    if dev == WG0:
+        other = WG1
+    else:
+        other = WG0
+    if wg_is_active(other):
+        if not wg_force_down(other):
+            log_err("Cannot stop " + other + ", aborting " + dev + " start")
+            return False
+    if wg_is_active(other):
+        log_err(other + " still active after force down")
+        return False
+    run("systemctl start wg-quick@" + dev, 8)
+    for _ in range(30):
+        if wg_is_active(dev):
+            if wg_is_active(other):
+                log_err("Double WG detected, stopping both")
+                wg_force_down(WG0)
+                wg_force_down(WG1)
+                return False
+            return True
+        time.sleep(0.1)
+    return False
+
+def ensure_single_wg():
+    wg0_up = wg_is_active(WG0)
+    wg1_up = wg_is_active(WG1)
+    if wg0_up and wg1_up:
+        log_err("Both WG active, emergency shutdown")
+        wg_force_down(WG1)
+        time.sleep(0.2)
+        if wg_is_active(WG1):
+            wg_force_down(WG0)
+            wg_force_down(WG1)
+        return False
+    return True
+
+def sync_failover_state():
+    global on_failover
+    wg0_up = wg_is_active(WG0)
+    wg1_up = wg_is_active(WG1)
+    if wg1_up and not wg0_up:
+        on_failover = True
+    elif wg0_up and not wg1_up:
+        on_failover = False
+
+def vps_route_needed():
+    if wg_is_active(WG1):
+        return True
+    if not wg_is_active(WG0):
+        return True
+    if on_failover:
+        return True
+    return False
+
+def update_dns(ip):
+    url = "https://api.cloudflare.com/client/v4/zones/" + CF_ZONE_ID + "/dns_records/" + CF_RECORD_ID
+    data = json.dumps({
+        "type": "A",
+        "name": DNS_RECORD_NAME,
+        "content": ip,
+        "ttl": 1,
+        "proxied": False
+    }).encode()
+    headers = {
+        "Authorization": "Bearer " + CF_TOKEN,
+        "Content-Type": "application/json"
+    }
+    for attempt in range(3):
+        try:
+            req = urllib.request.Request(url, data=data, headers=headers, method="PUT")
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                result = json.loads(resp.read().decode())
+                if result.get("success"):
+                    log("DNS updated: " + ip)
+                    return True
+        except:
+            if attempt < 2:
+                time.sleep(0.5)
+    log_err("DNS update failed: " + ip)
+    return False
+
+def ec2_get_state_fresh():
+    cmd = "aws ec2 describe-instances --instance-ids " + INSTANCE_ID + " --region " + REGION + " --query Reservations[0].Instances[0].State.Name --output text"
+    out = run(cmd, 15)
+    if out in ("running", "stopped", "stopping", "pending"):
+        return out
+    return "unknown"
+
+def ec2_get_state():
+    global ec2_state_cache, ec2_state_cache_time, prev_ec2_state
+    now = time.time()
+    if now - ec2_state_cache_time < EC2_CACHE_TTL:
+        return ec2_state_cache
+    state = ec2_get_state_fresh()
+    if state != "unknown":
+        ec2_state_cache = state
+        ec2_state_cache_time = now
+        if prev_ec2_state and state != prev_ec2_state:
+            log("EC2: " + prev_ec2_state + " -> " + state)
+        prev_ec2_state = state
+    return ec2_state_cache
+
+def ec2_is_running():
+    return ec2_get_state() == "running"
+
+def ec2_start():
+    global ec2_state_cache_time
+    state = ec2_get_state_fresh()
+    log("EC2 current state: " + state)
+    if state == "running":
+        log("EC2 already running")
+        return True
+    log("EC2 starting")
+    result = run("aws ec2 start-instances --instance-ids " + INSTANCE_ID + " --region " + REGION, 15)
+    log("EC2 start command result: " + result)
+    ec2_state_cache_time = 0
+    return True
+
+def ec2_stop():
+    global ec2_state_cache_time
+    state = ec2_get_state_fresh()
+    if state in ("stopped", "stopping"):
+        return
+    log("EC2 stopping")
+    run("aws ec2 stop-instances --instance-ids " + INSTANCE_ID + " --region " + REGION, 15)
+    ec2_state_cache_time = 0
+
+def ec2_wait_running(timeout=120):
+    global ec2_state_cache_time
+    log("Waiting for EC2 to reach running state (max " + str(timeout) + "s)")
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        ec2_state_cache_time = 0
+        state = ec2_get_state_fresh()
+        log("EC2 state: " + state)
+        if state == "running":
+            log("EC2 is now running")
+            return True
+        time.sleep(5)
+    log_err("EC2 start timeout")
+    return False
+
+def bfd_status():
+    out = run("vtysh -c show bfd peers json", 3)
+    try:
+        peers = json.loads(out)
+        for p in peers:
+            if p.get("peer") == WG0_BFD_PEER:
+                return p.get("status", "").lower()
+    except:
+        pass
+    return "unknown"
+
+def bfd_is_down():
+    global prev_bfd_down, script_start_time
+    now = time.time()
+    in_grace = (now - script_start_time) < BFD_GRACE
+    status = bfd_status()
+    if status == "unknown":
+        if in_grace:
+            return False
+        is_down = True
+    else:
+        is_down = status != "up"
+    if prev_bfd_down is not None and is_down != prev_bfd_down:
+        if is_down:
+            log("BFD: down")
+        else:
+            log("BFD: up")
+    prev_bfd_down = is_down
+    return is_down
+
+def vps_health_ok():
+    global prev_vps_health
+    try:
+        req = urllib.request.Request(VPS_HEALTH_URL)
+        with urllib.request.urlopen(req, timeout=3) as resp:
+            data = json.loads(resp.read().decode())
+            wg0_up = data.get("wg0") == "up"
+            if prev_vps_health is not None and wg0_up != prev_vps_health:
+                if wg0_up:
+                    log("VPS health: wg0 up")
+                else:
+                    log("VPS health: wg0 down")
+            prev_vps_health = wg0_up
+            return wg0_up
+    except:
+        if prev_vps_health is not None and prev_vps_health:
+            log("VPS health: unreachable")
+        prev_vps_health = False
+        return False
+
+def force_vps_route(reason, check_health=True, stop_ec2=True):
+    global attack_mode, attack_reason, on_failover, vps_health_up_since
+    global wg0_down_since, failback_grace_until, failback_ready_notice
+    log("FORCE VPS: " + reason)
+    if check_health and not vps_health_ok():
+        log_err("FORCE VPS abort: VPS health not ok")
+        return False
+    with wg_lock:
+        if wg_is_active(WG1):
+            log("Stopping wg1")
+            wg_force_down(WG1)
+
+        if not update_dns(VPS_IP):
+            log_err("FORCE VPS warning: DNS update failed")
+
+        if not wg_is_active(WG0):
+            log("Starting wg0")
+            if not wg_start_safe(WG0):
+                log_err("FORCE VPS error: wg0 start failed")
+                return False
+            wait_wg_handshake(WG0)
+
+        log("Post-switch grace (" + str(POST_SWITCH_GRACE) + "s)")
+        time.sleep(POST_SWITCH_GRACE)
+
+        clear_conntrack()
+        flush_routing_cache()
+
+        if stop_ec2:
+            ec2_stop()
+
+        attack_mode = False
+        attack_reason = None
+        on_failover = False
+        vps_health_up_since = None
+        wg0_down_since = None
+        failback_grace_until = time.time() + FAILBACK_GRACE
+        failback_ready_notice = False
+
+        log("FORCE VPS complete")
+        return True
+
+def do_failover():
+    global attack_mode, attack_reason, on_failover, wg0_down_since, ec2_state_cache_time
+    with wg_lock:
+        log("FAILOVER start")
+
+        attack_mode = True
+        attack_reason = "bfd"
+        on_failover = True
+
+        log("Step 1: Stopping wg0")
+        if not wg_force_down(WG0):
+            log_err("FAILOVER abort: wg0 stop failed")
+            on_failover = False
+            return False
+
+        log("Step 2: Stopping wg1 (cleanup)")
+        wg_force_down(WG1)
+
+        if wg_is_active(WG0) or wg_is_active(WG1):
+            log_err("FAILOVER abort: WG not clean")
+            on_failover = False
+            return False
+
+        log("Step 3: Clearing conntrack")
+        clear_conntrack()
+        flush_routing_cache()
+
+        log("Step 4: Checking EC2 state")
+        ec2_state_cache_time = 0
+        state = ec2_get_state_fresh()
+        log("EC2 state: " + state)
+
+        if state != "running":
+            log("Step 5: Starting EC2")
+            ec2_start()
+            if not ec2_wait_running(120):
+                log_err("FAILOVER warning: EC2 not running yet, continuing anyway")
+        else:
+            log("Step 5: EC2 already running")
+
+        log("Step 6: Updating DNS to EC2")
+        if not update_dns(EC2_IP):
+            log_err("FAILOVER abort: DNS failed")
+            return False
+
+        log("Step 7: Starting wg1")
+        if not wg_start_safe(WG1):
+            log_err("FAILOVER error: wg1 start failed")
+            return False
+
+        log("Step 8: Waiting for wg1 handshake")
+        wait_wg_handshake(WG1)
+
+        log("Step 9: Post-switch grace (" + str(POST_SWITCH_GRACE) + "s)")
+        time.sleep(POST_SWITCH_GRACE)
+
+        log("Step 10: Final conntrack clear")
+        clear_conntrack()
+        flush_routing_cache()
+
+        wg0_down_since = None
+        log("FAILOVER complete")
+        return True
+
+def do_failback():
+    global attack_mode, attack_reason, on_failover, vps_health_up_since, failback_grace_until
+    global failback_ready_notice
+    with wg_lock:
+        log("FAILBACK start")
+
+        log("Step 1: Stopping wg1")
+        if not wg_force_down(WG1):
+            log_err("FAILBACK warning: wg1 stop issue")
+
+        log("Step 2: Stopping wg0 (cleanup)")
+        wg_force_down(WG0)
+
+        if wg_is_active(WG0) or wg_is_active(WG1):
+            log_err("FAILBACK: WG not clean, forcing")
+            wg_force_down(WG0)
+            wg_force_down(WG1)
+            time.sleep(0.3)
+
+        log("Step 3: Clearing conntrack")
+        clear_conntrack()
+        flush_routing_cache()
+
+        log("Step 4: Updating DNS to VPS")
+        if not update_dns(VPS_IP):
+            log_err("FAILBACK abort: DNS failed")
+            return False
+
+        log("Step 5: Starting wg0")
+        if not wg_start_safe(WG0):
+            log_err("FAILBACK error: wg0 start failed")
+            return False
+
+        log("Step 6: Waiting for wg0 handshake")
+        wait_wg_handshake(WG0)
+
+        log("Step 7: Post-switch grace (" + str(POST_SWITCH_GRACE) + "s)")
+        time.sleep(POST_SWITCH_GRACE)
+
+        log("Step 8: Final conntrack clear")
+        clear_conntrack()
+        flush_routing_cache()
+
+        log("Step 9: Stopping EC2")
+        ec2_stop()
+
+        attack_mode = False
+        attack_reason = None
+        on_failover = False
+        vps_health_up_since = None
+        failback_grace_until = time.time() + FAILBACK_GRACE
+        failback_ready_notice = False
+
+        log("FAILBACK complete")
+        return True
+
+def udp_listener():
+    global attack_mode, attack_reason, attack_time
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        s.bind(("0.0.0.0", UDP_PORT))
+    except Exception as e:
+        log_err("UDP bind failed: " + str(e))
+        return
+    while True:
+        try:
+            msg, addr = s.recvfrom(1024)
+            sig = msg.decode(errors="ignore").strip()
+            log("DDoS alert: " + sig)
+            attack_mode = True
+            attack_reason = "ddos"
+            attack_time = time.time()
+            ec2_start()
+        except:
+            time.sleep(1)
+
+def player_watch():
+    global low_player_since
+    prev_count = None
+    while True:
+        if attack_mode or on_failover:
+            low_player_since = None
+            time.sleep(PLAYER_CHECK_INTERVAL)
+            continue
+        try:
+            with open(PLAYER_JSON, "r") as f:
+                j = json.load(f)
+            count = 0
+            servers = j.get("servers", {})
+            count = count + servers.get("minecraft", {}).get("online", 0)
+            count = count + servers.get("valheim", {}).get("online", 0)
+            count = count + servers.get("7dtd", {}).get("online", 0)
+        except:
+            count = 0
+        if prev_count is not None and count != prev_count:
+            log("Players: " + str(count))
+        prev_count = count
+        now = time.time()
+        if count >= PLAYER_THRESHOLD:
+            low_player_since = None
+            ec2_start()
+        else:
+            if low_player_since is None:
+                low_player_since = now
+            elif now - low_player_since >= PLAYER_LOW_DURATION:
+                ec2_stop()
+                low_player_since = None
+        time.sleep(PLAYER_CHECK_INTERVAL)
+
+def safety_monitor():
+    while True:
+        try:
+            ensure_single_wg()
+        except:
+            pass
+        time.sleep(2)
+
+def startup_reconcile():
+    log("Startup reconcile")
+    sync_failover_state()
+    if vps_health_ok():
+        if vps_route_needed():
+            force_vps_route("startup", check_health=False)
+        else:
+            update_dns(VPS_IP)
+            log("Startup: VPS route already active, DNS refreshed")
+            if auto_failback_enabled() and ec2_is_running():
+                log("Startup: stopping EC2 (auto-failback enabled)")
+                ec2_stop()
+    else:
+        log("Startup: VPS health not ok, keeping current route")
+
+def main_loop():
+    global wg0_down_since, vps_health_up_since, attack_mode, attack_reason
+    global script_start_time, failback_grace_until, failback_ready_notice
+    script_start_time = time.time()
+    log("Controller started")
+    while True:
+        try:
+            now = time.time()
+            elapsed = now - script_start_time
+            in_startup_grace = elapsed < STARTUP_GRACE
+            in_failback_grace = now < failback_grace_until
+            bfd_down = bfd_is_down()
+            if not on_failover:
+                if in_startup_grace or in_failback_grace:
+                    wg0_down_since = None
+                elif bfd_down:
+                    if wg0_down_since is None:
+                        wg0_down_since = now
+                    elif now - wg0_down_since >= BFD_DOWN_THRESHOLD:
+                        do_failover()
+                else:
+                    wg0_down_since = None
+
+            if auto_failback_enabled():
+                if vps_health_ok():
+                    if vps_route_needed():
+                        force_vps_route("auto-failback", check_health=False)
+                    else:
+                        if ec2_is_running():
+                            log("Auto-failback: stopping EC2")
+                            ec2_stop()
+                else:
+                    vps_health_up_since = None
+                    failback_ready_notice = False
+            else:
+                if on_failover:
+                    if vps_health_ok():
+                        if vps_health_up_since is None:
+                            vps_health_up_since = now
+                            log("VPS wg0 ready, failback countdown")
+                        elif now - vps_health_up_since >= VPS_HEALTH_UP_THRESHOLD:
+                            if failback_request_pending():
+                                consume_failback_request()
+                                do_failback()
+                            else:
+                                if not failback_ready_notice:
+                                    log("VPS ready, auto-failback disabled (create " + FAILBACK_REQUEST_FILE + " to fail back)")
+                                    failback_ready_notice = True
+                    else:
+                        if vps_health_up_since is not None:
+                            log("VPS wg0 not ready, failback cancelled")
+                        vps_health_up_since = None
+                        failback_ready_notice = False
+
+            if attack_mode and attack_reason == "ddos" and not on_failover:
+                if now - attack_time > ATTACK_MODE_TIMEOUT:
+                    log("Attack mode timeout")
+                    ec2_stop()
+                    attack_mode = False
+                    attack_reason = None
+        except Exception as e:
+            log_err("Loop error: " + str(e))
+        time.sleep(1)
+
+if __name__ == "__main__":
+    log("failover_core.py starting")
+    ensure_single_wg()
+    startup_reconcile()
+    threading.Thread(target=udp_listener, daemon=True).start()
+    threading.Thread(target=player_watch, daemon=True).start()
+    threading.Thread(target=safety_monitor, daemon=True).start()
+    try:
+        main_loop()
+    except KeyboardInterrupt:
+        log("Shutdown")
+        sys.exit(0)
+    except Exception as e:
+        log_err("Fatal: " + str(e))
+        sys.exit(1)

@@ -1,0 +1,95 @@
+---
+- name: WireGuard configuration
+  when: wireguard_manage | default(false)
+  block:
+    - name: Install WireGuard packages
+      apt:
+        name:
+          - wireguard
+          - wireguard-tools
+          - resolvconf
+        state: present
+        update_cache: "{{ wireguard_update_cache | default(true) }}"
+        cache_valid_time: "{{ (wireguard_update_cache | default(true)) | ternary(3600, omit) }}"
+
+    - name: Ensure /etc/wireguard exists
+      file:
+        path: /etc/wireguard
+        state: directory
+        owner: root
+        group: root
+        mode: "0700"
+
+    - name: Select WireGuard config list
+      set_fact:
+        wireguard_items: "{{ wireguard_raw_configs | default(wireguard_configs | default([])) }}"
+        wireguard_item_names: "{{ (wireguard_raw_configs | default(wireguard_configs | default([]))) | map(attribute='name') | list }}"
+
+    - name: Check existing WireGuard configs
+      stat:
+        path: "/etc/wireguard/{{ item }}.conf"
+      register: wg_conf_stats
+      loop: "{{ wireguard_item_names }}"
+
+    - name: Warn about existing configs when overwrite is disabled
+      debug:
+        msg: "Existing /etc/wireguard/{{ item.item }}.conf found; set wireguard_allow_overwrite: true to replace"
+      when: item.stat.exists and not (wireguard_allow_overwrite | default(false))
+      loop: "{{ wg_conf_stats.results }}"
+
+    - name: Deploy WireGuard configs (raw)
+      copy:
+        dest: "/etc/wireguard/{{ item.name }}.conf"
+        content: "{{ item.content }}"
+        owner: root
+        group: root
+        mode: "0600"
+        force: "{{ wireguard_allow_overwrite | default(false) }}"
+        backup: "{{ wireguard_allow_overwrite | default(false) }}"
+      loop: "{{ wireguard_raw_configs | default([]) }}"
+      when: wireguard_raw_configs is defined
+      no_log: true
+
+    - name: Deploy WireGuard configs (template)
+      template:
+        src: wg.conf.j2
+        dest: "/etc/wireguard/{{ item.name }}.conf"
+        owner: root
+        group: root
+        mode: "0600"
+        force: "{{ wireguard_allow_overwrite | default(false) }}"
+        backup: "{{ wireguard_allow_overwrite | default(false) }}"
+      loop: "{{ wireguard_configs | default([]) }}"
+      when: wireguard_raw_configs is not defined
+      no_log: true
+
+    - name: Ensure wg-quick override directory
+      file:
+        path: "/etc/systemd/system/wg-quick@{{ item }}.service.d"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+      loop: "{{ wireguard_item_names }}"
+
+    - name: Add wg-quick conflict override
+      copy:
+        dest: "/etc/systemd/system/wg-quick@{{ item }}.service.d/override.conf"
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          [Unit]
+          Conflicts=wg-quick@wg0.service wg-quick@wg1.service
+          After=network-online.target
+      loop: "{{ wireguard_item_names }}"
+
+    - name: Reload systemd daemon
+      systemd:
+        daemon_reload: true
+
+    - name: Enable primary WireGuard service on boot
+      systemd:
+        name: "wg-quick@{{ wireguard_primary }}"
+        enabled: true
+      when: wireguard_enable_on_boot | default(false) and wireguard_primary is defined

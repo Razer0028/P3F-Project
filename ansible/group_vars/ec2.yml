@@ -1,0 +1,3 @@
+---
+# Public defaults: keep EC2 features disabled until enabled via host_vars.
+# For a full-stack test profile, copy ec2.full.yml to ec2.yml.

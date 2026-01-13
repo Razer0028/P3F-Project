@@ -1,0 +1,6 @@
+---
+- name: Restart suricata
+  systemd:
+    name: "{{ suricata_service_name }}"
+    state: restarted
+  when: suricata_restart_on_change | default(false)

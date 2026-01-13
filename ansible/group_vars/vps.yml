@@ -1,0 +1,3 @@
+---
+# Public defaults: keep VPS features disabled until enabled via host_vars.
+# For a full-stack test profile, copy vps.full.yml to vps.yml.

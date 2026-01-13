@@ -1,0 +1,4 @@
+{
+  "default_dest_ip": "{{ portctl_default_dest_ip }}"{% if portctl_public_interface | length > 0 %},
+  "public_interface": "{{ portctl_public_interface }}"{% endif %}
+}

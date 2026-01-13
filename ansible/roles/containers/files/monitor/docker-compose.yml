@@ -1,0 +1,18 @@
+version: "3.9"
+
+services:
+  player_monitor:
+    build: .
+    container_name: player_monitor
+    restart: always
+
+    volumes:
+      # player_monitor が状態を書き込む場所
+      - {{ containers_root }}/monitor/opt_serveradmin:/opt/serveradmin
+
+      # docker.sock（ホスト操作用）
+      - /var/run/docker.sock:/var/run/docker.sock
+
+    environment:
+      PYTHONUNBUFFERED: "1"
+      TZ: Asia/Tokyo

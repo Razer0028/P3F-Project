@@ -1,0 +1,109 @@
+---
+- name: Suricata configuration
+  when: suricata_manage | default(false)
+  block:
+    - name: Check for Suricata binary
+      command: "{{ suricata_binary_path }} -V"
+      register: suricata_binary
+      changed_when: false
+      failed_when: false
+
+    - name: Install Suricata packages when missing
+      apt:
+        name: "{{ suricata_packages }}"
+        state: present
+        update_cache: "{{ suricata_update_cache | default(true) }}"
+        cache_valid_time: "{{ (suricata_update_cache | default(true)) | ternary(3600, omit) }}"
+      when: suricata_install_if_missing | default(true) and suricata_binary.rc != 0
+
+    - name: Ensure Suricata config directory
+      file:
+        path: /etc/suricata
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Write /etc/default/suricata
+      template:
+        src: suricata_default.j2
+        dest: /etc/default/suricata
+        owner: root
+        group: root
+        mode: "0644"
+      when: suricata_default_manage | default(true)
+
+    - name: Ensure Suricata rules directory
+      file:
+        path: "{{ suricata_rules_path }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Read existing suricata.yaml metadata
+      stat:
+        path: "{{ suricata_yaml_path }}"
+      register: suricata_yaml_stat
+
+    - name: Read existing custom rules metadata
+      stat:
+        path: "{{ suricata_custom_rules_path }}"
+      register: suricata_rules_stat
+
+    - name: Warn when suricata.yaml exists and overwrite is disabled
+      debug:
+        msg: "Existing {{ suricata_yaml_path }} found; set suricata_allow_overwrite: true to replace"
+      when: suricata_yaml_stat.stat.exists and not (suricata_allow_overwrite | default(false))
+
+    - name: Warn when custom rules exists and overwrite is disabled
+      debug:
+        msg: "Existing {{ suricata_custom_rules_path }} found; set suricata_allow_overwrite: true to replace"
+      when: suricata_rules_stat.stat.exists and not (suricata_allow_overwrite | default(false))
+
+    - name: Validate Suricata variables
+      assert:
+        that:
+          - suricata_custom_rules_content | length > 0
+        fail_msg: "suricata_custom_rules_content must be set"
+      when: suricata_require_vars | default(false)
+
+    - name: Deploy suricata.yaml
+      copy:
+        dest: "{{ suricata_yaml_path }}"
+        content: "{{ suricata_yaml_content }}"
+        owner: root
+        group: root
+        mode: "0644"
+        force: "{{ suricata_allow_overwrite | default(false) }}"
+        backup: "{{ suricata_allow_overwrite | default(false) }}"
+      when: suricata_yaml_manage | default(false) and (suricata_yaml_content | length > 0)
+      notify: Restart suricata
+
+    - name: Deploy custom rules
+      copy:
+        dest: "{{ suricata_custom_rules_path }}"
+        content: "{{ suricata_custom_rules_content }}"
+        owner: root
+        group: root
+        mode: "0644"
+        force: "{{ suricata_allow_overwrite | default(false) }}"
+        backup: "{{ suricata_allow_overwrite | default(false) }}"
+      when: suricata_custom_rules_content | length > 0
+      notify: Restart suricata
+
+
+    - name: Update Suricata interface in config
+      replace:
+        path: "{{ suricata_yaml_path }}"
+        regexp: "(^\\s*-\\s*interface:\\s*)eth0\\b"
+        replace: "\\1{{ suricata_interface }}"
+      when: suricata_interface | default("") | length > 0
+      notify: Restart suricata
+
+    - name: Ensure Suricata service state
+      systemd:
+        name: "{{ suricata_service_name }}"
+        enabled: "{{ suricata_enable_service | default(true) }}"
+        state: "{{ suricata_service_state }}"
+      when: suricata_manage_service | default(false)

@@ -1,0 +1,253 @@
+---
+- name: Portctl configuration
+  when: portctl_manage | default(false)
+  block:
+    - name: Install portctl packages
+      apt:
+        name: "{{ portctl_packages }}"
+        state: present
+        update_cache: "{{ portctl_update_cache | default(true) }}"
+        cache_valid_time: "{{ (portctl_update_cache | default(true)) | ternary(3600, omit) }}"
+      when: portctl_install_if_missing | default(true)
+
+    - name: Ensure portctl directories
+      file:
+        path: "{{ item }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+      loop:
+        - /opt/portctl
+        - /etc/portctl
+        - "{{ portctl_web_root }}"
+        - /var/lib/php/portctl-sessions
+
+    - name: Read existing agent metadata
+      stat:
+        path: "{{ portctl_agent_path }}"
+      register: portctl_agent_stat
+
+    - name: Read existing web metadata
+      stat:
+        path: "{{ portctl_web_root }}/index.php"
+      register: portctl_web_stat
+
+    - name: Read existing config metadata
+      stat:
+        path: "{{ portctl_config_path }}"
+      register: portctl_config_stat
+
+    - name: Read existing rules metadata
+      stat:
+        path: "{{ portctl_rules_path }}"
+      register: portctl_rules_stat
+
+    - name: Warn when agent exists and overwrite is disabled
+      debug:
+        msg: "Existing {{ portctl_agent_path }} found; set portctl_allow_overwrite: true to replace"
+      when: portctl_agent_stat.stat.exists and not (portctl_allow_overwrite | default(false))
+
+    - name: Warn when web UI exists and overwrite is disabled
+      debug:
+        msg: "Existing {{ portctl_web_root }}/index.php found; set portctl_allow_overwrite: true to replace"
+      when: portctl_web_stat.stat.exists and not (portctl_allow_overwrite | default(false))
+
+    - name: Warn when config exists and overwrite is disabled
+      debug:
+        msg: "Existing {{ portctl_config_path }} found; set portctl_allow_overwrite: true to replace"
+      when: portctl_config_stat.stat.exists and not (portctl_allow_overwrite | default(false))
+
+    - name: Deploy portctl agent
+      copy:
+        src: agent.py
+        dest: "{{ portctl_agent_path }}"
+        owner: root
+        group: root
+        mode: "0755"
+        force: "{{ portctl_allow_overwrite | default(false) }}"
+        backup: "{{ portctl_allow_overwrite | default(false) }}"
+      notify: Restart portctl
+
+    - name: Deploy portctl web UI
+      copy:
+        src: portctl-web/index.php
+        dest: "{{ portctl_web_root }}/index.php"
+        owner: root
+        group: root
+        mode: "0644"
+        force: "{{ portctl_allow_overwrite | default(false) }}"
+        backup: "{{ portctl_allow_overwrite | default(false) }}"
+      notify:
+        - Restart portctl web
+        - Restart portctl web local
+
+    - name: Ensure portctl rules file
+      copy:
+        dest: "{{ portctl_rules_path }}"
+        content: "[]\n"
+        owner: root
+        group: root
+        mode: "0644"
+        force: false
+      when: not portctl_rules_stat.stat.exists
+
+    - name: Deploy portctl config
+      template:
+        src: config.json.j2
+        dest: "{{ portctl_config_path }}"
+        owner: root
+        group: root
+        mode: "0644"
+        force: "{{ portctl_allow_overwrite | default(false) }}"
+        backup: "{{ portctl_allow_overwrite | default(false) }}"
+      notify: Restart portctl
+
+    - name: Deploy portctl systemd unit
+      template:
+        src: portctl.service.j2
+        dest: "/etc/systemd/system/{{ portctl_service_name }}.service"
+        owner: root
+        group: root
+        mode: "0644"
+      register: portctl_unit
+
+    - name: Deploy portctl web systemd unit (wg)
+      template:
+        src: portctl-web.service.j2
+        dest: "/etc/systemd/system/{{ portctl_web_service_name }}.service"
+        owner: root
+        group: root
+        mode: "0644"
+      when: portctl_enable_web_wg | default(true)
+      register: portctl_web_unit
+
+    - name: Deploy portctl web systemd unit (local)
+      template:
+        src: portctl-web-local.service.j2
+        dest: "/etc/systemd/system/{{ portctl_web_local_service_name }}.service"
+        owner: root
+        group: root
+        mode: "0644"
+      when: portctl_enable_web_local | default(true)
+      register: portctl_web_local_unit
+
+    - name: Reload systemd daemon
+      systemd:
+        daemon_reload: true
+      when: portctl_unit.changed or (portctl_web_unit is defined and portctl_web_unit.changed) or (portctl_web_local_unit is defined and portctl_web_local_unit.changed)
+
+    - name: Ensure portctl service state
+      systemd:
+        name: "{{ portctl_service_name }}"
+        enabled: true
+        state: "{{ portctl_service_state }}"
+      when: portctl_manage_service | default(false)
+
+    - name: Ensure portctl web service state (wg)
+      systemd:
+        name: "{{ portctl_web_service_name }}"
+        enabled: true
+        state: "{{ portctl_web_service_state }}"
+      when: portctl_manage_service | default(false) and portctl_enable_web_wg | default(true)
+
+    - name: Ensure portctl web service state (local)
+      systemd:
+        name: "{{ portctl_web_local_service_name }}"
+        enabled: true
+        state: "{{ portctl_web_local_service_state }}"
+      when: portctl_manage_service | default(false) and portctl_enable_web_local | default(true)
+
+    - name: Wait for portctl socket
+      wait_for:
+        path: /run/portctl.sock
+        timeout: 10
+      when:
+        - portctl_manage_service | default(false)
+        - portctl_apply_rules | default(true)
+        - (portctl_forward_rules | length > 0) or (portctl_ufw_rules | length > 0)
+
+    - name: Apply port forwarding rules
+      shell: |
+        python3 - <<'PY'
+        import json
+        import os
+        import socket
+
+        rules = json.loads(os.environ.get("PORTCTL_FORWARD_RULES", "[]"))
+        if not rules:
+            raise SystemExit(0)
+
+        def send(req):
+            sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            sock.connect("/run/portctl.sock")
+            sock.sendall(json.dumps(req).encode("utf-8"))
+            data = b""
+            while True:
+                chunk = sock.recv(4096)
+                if not chunk:
+                    break
+                data += chunk
+            sock.close()
+            return json.loads(data.decode("utf-8") or "{}")
+
+        for rule in rules:
+            payload = {
+                "action": "add_forward",
+                "ext_port": rule.get("ext_port", ""),
+                "protocol": rule.get("protocol", ""),
+                "dest_ip": rule.get("dest_ip", ""),
+                "dest_port": rule.get("dest_port", ""),
+            }
+            result = send(payload)
+            if result.get("status") != "ok":
+                raise SystemExit(result.get("message", "portctl add_forward failed"))
+        PY
+      environment:
+        PORTCTL_FORWARD_RULES: "{{ portctl_forward_rules | to_json }}"
+      when:
+        - portctl_manage_service | default(false)
+        - portctl_apply_rules | default(true)
+        - portctl_forward_rules | length > 0
+
+    - name: Apply UFW allow rules
+      shell: |
+        python3 - <<'PY'
+        import json
+        import os
+        import socket
+
+        rules = json.loads(os.environ.get("PORTCTL_UFW_RULES", "[]"))
+        if not rules:
+            raise SystemExit(0)
+
+        def send(req):
+            sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            sock.connect("/run/portctl.sock")
+            sock.sendall(json.dumps(req).encode("utf-8"))
+            data = b""
+            while True:
+                chunk = sock.recv(4096)
+                if not chunk:
+                    break
+                data += chunk
+            sock.close()
+            return json.loads(data.decode("utf-8") or "{}")
+
+        existing = send({"action": "list_ufw"}).get("rules", [])
+        existing_text = [item.get("rule", "") for item in existing if isinstance(item, dict)]
+
+        for rule in rules:
+            needle = rule.replace("allow ", "").strip()
+            if any(needle in item for item in existing_text):
+                continue
+            result = send({"action": "add_ufw", "rule": rule})
+            if result.get("status") != "ok":
+                raise SystemExit(result.get("message", "portctl add_ufw failed"))
+        PY
+      environment:
+        PORTCTL_UFW_RULES: "{{ portctl_ufw_rules | to_json }}"
+      when:
+        - portctl_manage_service | default(false)
+        - portctl_apply_rules | default(true)
+        - portctl_ufw_rules | length > 0

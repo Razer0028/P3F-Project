@@ -1,0 +1,259 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+import time
+import socket
+import json
+import logging
+import sys
+import os
+import subprocess
+import threading
+import urllib.request
+import urllib.error
+from http.server import HTTPServer, BaseHTTPRequestHandler
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="[%(asctime)s] [{{ ddos_notify_server_label }}] %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+    handlers=[logging.StreamHandler(sys.stdout)],
+)
+
+log = logging.info
+log_warn = logging.warning
+log_err = logging.error
+
+EVE_LOG = "{{ ddos_notify_eve_log }}"
+
+DEST_IP_PRIMARY = "{{ ddos_notify_primary_ip }}"
+DEST_IP_FALLBACK = "{{ ddos_notify_fallback_ip }}"
+DEST_PORT = {{ ddos_notify_port }}
+
+HEALTH_PORT = {{ ddos_notify_health_port }}
+
+COOLDOWN = {{ ddos_notify_cooldown }}
+GLOBAL_COOLDOWN = {{ ddos_notify_global_cooldown }}
+UDP_RETRY_COUNT = {{ ddos_notify_udp_retry_count }}
+UDP_RETRY_DELAY = {{ ddos_notify_udp_retry_delay }}
+
+SIGNATURES = {
+{% for signature in ddos_notify_signatures %}
+    "{{ signature }}",
+{% endfor %}
+}
+
+DISCORD_WEBHOOK = "{{ ddos_notify_discord_webhook }}"
+DISCORD_COOLDOWN = {{ ddos_notify_discord_cooldown }}
+DISCORD_USER_AGENT = "{{ ddos_notify_user_agent }}"
+
+last_notify_by_sig = {}
+last_notify_global = 0.0
+last_discord_time = 0.0
+
+
+def run_cmd(cmd, timeout=3):
+    try:
+        result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=timeout)
+        return result.stdout.strip(), result.returncode
+    except Exception:
+        return "", 1
+
+
+def wg0_is_active():
+    out, rc = run_cmd("systemctl is-active wg-quick@wg0")
+    if rc == 0 and out == "active":
+        return True
+    out, rc = run_cmd("wg show wg0 2>/dev/null")
+    if rc == 0 and out:
+        return True
+    out, rc = run_cmd("ip link show wg0 2>/dev/null")
+    if rc == 0 and "wg0" in out:
+        return True
+    return False
+
+
+def send_discord(message, title="Alert"):
+    global last_discord_time
+    if not DISCORD_WEBHOOK:
+        return False
+    now = time.time()
+    if now - last_discord_time < DISCORD_COOLDOWN:
+        log("Discord skipped (cooldown)")
+        return False
+    try:
+        payload = {
+            "embeds": [{
+                "title": title,
+                "description": message,
+                "color": 16711680,
+                "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+            }]
+        }
+        data = json.dumps(payload).encode()
+        req = urllib.request.Request(
+            DISCORD_WEBHOOK,
+            data=data,
+            headers={
+                "Content-Type": "application/json",
+                "User-Agent": DISCORD_USER_AGENT,
+            },
+            method="POST"
+        )
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            if resp.status in (200, 204):
+                last_discord_time = now
+                log("Discord notification sent")
+                return True
+    except Exception as exc:
+        log_err("Discord failed: " + str(exc))
+    return False
+
+
+def send_ddos_alert(signature):
+    title = "DDoS Attack Detected"
+    message = "**Signature:** " + signature + "\n"
+    message += "**Server:** {{ ddos_notify_server_label }}\n"
+    message += "**Time:** " + time.strftime("%Y-%m-%d %H:%M:%S")
+    send_discord(message, title)
+
+
+class HealthHandler(BaseHTTPRequestHandler):
+    def log_message(self, format, *args):
+        pass
+
+    def do_GET(self):
+        if self.path in ("/health", "/"):
+            wg0_up = wg0_is_active()
+            response = {
+                "status": "ok" if wg0_up else "down",
+                "wg0": "up" if wg0_up else "down",
+                "timestamp": time.time()
+            }
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps(response).encode())
+        else:
+            self.send_response(404)
+            self.end_headers()
+
+
+def run_health_server():
+    server = HTTPServer(("0.0.0.0", HEALTH_PORT), HealthHandler)
+    log("Health server started on port " + str(HEALTH_PORT))
+    server.serve_forever()
+
+
+def send_udp(msg, dest_ip):
+    if not dest_ip:
+        return False
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.settimeout(2.0)
+        sock.sendto(msg.encode("utf-8"), (dest_ip, DEST_PORT))
+        sock.close()
+        return True
+    except Exception as exc:
+        log_err("UDP send failed (" + dest_ip + ":" + str(DEST_PORT) + "): " + str(exc))
+        return False
+
+
+def notify_attack(signature):
+    global last_notify_global
+    msg = "DDOS_ALERT:" + signature
+    for attempt in range(1, UDP_RETRY_COUNT + 1):
+        if send_udp(msg, DEST_IP_PRIMARY):
+            log("Notification sent: " + signature)
+            last_notify_global = time.time()
+            send_ddos_alert(signature)
+            return True
+        if attempt < UDP_RETRY_COUNT:
+            time.sleep(UDP_RETRY_DELAY)
+    if DEST_IP_FALLBACK:
+        log_warn("Primary failed, trying fallback")
+        for attempt in range(1, UDP_RETRY_COUNT + 1):
+            if send_udp(msg, DEST_IP_FALLBACK):
+                log("Fallback notification sent: " + signature)
+                last_notify_global = time.time()
+                send_ddos_alert(signature)
+                return True
+            if attempt < UDP_RETRY_COUNT:
+                time.sleep(UDP_RETRY_DELAY)
+        log_err("Notification failed: " + signature)
+    return False
+
+
+def wait_for_file(filepath, timeout=60.0):
+    start = time.time()
+    while not os.path.exists(filepath):
+        if time.time() - start > timeout:
+            log_err("File wait timeout: " + filepath)
+            sys.exit(1)
+        log_warn("Waiting for file: " + filepath)
+        time.sleep(5)
+
+
+def watch():
+    global last_notify_by_sig, last_notify_global
+    log("DDoS Watch starting")
+    log("EVE log: " + EVE_LOG)
+    log("Primary: " + DEST_IP_PRIMARY + ":" + str(DEST_PORT))
+    if DEST_IP_FALLBACK:
+        log("Fallback: " + DEST_IP_FALLBACK + ":" + str(DEST_PORT))
+    if DISCORD_WEBHOOK:
+        log("Discord webhook configured")
+    wait_for_file(EVE_LOG)
+    log("Suricata monitoring started")
+    try:
+        with open(EVE_LOG, "r") as f:
+            f.seek(0, os.SEEK_END)
+            while True:
+                line = f.readline()
+                if not line:
+                    time.sleep(0.05)
+                    continue
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    event = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if event.get("event_type") != "alert":
+                    continue
+                alert = event.get("alert")
+                if not alert:
+                    continue
+                signature = alert.get("signature", "")
+                if not signature:
+                    continue
+                if signature not in SIGNATURES:
+                    continue
+                now = time.time()
+                if now - last_notify_global < GLOBAL_COOLDOWN:
+                    continue
+                last_time = last_notify_by_sig.get(signature, 0.0)
+                if now - last_time < COOLDOWN:
+                    continue
+                log("DDoS alert: " + signature)
+                if notify_attack(signature):
+                    last_notify_by_sig[signature] = now
+    except FileNotFoundError:
+        log_err("File not found: " + EVE_LOG)
+        sys.exit(1)
+    except PermissionError:
+        log_err("Permission denied: " + EVE_LOG)
+        sys.exit(1)
+    except KeyboardInterrupt:
+        log("Shutdown")
+        sys.exit(0)
+    except Exception as exc:
+        log_err("Unexpected error: " + str(exc))
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    log("VPS monitor starting")
+    threading.Thread(target=run_health_server, daemon=True).start()
+    watch()

@@ -1,0 +1,25 @@
+---
+cloudflared_manage: false
+cloudflared_require_vars: false
+cloudflared_install_if_missing: false
+cloudflared_update_cache: true
+cloudflared_restart_on_change: false
+cloudflared_allow_overwrite: false
+
+cloudflared_manage_service: false
+cloudflared_enable_service: true
+cloudflared_service_state: started
+cloudflared_service_name: cloudflared
+
+cloudflared_packages:
+  - cloudflared
+
+cloudflared_binary_path: /usr/bin/cloudflared
+
+cloudflared_config_path: /etc/cloudflared/config.yml
+cloudflared_credentials_path: ""
+cloudflared_cert_path: ""
+
+cloudflared_config_content: ""
+cloudflared_credentials_content: ""
+cloudflared_cert_content: ""

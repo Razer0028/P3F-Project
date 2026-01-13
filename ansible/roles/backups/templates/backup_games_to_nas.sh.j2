@@ -1,0 +1,38 @@
+#!/bin/bash
+set -euo pipefail
+
+DEST="{{ backup_games_root }}"
+LOG_FILE="{{ backup_games_log }}"
+
+SRC_DIRS=(
+  "{{ containers_root }}/minecraft"
+  "{{ containers_root }}/minecraft_priv"
+  "{{ containers_root }}/valheim_server"
+  "{{ containers_root }}/7dtd_server"
+  "{{ containers_root }}/dayz"
+  "{{ containers_root }}/ark"
+  "{{ containers_root }}/ARK"
+  "{{ containers_root }}/ark_aberration"
+  "{{ containers_root }}/ark_dlc"
+)
+
+if ! mountpoint -q "{{ nas_mount }}"; then
+  echo "$(date +%Y-%m-%d %H:%M:%S) [backup_games] ERROR: {{ nas_mount }} is not mounted" >> "$LOG_FILE"
+  exit 1
+fi
+
+mkdir -p "$DEST"
+
+echo "$(date +%Y-%m-%d %H:%M:%S) [backup_games] START" >> "$LOG_FILE"
+
+for src in "${SRC_DIRS[@]}"; do
+  if [ -d "$src" ]; then
+    name="$(basename "$src")"
+    ionice -c3 nice -n 19 rsync -aH --delete --numeric-ids \
+      "$src"/ "$DEST/$name"/ >> "$LOG_FILE" 2>&1
+  else
+    echo "$(date +%Y-%m-%d %H:%M:%S) [backup_games] SKIP: $src missing" >> "$LOG_FILE"
+  fi
+  done
+
+echo "$(date +%Y-%m-%d %H:%M:%S) [backup_games] DONE" >> "$LOG_FILE"

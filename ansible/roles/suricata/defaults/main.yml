@@ -1,0 +1,30 @@
+---
+suricata_manage: false
+suricata_require_vars: false
+suricata_install_if_missing: true
+suricata_update_cache: true
+suricata_restart_on_change: false
+suricata_allow_overwrite: false
+
+suricata_manage_service: false
+suricata_enable_service: true
+suricata_service_state: started
+suricata_service_name: suricata
+
+suricata_default_manage: true
+suricata_run: "yes"
+suricata_listenmode: af-packet
+suricata_interface: "{{ ansible_default_ipv4.interface | default('eth0') }}"
+suricata_pidfile: /var/run/suricata.pid
+
+suricata_packages:
+  - suricata
+
+suricata_binary_path: /usr/bin/suricata
+suricata_yaml_path: /etc/suricata/suricata.yaml
+suricata_rules_path: /etc/suricata/rules
+suricata_custom_rules_path: /etc/suricata/rules/local.rules
+
+suricata_yaml_manage: false
+suricata_yaml_content: ""
+suricata_custom_rules_content: ""

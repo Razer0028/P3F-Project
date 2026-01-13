@@ -1,0 +1,16 @@
+---
+- name: Reload systemd
+  systemd:
+    daemon_reload: true
+
+- name: Restart failover core
+  systemd:
+    name: "{{ failover_core_service_name }}"
+    state: restarted
+  when: failover_core_restart_on_change | default(true)
+
+- name: Restart ddos receiver
+  systemd:
+    name: "{{ failover_ddos_receiver_service_name }}"
+    state: restarted
+  when: (failover_ddos_receiver_manage | default(true)) and (failover_core_restart_on_change | default(true))

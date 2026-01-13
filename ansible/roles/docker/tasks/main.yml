@@ -1,0 +1,58 @@
+---
+- name: Docker configuration
+  when: docker_manage | default(false)
+  block:
+    - name: Check for docker binary
+      shell: |
+        set -o pipefail
+        command -v docker
+      register: docker_binary
+      changed_when: false
+      failed_when: false
+
+    - name: Install docker packages when missing
+      apt:
+        name: "{{ docker_packages }}"
+        state: present
+        update_cache: "{{ docker_update_cache | default(true) }}"
+        cache_valid_time: "{{ (docker_update_cache | default(true)) | ternary(3600, omit) }}"
+      when: (docker_install_if_missing | default(true) | bool) and docker_binary.rc != 0
+
+    - name: Ensure docker group exists
+      group:
+        name: docker
+        state: present
+
+    - name: Add users to docker group
+      user:
+        name: "{{ item }}"
+        groups: docker
+        append: true
+      loop: "{{ docker_users }}"
+      when: docker_users | length > 0
+
+    - name: Ensure docker config directory
+      file:
+        path: /etc/docker
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+      when: docker_manage_daemon_config | default(false)
+
+    - name: Write daemon.json
+      template:
+        src: daemon.json.j2
+        dest: "{{ docker_daemon_config_path }}"
+        owner: root
+        group: root
+        mode: "0644"
+      when: docker_manage_daemon_config | default(false)
+      notify: Restart docker
+
+    - name: Ensure docker service state
+      systemd:
+        name: "{{ docker_service_name }}"
+        enabled: "{{ docker_manage_service | default(true) }}"
+        state: "{{ docker_manage_service | default(true) | ternary('started', 'stopped') }}"
+      when: docker_manage_service | default(true)

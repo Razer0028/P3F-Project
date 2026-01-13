@@ -1,0 +1,623 @@
+---
+- name: Container stack setup
+  when: containers_manage | default(false)
+  block:
+    - name: Ensure container group exists
+      group:
+        name: "{{ containers_group }}"
+        state: present
+      when:
+        - containers_manage_user | default(true)
+        - containers_group != "root"
+
+    - name: Ensure container user exists
+      user:
+        name: "{{ containers_owner }}"
+        group: "{{ containers_group }}"
+        state: present
+        create_home: true
+      when:
+        - containers_manage_user | default(true)
+        - containers_owner != "root"
+
+    - name: Read containers owner uid
+      command: id -u {{ containers_owner }}
+      register: containers_owner_uid_cmd
+      changed_when: false
+      when: containers_owner != "root"
+
+    - name: Read containers owner gid
+      command: id -g {{ containers_owner }}
+      register: containers_owner_gid_cmd
+      changed_when: false
+      when: containers_owner != "root"
+
+    - name: Set containers owner uid/gid facts
+      set_fact:
+        containers_owner_uid: "{{ containers_owner_uid_cmd.stdout }}"
+        containers_owner_gid: "{{ containers_owner_gid_cmd.stdout }}"
+      when: containers_owner != "root"
+
+    - name: Set containers owner uid/gid for root
+      set_fact:
+        containers_owner_uid: 0
+        containers_owner_gid: 0
+      when: containers_owner == "root"
+
+    - name: Ensure container root
+      file:
+        path: "{{ containers_root }}"
+        state: directory
+        owner: "{{ containers_owner }}"
+        group: "{{ containers_group }}"
+        mode: "0755"
+
+    - name: Detect docker compose command
+      block:
+        - name: Check configured compose command
+          shell: "{{ containers_compose_cmd }} version"
+          register: containers_compose_check
+          changed_when: false
+          failed_when: false
+
+        - name: Check legacy docker-compose command
+          command: docker-compose --version
+          register: containers_compose_legacy
+          changed_when: false
+          failed_when: false
+
+        - name: Select available compose command
+          set_fact:
+            containers_compose_cmd: >-
+              {{ 'docker-compose'
+                 if containers_compose_check.rc != 0 and containers_compose_legacy.rc == 0
+                 else containers_compose_cmd }}
+
+        - name: Fail when no compose command is available
+          fail:
+            msg: "Neither docker compose nor docker-compose is available"
+          when:
+            - containers_compose_check.rc != 0
+            - containers_compose_legacy.rc != 0
+
+    - name: Ensure /opt/serveradmin tree
+      file:
+        path: "{{ item }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+      loop:
+        - /opt/serveradmin
+        - /opt/serveradmin/bin
+        - /opt/serveradmin/scripts
+        - /opt/serveradmin/logs
+        - /opt/serveradmin/status
+        - /opt/serveradmin/config
+
+    - name: Ensure archives directory
+      file:
+        path: /opt/serveradmin/archives
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Copy game archives
+      copy:
+        src: "archives/{{ item }}"
+        dest: "/opt/serveradmin/archives/{{ item }}"
+        owner: root
+        group: root
+        mode: "0644"
+      loop:
+        - minecraft.tar.gz
+        - valheim.tar.gz
+        - 7dtd.tar.gz
+
+    - name: Ensure mirror archives directory
+      file:
+        path: "{{ containers_root }}/monitor/opt_serveradmin/archives"
+        state: directory
+        owner: "{{ containers_owner }}"
+        group: "{{ containers_group }}"
+        mode: "0755"
+
+    - name: Copy game archives (mirror)
+      copy:
+        src: "archives/{{ item }}"
+        dest: "{{ containers_root }}/monitor/opt_serveradmin/archives/{{ item }}"
+        owner: "{{ containers_owner }}"
+        group: "{{ containers_group }}"
+        mode: "0644"
+      loop:
+        - minecraft.tar.gz
+        - valheim.tar.gz
+        - 7dtd.tar.gz
+
+    - name: Ensure SteamCMD assets
+      when: "'valheim' in containers_enabled or '7dtd' in containers_enabled"
+      block:
+        - name: Ensure SteamCMD directory exists
+          file:
+            path: "{{ steamcmd_dir }}"
+            state: directory
+            owner: "{{ steamcmd_owner }}"
+            group: "{{ steamcmd_group }}"
+            mode: "0755"
+
+        - name: Check SteamCMD install
+          stat:
+            path: "{{ steamcmd_dir }}/steamcmd.sh"
+          register: steamcmd_stat
+
+        - name: Check SteamCMD tarball
+          stat:
+            path: "{{ steamcmd_tarball }}"
+          register: steamcmd_tarball_stat
+
+        - name: Download SteamCMD
+          get_url:
+            url: "https://steamcdn-a.akamaihd.net/client/installer/steamcmd_linux.tar.gz"
+            dest: "{{ steamcmd_tarball }}"
+            mode: "0644"
+          register: steamcmd_download
+          when:
+            - not steamcmd_stat.stat.exists
+            - not steamcmd_tarball_stat.stat.exists
+
+        - name: Set SteamCMD tarball exists flag
+          set_fact:
+            steamcmd_tarball_exists: "{{ steamcmd_tarball_stat.stat.exists or (steamcmd_download is defined and steamcmd_download is succeeded) }}"
+
+        - name: Fail when SteamCMD tarball missing
+          fail:
+            msg: "SteamCMD tarball not found at {{ steamcmd_tarball }}. Place it there or enable outbound DNS for download."
+          when:
+            - not steamcmd_stat.stat.exists
+            - not steamcmd_tarball_exists
+
+        - name: Extract SteamCMD
+          unarchive:
+            src: "{{ steamcmd_tarball }}"
+            dest: "{{ steamcmd_dir }}"
+            remote_src: true
+            owner: "{{ steamcmd_owner }}"
+            group: "{{ steamcmd_group }}"
+          when:
+            - not steamcmd_stat.stat.exists
+            - steamcmd_tarball_exists
+
+        - name: Ensure SteamCMD binaries are executable
+          file:
+            path: "{{ item }}"
+            owner: "{{ steamcmd_owner }}"
+            group: "{{ steamcmd_group }}"
+            mode: "0755"
+          loop:
+            - "{{ steamcmd_dir }}/steamcmd.sh"
+            - "{{ steamcmd_dir }}/linux32/steamcmd"
+          when: steamcmd_tarball_exists
+
+    - name: Ensure monitor serveradmin tree
+      file:
+        path: "{{ item }}"
+        state: directory
+        owner: "{{ containers_owner }}"
+        group: "{{ containers_group }}"
+        mode: "0755"
+      loop:
+        - "{{ containers_root }}/monitor/opt_serveradmin"
+        - "{{ containers_root }}/monitor/opt_serveradmin/bin"
+        - "{{ containers_root }}/monitor/opt_serveradmin/scripts"
+        - "{{ containers_root }}/monitor/opt_serveradmin/logs"
+        - "{{ containers_root }}/monitor/opt_serveradmin/status"
+        - "{{ containers_root }}/monitor/opt_serveradmin/config"
+
+    - name: Install serveradmin helper scripts
+      template:
+        src: "serveradmin/bin/{{ item }}.j2"
+        dest: "/opt/serveradmin/bin/{{ item }}"
+        owner: root
+        group: root
+        mode: "0750"
+      loop:
+        - docker_manage.sh
+        - game_admin.sh
+
+    - name: Install serveradmin monitor scripts
+      copy:
+        src: "serveradmin/scripts/{{ item }}"
+        dest: "/opt/serveradmin/scripts/{{ item }}"
+        owner: root
+        group: root
+        mode: "0755"
+      loop:
+        - player_monitor.py
+
+    - name: Mirror helper scripts for monitor mount
+      template:
+        src: "serveradmin/bin/{{ item }}.j2"
+        dest: "{{ containers_root }}/monitor/opt_serveradmin/bin/{{ item }}"
+        owner: "{{ containers_owner }}"
+        group: "{{ containers_group }}"
+        mode: "0750"
+      loop:
+        - docker_manage.sh
+        - game_admin.sh
+
+    - name: Mirror monitor scripts for monitor mount
+      copy:
+        src: "serveradmin/scripts/{{ item }}"
+        dest: "{{ containers_root }}/monitor/opt_serveradmin/scripts/{{ item }}"
+        owner: "{{ containers_owner }}"
+        group: "{{ containers_group }}"
+        mode: "0755"
+      loop:
+        - player_monitor.py
+
+    - name: Ensure status JSON exists
+      copy:
+        dest: "{{ item }}"
+        content: "{}\n"
+        owner: "{{ containers_owner }}"
+        group: "{{ containers_group }}"
+        mode: "0644"
+        force: false
+      loop:
+        - /opt/serveradmin/status/current_players.json
+        - "{{ containers_root }}/monitor/opt_serveradmin/status/current_players.json"
+
+    - name: Write portal services config (host)
+      template:
+        src: portal_services.json.j2
+        dest: /opt/serveradmin/config/portal_services.json
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Write portal services config (monitor mount)
+      template:
+        src: portal_services.json.j2
+        dest: "{{ containers_root }}/monitor/opt_serveradmin/config/portal_services.json"
+        owner: "{{ containers_owner }}"
+        group: "www-data"
+        mode: "0664"
+
+    - name: Deploy minecraft container files
+      when: "'minecraft' in containers_enabled"
+      block:
+        - name: Ensure minecraft directory
+          file:
+            path: "{{ containers_root }}/minecraft"
+            state: directory
+            owner: "{{ containers_owner }}"
+            group: "{{ containers_group }}"
+            mode: "0755"
+        - name: Ensure minecraft data directory
+          file:
+            path: "{{ containers_root }}/minecraft/data"
+            state: directory
+            owner: "{{ containers_owner }}"
+            group: "{{ containers_group }}"
+            mode: "0755"
+        - name: Extract minecraft build context
+          unarchive:
+            src: "archives/minecraft.tar.gz"
+            dest: "{{ containers_root }}/minecraft"
+            owner: "{{ containers_owner }}"
+            group: "{{ containers_group }}"
+
+        - name: Ensure minecraft start script is executable
+          file:
+            path: "{{ containers_root }}/minecraft/start.sh"
+            owner: "{{ containers_owner }}"
+            group: "{{ containers_group }}"
+            mode: "0755"
+
+    - name: Deploy valheim container files
+      when: "'valheim' in containers_enabled"
+      block:
+        - name: Ensure valheim directory
+          file:
+            path: "{{ containers_root }}/valheim_server"
+            state: directory
+            owner: "{{ containers_owner }}"
+            group: "{{ containers_group }}"
+            mode: "0755"
+        - name: Ensure valheim data directory
+          file:
+            path: "{{ containers_root }}/valheim_server/data"
+            state: directory
+            owner: "{{ containers_owner }}"
+            group: "{{ containers_group }}"
+            mode: "0755"
+        - name: Extract valheim build context
+          unarchive:
+            src: "archives/valheim.tar.gz"
+            dest: "{{ containers_root }}/valheim_server"
+            owner: "{{ containers_owner }}"
+            group: "{{ containers_group }}"
+
+        - name: Normalize valheim data volume path
+          replace:
+            path: "{{ containers_root }}/valheim_server/docker-compose.yml"
+            regexp: "/home/gameadmin/valheim_server/data"
+            replace: "./data"
+
+        - name: Normalize valheim steamcmd volume path
+          replace:
+            path: "{{ containers_root }}/valheim_server/docker-compose.yml"
+            regexp: "/home/gameadmin/steamcmd"
+            replace: "{{ steamcmd_dir }}"
+
+        - name: Ensure valheim start script is executable
+          file:
+            path: "{{ containers_root }}/valheim_server/run_valheim.sh"
+            owner: "{{ containers_owner }}"
+            group: "{{ containers_group }}"
+            mode: "0755"
+
+    - name: Deploy 7dtd container files
+      when: "'7dtd' in containers_enabled"
+      block:
+        - name: Ensure 7dtd directory
+          file:
+            path: "{{ containers_root }}/7dtd_server"
+            state: directory
+            owner: "{{ containers_owner }}"
+            group: "{{ containers_group }}"
+            mode: "0755"
+        - name: Ensure 7dtd data directories
+          file:
+            path: "{{ containers_root }}/7dtd_server/{{ item }}"
+            state: directory
+            owner: "{{ containers_owner }}"
+            group: "{{ containers_group }}"
+            mode: "0755"
+          loop:
+            - serverfiles
+            - data
+            - logs
+        - name: Extract 7dtd build context
+          unarchive:
+            src: "archives/7dtd.tar.gz"
+            dest: "{{ containers_root }}/7dtd_server"
+            owner: "{{ containers_owner }}"
+            group: "{{ containers_group }}"
+
+        - name: Normalize 7dtd steamcmd volume path
+          replace:
+            path: "{{ containers_root }}/7dtd_server/docker-compose.yml"
+            regexp: "/home/gameadmin/steamcmd"
+            replace: "{{ steamcmd_dir }}"
+
+        - name: Ensure 7dtd check_mapcount returns success
+          lineinfile:
+            path: "{{ containers_root }}/7dtd_server/start_7dtd.sh"
+            line: "  return 0"
+            insertbefore: "^}$"
+            firstmatch: true
+
+        - name: Ensure 7dtd start script is executable
+          file:
+            path: "{{ containers_root }}/7dtd_server/start_7dtd.sh"
+            owner: "{{ containers_owner }}"
+            group: "{{ containers_group }}"
+            mode: "0755"
+
+    - name: Deploy web portal files
+      when: "'web_portal' in containers_enabled"
+      block:
+        - name: Ensure web portal directory
+          file:
+            path: "{{ containers_root }}/web"
+            state: directory
+            owner: "{{ containers_owner }}"
+            group: "{{ containers_group }}"
+            mode: "0755"
+        - name: Copy web portal core files
+          copy:
+            src: "web_portal/{{ item }}"
+            dest: "{{ containers_root }}/web/{{ item }}"
+            owner: "{{ containers_owner }}"
+            group: "{{ containers_group }}"
+            mode: "0644"
+          loop:
+            - Dockerfile
+            - sudoers_www
+        - name: Render web portal docker-compose
+          template:
+            src: web_portal/docker-compose.yml.j2
+            dest: "{{ containers_root }}/web/docker-compose.yml"
+            owner: "{{ containers_owner }}"
+            group: "{{ containers_group }}"
+            mode: "0644"
+        - name: Copy web portal directories
+          copy:
+            src: "web_portal/{{ item }}/"
+            dest: "{{ containers_root }}/web/{{ item }}/"
+            owner: "{{ containers_owner }}"
+            group: "{{ containers_group }}"
+            mode: "0644"
+          loop:
+            - admin
+            - public
+
+        - name: Remove nested web portal directories
+          file:
+            path: "{{ containers_root }}/web/{{ item }}/{{ item }}"
+            state: absent
+          loop:
+            - admin
+            - public
+
+        - name: Ensure web portal scripts directory
+          file:
+            path: "{{ containers_root }}/web/public/scripts"
+            state: directory
+            owner: "{{ containers_owner }}"
+            group: "{{ containers_group }}"
+            mode: "0755"
+
+        - name: Render web portal portal_config.php
+          template:
+            src: web_portal/public/scripts/portal_config.php.j2
+            dest: "{{ containers_root }}/web/public/scripts/portal_config.php"
+            owner: "{{ containers_owner }}"
+            group: "{{ containers_group }}"
+            mode: "0644"
+        - name: Render web portal server_portal.php
+          template:
+            src: web_portal/public/scripts/server_portal.php.j2
+            dest: "{{ containers_root }}/web/public/scripts/server_portal.php"
+            owner: "{{ containers_owner }}"
+            group: "{{ containers_group }}"
+            mode: "0644"
+        - name: Render web portal docker_panel.php
+          template:
+            src: web_portal/admin/docker_panel.php.j2
+            dest: "{{ containers_root }}/web/admin/docker_panel.php"
+            owner: "{{ containers_owner }}"
+            group: "{{ containers_group }}"
+            mode: "0644"
+
+        - name: Ensure web portal apache directory
+          file:
+            path: "{{ containers_root }}/web/apache"
+            state: directory
+            owner: "{{ containers_owner }}"
+            group: "{{ containers_group }}"
+            mode: "0755"
+
+        - name: Render web portal apache vhost
+          template:
+            src: 000-default.conf.j2
+            dest: "{{ containers_root }}/web/apache/000-default.conf"
+            owner: "{{ containers_owner }}"
+            group: "{{ containers_group }}"
+            mode: "0644"
+
+        - name: Validate web portal admin credentials
+          assert:
+            that:
+              - web_portal_admin_user | length > 0
+              - web_portal_admin_password | length > 0
+            fail_msg: "web_portal_admin_enable requires web_portal_admin_user and web_portal_admin_password"
+          when: web_portal_admin_enable | default(false)
+          no_log: true
+
+        - name: Compute web portal admin digest
+          set_fact:
+            web_portal_admin_htdigest_line: "{{ web_portal_admin_user }}:{{ web_portal_admin_realm | default(\"admin-panel\") }}:{{ (web_portal_admin_user ~ \":\" ~ (web_portal_admin_realm | default(\"admin-panel\")) ~ \":\" ~ web_portal_admin_password) | hash(\"md5\") }}"
+          when: web_portal_admin_enable | default(false)
+          no_log: true
+
+        - name: Write web portal admin digest (generated)
+          copy:
+            dest: "{{ containers_root }}/web/admin/.htdigest"
+            content: "{{ web_portal_admin_htdigest_line }}\n"
+            owner: "{{ containers_owner }}"
+            group: "{{ containers_group }}"
+            mode: "0644"
+          when: web_portal_admin_enable | default(false)
+          no_log: true
+
+        - name: Write web portal admin digest (manual)
+          copy:
+            dest: "{{ containers_root }}/web/admin/.htdigest"
+            content: "{{ web_portal_admin_htdigest | trim }}\n"
+            owner: "{{ containers_owner }}"
+            group: "{{ containers_group }}"
+            mode: "0644"
+          when:
+            - not (web_portal_admin_enable | default(false))
+            - web_portal_admin_htdigest | default("") | length > 0
+          no_log: true
+
+        - name: Remove web portal admin digest when unset
+          file:
+            path: "{{ containers_root }}/web/admin/.htdigest"
+            state: absent
+          when:
+            - not (web_portal_admin_enable | default(false))
+            - web_portal_admin_htdigest | default("") | length == 0
+
+        - name: Write web portal .env (optional)
+          copy:
+            dest: "{{ containers_root }}/web/.env"
+            content: "DISCORD_WEBHOOK_URL={{ web_portal_discord_webhook }}\n"
+            owner: "{{ containers_owner }}"
+            group: "{{ containers_group }}"
+            mode: "0600"
+          when: web_portal_discord_webhook | default('') | length > 0
+          no_log: true
+
+    - name: Deploy player monitor files
+      when: "'player_monitor' in containers_enabled"
+      block:
+        - name: Ensure monitor directory
+          file:
+            path: "{{ containers_root }}/monitor"
+            state: directory
+            owner: "{{ containers_owner }}"
+            group: "{{ containers_group }}"
+            mode: "0755"
+        - name: Copy monitor files
+          copy:
+            src: "monitor/{{ item }}"
+            dest: "{{ containers_root }}/monitor/{{ item }}"
+            owner: "{{ containers_owner }}"
+            group: "{{ containers_group }}"
+            mode: "{{ '0755' if item == 'start.sh' else '0644' }}"
+          loop:
+            - Dockerfile
+            - player_monitor.logrotate
+            - start.sh
+        - name: Render monitor docker-compose
+          template:
+            src: monitor/docker-compose.yml.j2
+            dest: "{{ containers_root }}/monitor/docker-compose.yml"
+            owner: "{{ containers_owner }}"
+            group: "{{ containers_group }}"
+            mode: "0644"
+
+    - name: Start minecraft container
+      when:
+        - containers_start | default(false)
+        - "'minecraft' in containers_enabled"
+      command: "{{ containers_compose_cmd | default('docker compose') }} up -d --build"
+      args:
+        chdir: "{{ containers_root }}/minecraft"
+
+    - name: Start valheim container
+      when:
+        - containers_start | default(false)
+        - "'valheim' in containers_enabled"
+      command: "{{ containers_compose_cmd | default('docker compose') }} up -d --build"
+      args:
+        chdir: "{{ containers_root }}/valheim_server"
+
+    - name: Start 7dtd container
+      when:
+        - containers_start | default(false)
+        - "'7dtd' in containers_enabled"
+      command: "{{ containers_compose_cmd | default('docker compose') }} up -d --build"
+      args:
+        chdir: "{{ containers_root }}/7dtd_server"
+
+    - name: Start web portal container
+      when:
+        - containers_start | default(false)
+        - "'web_portal' in containers_enabled"
+      command: "{{ containers_compose_cmd | default('docker compose') }} up -d --build"
+      args:
+        chdir: "{{ containers_root }}/web"
+
+    - name: Start player monitor container
+      when:
+        - containers_start | default(false)
+        - "'player_monitor' in containers_enabled"
+      command: "{{ containers_compose_cmd | default('docker compose') }} up -d --build"
+      args:
+        chdir: "{{ containers_root }}/monitor"

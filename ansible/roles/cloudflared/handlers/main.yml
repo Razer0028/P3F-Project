@@ -1,0 +1,6 @@
+---
+- name: Restart cloudflared
+  systemd:
+    name: "{{ cloudflared_service_name }}"
+    state: restarted
+  when: cloudflared_restart_on_change | default(false)

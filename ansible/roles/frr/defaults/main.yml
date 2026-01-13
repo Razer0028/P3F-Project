@@ -1,0 +1,29 @@
+---
+frr_manage: false
+frr_require_vars: false
+frr_install_if_missing: true
+frr_update_cache: true
+frr_restart_on_change: false
+frr_allow_overwrite: false
+
+frr_manage_service: false
+frr_enable_service: true
+frr_service_state: started
+frr_service_name: frr
+
+frr_packages:
+  - frr
+  - frr-pythontools
+
+frr_binary_path: /usr/bin/vtysh
+
+frr_conf_path: /etc/frr/frr.conf
+frr_daemons_path: /etc/frr/daemons
+
+frr_owner_default: frr
+frr_group_default: frr
+frr_daemons_owner_default: frr
+frr_daemons_group_default: frr
+
+frr_config_content: ""
+frr_daemons_content: ""

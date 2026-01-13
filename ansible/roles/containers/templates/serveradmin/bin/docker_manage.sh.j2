@@ -1,0 +1,436 @@
+#!/bin/bash
+# /opt/serveradmin/bin/docker_manage.sh
+#
+# 役割:
+#   - コンテナ状態の集約(JSON出力)
+#   - コンテナの start / stop / build / delete / deploy / purge
+#   - アーカイブの展開と削除
+#   - 操作ログの記録
+#
+# 使い方:
+#   docker_manage.sh status
+#   docker_manage.sh catalog
+#   docker_manage.sh start  <container> <user_email>
+#   docker_manage.sh stop   <container> <user_email>
+#   docker_manage.sh build  <container> <user_email>
+#   docker_manage.sh delete <container> <user_email>
+#   docker_manage.sh deploy <container> <user_email>
+#   docker_manage.sh purge  <container> <user_email>
+
+LOGFILE="/opt/serveradmin/logs/web_actions.log"
+
+CONFIG_PATH="/opt/serveradmin/config/portal_services.json"
+ARCHIVE_DIR="/opt/serveradmin/archives"
+DEFAULT_CONTAINERS=("minecraft_server" "valheim_server" "7dtd-server")
+ALLOWED_CONTAINERS=()
+
+declare -A COMPOSE_DIRS
+declare -A ARCHIVE_MAP
+
+action="$1"
+container="$2"
+who="$3"
+
+default_compose_dir() {
+    case "$1" in
+        minecraft_server) echo "{{ containers_root }}/minecraft";;
+        valheim_server) echo "{{ containers_root }}/valheim_server";;
+        7dtd-server) echo "{{ containers_root }}/7dtd_server";;
+        web_portal) echo "{{ containers_root }}/web";;
+        player_monitor) echo "{{ containers_root }}/monitor";;
+        *) echo "";;
+    esac
+}
+
+default_archive_name() {
+    case "$1" in
+        minecraft_server) echo "minecraft.tar.gz";;
+        valheim_server) echo "valheim.tar.gz";;
+        7dtd-server) echo "7dtd.tar.gz";;
+        *) echo "";;
+    esac
+}
+
+compose_dir_for() {
+    local name="$1"
+    if [ -n "${COMPOSE_DIRS[$name]:-}" ]; then
+        echo "${COMPOSE_DIRS[$name]}"
+        return 0
+    fi
+    default_compose_dir "$name"
+}
+
+archive_path_for() {
+    local name="$1"
+    local archive="${ARCHIVE_MAP[$name]:-}"
+    if [ -z "$archive" ]; then
+        archive="$(default_archive_name "$name")"
+    fi
+    if [ -z "$archive" ]; then
+        echo ""
+        return 0
+    fi
+    if [[ "$archive" = /* ]]; then
+        echo "$archive"
+    else
+        echo "$ARCHIVE_DIR/$archive"
+    fi
+}
+
+is_allowed() {
+    local name="$1"
+    for c in "${ALLOWED_CONTAINERS[@]}"; do
+        if [ "$c" = "$name" ]; then
+            return 0
+        fi
+    done
+    return 1
+}
+
+is_known() {
+    local dir
+    dir="$(compose_dir_for "$1")"
+    [ -n "$dir" ]
+}
+
+owner_for_dir() {
+    local dir="$1"
+    if [ -d "$dir" ]; then
+        stat -c '%u:%g' "$dir" 2>/dev/null || echo "0:0"
+        return 0
+    fi
+    stat -c '%u:%g' "$(dirname "$dir")" 2>/dev/null || echo "0:0"
+}
+
+load_allowed_containers() {
+    if [ -r "$CONFIG_PATH" ]; then
+        mapfile -t ALLOWED_CONTAINERS < <(
+            python3 - "$CONFIG_PATH" <<'PY'
+import json
+import sys
+
+path = sys.argv[1]
+try:
+    with open(path, "r", encoding="utf-8") as fh:
+        data = json.load(fh)
+except Exception:
+    sys.exit(0)
+
+enabled = data.get("enabled", [])
+services = data.get("services", {})
+if not isinstance(enabled, list) or not isinstance(services, dict):
+    sys.exit(0)
+
+for service_id in enabled:
+    service = services.get(service_id, {})
+    if not isinstance(service, dict):
+        continue
+    name = service.get("container")
+    if isinstance(name, str) and name:
+        print(name)
+PY
+        )
+
+        while IFS='|' read -r name dir archive; do
+            if [ -n "$name" ]; then
+                if [ -n "$dir" ]; then
+                    COMPOSE_DIRS["$name"]="$dir"
+                fi
+                if [ -n "$archive" ]; then
+                    ARCHIVE_MAP["$name"]="$archive"
+                fi
+            fi
+        done < <(
+            python3 - "$CONFIG_PATH" <<'PY'
+import json
+import sys
+
+path = sys.argv[1]
+try:
+    with open(path, "r", encoding="utf-8") as fh:
+        data = json.load(fh)
+except Exception:
+    sys.exit(0)
+
+services = data.get("services", {})
+if not isinstance(services, dict):
+    sys.exit(0)
+
+for service in services.values():
+    if not isinstance(service, dict):
+        continue
+    name = service.get("container")
+    compose_dir = service.get("compose_dir")
+    archive = service.get("archive")
+    if isinstance(name, str) and name:
+        print("{}|{}|{}".format(name or "", compose_dir or "", archive or ""))
+PY
+        )
+    fi
+
+{% raw %}
+    if [ ${#ALLOWED_CONTAINERS[@]} -eq 0 ]; then
+{% endraw %}
+        ALLOWED_CONTAINERS=("${DEFAULT_CONTAINERS[@]}")
+    fi
+}
+
+load_allowed_containers
+
+case "$action" in
+  status)
+    # 各コンテナの稼働状態と docker ps のステータステキストをJSONで返す
+    echo "{"
+    first=1
+    for c in "${ALLOWED_CONTAINERS[@]}"; do
+{% raw %}
+        st=$(docker ps --filter "name=^/${c}$" --format '{{.Status}}')
+{% endraw %}
+
+        if [ -z "$st" ]; then
+            state="stopped"
+            detail=""
+        else
+            state="running"
+            detail="$st"
+        fi
+
+        safe_detail=$(echo "$detail" | sed 's/"/\\"/g')
+
+        if [ $first -eq 0 ]; then
+            echo ","
+        fi
+        first=0
+
+        echo "  \"${c}\": { \"state\": \"${state}\", \"detail\": \"${safe_detail}\" }"
+    done
+    echo "}"
+    exit 0
+    ;;
+
+  catalog)
+    python3 - "$CONFIG_PATH" "$ARCHIVE_DIR" <<'PY'
+import json
+import os
+import sys
+
+path = sys.argv[1]
+archive_dir = sys.argv[2]
+
+services = {}
+try:
+    with open(path, "r", encoding="utf-8") as fh:
+        data = json.load(fh)
+        services = data.get("services", {}) if isinstance(data, dict) else {}
+except Exception:
+    services = {}
+
+if not isinstance(services, dict):
+    services = {}
+
+def_archives = {
+    "minecraft_server": "minecraft.tar.gz",
+    "valheim_server": "valheim.tar.gz",
+    "7dtd-server": "7dtd.tar.gz",
+}
+
+result = {}
+for service_id, service in services.items():
+    if not isinstance(service, dict):
+        continue
+    name = service.get("container")
+    if not isinstance(name, str) or not name:
+        continue
+    compose_dir = service.get("compose_dir")
+    if not isinstance(compose_dir, str):
+        compose_dir = ""
+
+    archive = service.get("archive")
+    if not isinstance(archive, str) or not archive:
+        archive = def_archives.get(name, "")
+
+    archive_path = ""
+    archive_exists = False
+    if archive:
+        archive_path = archive if archive.startswith("/") else os.path.join(archive_dir, archive)
+        archive_exists = os.path.isfile(archive_path)
+
+    result[name] = {
+        "type": service.get("type") or "",
+        "label": service.get("label") or service_id,
+        "compose_dir": compose_dir,
+        "dir_exists": bool(compose_dir and os.path.isdir(compose_dir)),
+        "archive": archive_path,
+        "archive_exists": archive_exists,
+    }
+
+print(json.dumps(result, ensure_ascii=False))
+PY
+    exit 0
+    ;;
+
+  start)
+    if ! is_allowed "$container"; then
+        echo "DENY: $container is not allowed"
+        exit 1
+    fi
+
+    if /usr/bin/docker inspect "$container" >/dev/null 2>&1; then
+        /usr/bin/docker start "$container" >/tmp/docker_manage_tmp 2>&1
+        code=$?
+        action_label="START"
+    else
+        if ! is_known "$container"; then
+            echo "DENY: $container is not known"
+            exit 1
+        fi
+        compose_dir="$(compose_dir_for "$container")"
+        if [ -z "$compose_dir" ] || [ ! -d "$compose_dir" ]; then
+            echo "DENY: compose dir not found for $container"
+            exit 1
+        fi
+        (cd "$compose_dir" && /usr/bin/docker compose up -d --build) >/tmp/docker_manage_tmp 2>&1
+        code=$?
+        action_label="UP"
+    fi
+
+    ts=$(date +%F %T)
+    echo "$ts [$who] $action_label $container code=$code" >> "$LOGFILE"
+
+    cat /tmp/docker_manage_tmp
+    exit $code
+    ;;
+
+  stop)
+    if ! is_allowed "$container"; then
+        echo "DENY: $container is not allowed"
+        exit 1
+    fi
+
+    /usr/bin/docker stop "$container" >/tmp/docker_manage_tmp 2>&1
+    code=$?
+
+    ts=$(date '+%F %T')
+    echo "$ts [$who] STOP $container code=$code" >> "$LOGFILE"
+
+    cat /tmp/docker_manage_tmp
+    exit $code
+    ;;
+
+  build)
+    if ! is_known "$container"; then
+        echo "DENY: $container is not known"
+        exit 1
+    fi
+
+    compose_dir="$(compose_dir_for "$container")"
+    if [ -z "$compose_dir" ] || [ ! -d "$compose_dir" ]; then
+        echo "DENY: compose dir not found for $container"
+        exit 1
+    fi
+
+    (cd "$compose_dir" && /usr/bin/docker compose build) >/tmp/docker_manage_tmp 2>&1
+    code=$?
+
+    ts=$(date '+%F %T')
+    echo "$ts [$who] BUILD $container dir=$compose_dir code=$code" >> "$LOGFILE"
+
+    cat /tmp/docker_manage_tmp
+    exit $code
+    ;;
+
+  delete)
+    if ! is_known "$container"; then
+        echo "DENY: $container is not known"
+        exit 1
+    fi
+
+    compose_dir="$(compose_dir_for "$container")"
+    if [ -z "$compose_dir" ] || [ ! -d "$compose_dir" ]; then
+        echo "DENY: compose dir not found for $container"
+        exit 1
+    fi
+
+    (cd "$compose_dir" && /usr/bin/docker compose down --remove-orphans --rmi local) >/tmp/docker_manage_tmp 2>&1
+    code=$?
+
+    ts=$(date '+%F %T')
+    echo "$ts [$who] DELETE $container dir=$compose_dir code=$code" >> "$LOGFILE"
+
+    cat /tmp/docker_manage_tmp
+    exit $code
+    ;;
+
+  deploy)
+    if ! is_known "$container"; then
+        echo "DENY: $container is not known"
+        exit 1
+    fi
+
+    archive_path="$(archive_path_for "$container")"
+    if [ -z "$archive_path" ] || [ ! -f "$archive_path" ]; then
+        echo "DENY: archive not found for $container"
+        exit 1
+    fi
+
+    compose_dir="$(compose_dir_for "$container")"
+    if [ -z "$compose_dir" ]; then
+        echo "DENY: compose dir not found for $container"
+        exit 1
+    fi
+
+    owner_pair="$(owner_for_dir "$compose_dir")"
+    {
+      echo "[deploy] archive=$archive_path"
+      mkdir -p "$compose_dir"
+      tar -xzf "$archive_path" -C "$compose_dir"
+      if [ -n "$owner_pair" ]; then
+        chown -R "$owner_pair" "$compose_dir" || true
+      fi
+      if [ -f "$compose_dir/docker-compose.yml" ]; then
+        (cd "$compose_dir" && /usr/bin/docker compose build)
+      else
+        echo "WARN: docker-compose.yml not found in $compose_dir"
+      fi
+    } >/tmp/docker_manage_tmp 2>&1
+    code=$?
+
+    ts=$(date '+%F %T')
+    echo "$ts [$who] DEPLOY $container dir=$compose_dir code=$code" >> "$LOGFILE"
+
+    cat /tmp/docker_manage_tmp
+    exit $code
+    ;;
+
+  purge)
+    if ! is_known "$container"; then
+        echo "DENY: $container is not known"
+        exit 1
+    fi
+
+    compose_dir="$(compose_dir_for "$container")"
+    if [ -z "$compose_dir" ] || [ ! -d "$compose_dir" ]; then
+        echo "DENY: compose dir not found for $container"
+        exit 1
+    fi
+
+    {
+      if [ -f "$compose_dir/docker-compose.yml" ]; then
+        (cd "$compose_dir" && /usr/bin/docker compose down --remove-orphans --rmi local) || true
+      fi
+      rm -rf "$compose_dir"
+    } >/tmp/docker_manage_tmp 2>&1
+    code=$?
+
+    ts=$(date '+%F %T')
+    echo "$ts [$who] PURGE $container dir=$compose_dir code=$code" >> "$LOGFILE"
+
+    cat /tmp/docker_manage_tmp
+    exit $code
+    ;;
+
+  *)
+    echo "usage: $0 {status|catalog|start <container> <user>|stop <container> <user>|build <container> <user>|delete <container> <user>|deploy <container> <user>|purge <container> <user>}"
+    exit 1
+    ;;
+esac

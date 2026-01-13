@@ -1,0 +1,147 @@
+---
+- name: Failover core configuration
+  when: failover_core_manage | default(false)
+  block:
+    - name: Validate failover core variables
+      assert:
+        that:
+          - failover_instance_id | length > 0
+          - failover_ec2_ip | length > 0
+          - failover_cf_token | length > 0
+          - failover_cf_zone_id | length > 0
+          - failover_cf_record_id | length > 0
+          - failover_dns_record_name | length > 0
+          - failover_vps_ip | length > 0
+        fail_msg: >-
+          failover_core requires instance_id/ec2_ip/cf_token/cf_zone_id/
+          cf_record_id/dns_record_name/vps_ip to be set.
+      when: failover_core_require_vars | default(true)
+
+    - name: Install failover core packages
+      apt:
+        name: "{{ failover_core_packages }}"
+        state: present
+        update_cache: "{{ failover_core_update_cache | default(true) }}"
+        cache_valid_time: "{{ (failover_core_update_cache | default(true)) | ternary(3600, omit) }}"
+
+    - name: Ensure failover core directory
+      file:
+        path: "{{ failover_core_path }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Ensure failover state directory
+      file:
+        path: "{{ failover_state_dir }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Ensure AWS config directory for failover
+      file:
+        path: "{{ failover_aws_dir }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0700"
+      when:
+        - failover_aws_manage | default(false)
+        - failover_aws_access_key_id | length > 0
+        - failover_aws_secret_access_key | length > 0
+
+    - name: Write AWS credentials for failover
+      copy:
+        dest: "{{ failover_aws_credentials_path }}"
+        owner: root
+        group: root
+        mode: "0600"
+        content: |
+          [{% if (failover_aws_profile | default('default')) == 'default' %}default{% else %}{{ failover_aws_profile }}{% endif %}]
+          aws_access_key_id={{ failover_aws_access_key_id }}
+          aws_secret_access_key={{ failover_aws_secret_access_key }}{% if failover_aws_session_token | length > 0 %}
+          aws_session_token={{ failover_aws_session_token }}{% endif %}
+      when:
+        - failover_aws_manage | default(false)
+        - failover_aws_access_key_id | length > 0
+        - failover_aws_secret_access_key | length > 0
+      no_log: true
+
+    - name: Write AWS config for failover
+      copy:
+        dest: "{{ failover_aws_config_path }}"
+        owner: root
+        group: root
+        mode: "0600"
+        content: |
+          [{% if (failover_aws_profile | default('default')) == 'default' %}default{% else %}profile {{ failover_aws_profile }}{% endif %}]
+          region={{ failover_aws_region | default(failover_region) }}
+          output=json
+      when:
+        - failover_aws_manage | default(false)
+        - failover_aws_write_config | default(true)
+        - failover_aws_access_key_id | length > 0
+        - failover_aws_secret_access_key | length > 0
+      no_log: true
+
+    - name: Deploy failover core script
+      template:
+        src: failover_core.py.j2
+        dest: "{{ failover_core_script }}"
+        owner: root
+        group: root
+        mode: "0600"
+      notify: Restart failover core
+      no_log: true
+
+    - name: Deploy ddos receiver script
+      template:
+        src: ddos_receiver.sh.j2
+        dest: "{{ failover_ddos_receiver_script }}"
+        owner: root
+        group: root
+        mode: "0755"
+      when: failover_ddos_receiver_manage | default(true)
+      notify: Restart ddos receiver
+
+    - name: Deploy failover core service unit
+      template:
+        src: failover_core.service.j2
+        dest: "{{ failover_core_service }}"
+        owner: root
+        group: root
+        mode: "0644"
+      notify:
+        - Reload systemd
+        - Restart failover core
+
+    - name: Deploy ddos receiver service unit
+      template:
+        src: ddos_receiver.service.j2
+        dest: "{{ failover_ddos_receiver_service }}"
+        owner: root
+        group: root
+        mode: "0644"
+      when: failover_ddos_receiver_manage | default(true)
+      notify:
+        - Reload systemd
+        - Restart ddos receiver
+
+    - name: Ensure systemd daemon reloaded
+      systemd:
+        daemon_reload: true
+
+    - name: Ensure failover core service state
+      systemd:
+        name: "{{ failover_core_service_name }}"
+        enabled: "{{ failover_core_enable | default(true) }}"
+        state: "{{ failover_core_state | default(started) }}"
+
+    - name: Ensure ddos receiver service state
+      systemd:
+        name: "{{ failover_ddos_receiver_service_name }}"
+        enabled: "{{ failover_ddos_receiver_enable | default(true) }}"
+        state: "{{ failover_ddos_receiver_state | default(started) }}"
+      when: failover_ddos_receiver_manage | default(true)

@@ -1,0 +1,4 @@
+---
+- name: "${role} role placeholder"
+  debug:
+    msg: "${role} role not implemented yet"

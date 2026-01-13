@@ -1,0 +1,46 @@
+aws_region  = "YOUR_REGION" # e.g. ap-northeast-1
+aws_profile = "" # optional (e.g. default)
+
+# VPC creation mode.
+vpc_mode = "auto" # auto or custom
+
+# Custom VPC settings (used when vpc_mode = "custom").
+# vpc_cidr          = "10.20.0.0/16"
+# public_subnet_cidr = "10.20.10.0/24"
+# public_subnet_az   = "ap-northeast-1a"
+
+# AMI selection
+ami_mode = "manual" # manual or auto
+ami_id   = "ami-xxxxxxxx" # required when ami_mode=manual
+# ami_owners              = ["YOUR_AMI_OWNER"]
+# ami_name_filter         = "YOUR_AMI_NAME_PATTERN"
+# ami_architecture        = "arm64"
+# ami_virtualization_type = "hvm"
+# ami_root_device_type    = "ebs"
+
+instance_type = "t4g.medium"
+key_name      = "YOUR_KEYPAIR"
+instance_name = "YOUR_INSTANCE_NAME" # e.g. project-ec2
+associate_eip = true
+source_dest_check = false
+
+# KeyPair mode: use existing or create from a public key.
+key_pair_mode = "existing" # existing or create
+# key_pair_public_key = "ssh-ed25519 AAAA... user@host"
+
+# Failover IAM user (auto-created for EC2 start/stop).
+create_failover_iam = true
+# failover_iam_user_name   = "edge-failover"
+# failover_iam_policy_name = "edge-failover-policy"
+
+# Replace with your admin IP range.
+allowed_ssh_cidrs = ["YOUR_ADMIN_CIDR"]
+
+# WireGuard and game ports as needed.
+allowed_udp_ports = [51820]
+allowed_tcp_ports = [22]
+
+# Optional tags.
+# tags = {
+#   Project = "edge-stack"
+# }

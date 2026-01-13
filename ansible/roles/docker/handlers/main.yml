@@ -1,0 +1,6 @@
+---
+- name: Restart docker
+  systemd:
+    name: "{{ docker_service_name }}"
+    state: restarted
+  when: docker_restart_on_change | default(true)

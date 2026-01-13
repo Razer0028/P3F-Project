@@ -1,0 +1,96 @@
+# Example Ansible Vault file for VPS (encrypt with ansible-vault)
+# ansible-vault edit ~/.config/edge-stack/ansible/host_vars/vps-1.yml
+
+# WireGuard
+wireguard_raw_configs:
+  - name: "wg0"
+    content: |
+      [Interface]
+      Address = 10.100.0.1/32
+      ListenPort = 51820
+      PrivateKey = REPLACE_ME
+
+      [Peer]
+      PublicKey = REPLACE_ME
+      AllowedIPs = 10.100.0.2/32
+
+# FRR/BFD
+frr_config_content: |
+  ! REPLACE_ME
+frr_daemons_content: |
+  ! REPLACE_ME
+
+# Suricata
+suricata_allow_overwrite: true
+suricata_custom_rules_path: /etc/suricata/rules/custom.rules
+suricata_custom_rules_content: |
+  # ============================
+  # DDoS / Flood Detection Rules
+  # ============================
+
+  # --- ICMP Flood (single source) ---
+  alert icmp any any -> $HOME_NET any (msg:"DoS ICMP Flood detected"; detection_filter:track by_src,count 6000,seconds 1; sid:200001; rev:3;)
+
+  # --- UDP Flood Attack (single source) ---
+  alert udp any any -> $HOME_NET any (msg:"DoS UDP Flood detected"; detection_filter:track by_src,count 6000,seconds 1; sid:200004; rev:3;)
+
+  # --- TCP SYN Flood (single source) ---
+  alert tcp any any -> $HOME_NET any (msg:"DoS TCP SYN Flood detected"; flags:S; detection_filter:track by_src,count 6000,seconds 1; sid:200003; rev:3;)
+
+  # --- Aggregate floods (distributed DDoS) ---
+  alert icmp any any -> $HOME_NET any (msg:"DDoS ICMP Flood (aggregate)"; detection_filter:track by_dst,count 4000,seconds 1; sid:200101; rev:1;)
+  alert udp any any -> $HOME_NET any (msg:"DDoS UDP Flood (aggregate)"; detection_filter:track by_dst,count 4000,seconds 1; sid:200102; rev:1;)
+  alert tcp any any -> $HOME_NET any (msg:"DDoS TCP SYN Flood (aggregate)"; flags:S; detection_filter:track by_dst,count 4000,seconds 1; sid:200103; rev:1;)
+
+  # ============================
+  # Other Attack Patterns (not notified)
+  # ============================
+
+  # --- PortScan ---
+  drop tcp any any -> $HOME_NET any (msg:"PortScan detected"; detection_filter:track by_src,count 20,seconds 3; sid:100010; rev:3;)
+
+  # --- Fragmentation attack ---
+  drop ip any any -> $HOME_NET any (msg:"Fragmentation attack detected"; fragbits:M; sid:100011; rev:3;)
+
+  # --- Protocol anomaly ---
+  drop ip any any -> $HOME_NET any (msg:"Protocol anomaly traffic"; ipopts:any; sid:100014; rev:3;)
+
+  # ============================
+  # WireGuard Protection (DoS oriented)
+  # ============================
+
+  # --- WireGuard Handshake Flood ---
+  drop udp any any -> $HOME_NET 51820 (msg:"WireGuard handshake flood detected"; content:"|01|"; offset:0; depth:1; detection_filter:track by_src,count 2000,seconds 1; sid:100050; rev:4;)
+
+  # --- WireGuard invalid packet size ---
+  drop udp any any -> $HOME_NET 51820 (msg:"WireGuard invalid packet size"; dsize:<32; sid:100051; rev:3;)
+
+  # --- WireGuard replay attack ---
+  drop udp any any -> $HOME_NET 51820 (msg:"WireGuard replay-attack suspect"; detection_filter:track by_src,count 10,seconds 1; sid:100052; rev:4;)
+
+# DDoS notify (Suricata eve.json watcher)
+ddos_notify_manage: true
+ddos_notify_primary_ip: "10.100.0.2"
+ddos_notify_fallback_ip: ""
+ddos_notify_port: 9001
+ddos_notify_discord_webhook: "REPLACE_ME"
+ddos_notify_server_label: "VPS"
+ddos_notify_signatures:
+  - "DoS ICMP Flood detected"
+  - "DoS TCP SYN Flood detected"
+  - "DoS UDP Flood detected"
+  - "DDoS ICMP Flood (aggregate)"
+  - "DDoS UDP Flood (aggregate)"
+  - "DDoS TCP SYN Flood (aggregate)"
+
+# Cloudflared
+cloudflared_config_content: |
+  tunnel: REPLACE_ME
+  credentials-file: /etc/cloudflared/REPLACE_ME.json
+  ingress:
+    - hostname: YOUR_DOMAIN
+      service: http://127.0.0.1:8080
+    - service: http_status:404
+cloudflared_credentials_path: /etc/cloudflared/REPLACE_ME.json
+cloudflared_credentials_content: |
+  {"AccountTag":"REPLACE_ME","TunnelSecret":"REPLACE_ME","TunnelID":"REPLACE_ME"}

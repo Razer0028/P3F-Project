@@ -1,0 +1,43 @@
+---
+- name: DDoS notify setup
+  when: ddos_notify_manage | default(false)
+  block:
+    - name: Validate DDoS notify variables
+      assert:
+        that:
+          - ddos_notify_primary_ip | length > 0
+        fail_msg: "ddos_notify_primary_ip must be set"
+
+    - name: Ensure DDoS notify directory
+      file:
+        path: "{{ ddos_notify_config_dir }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Deploy DDoS notify script
+      template:
+        src: ddos_watch_udp.py.j2
+        dest: "{{ ddos_notify_script_path }}"
+        owner: root
+        group: root
+        mode: "0755"
+      notify: Restart ddos notify
+
+    - name: Deploy DDoS notify systemd unit
+      template:
+        src: ddos_watch.service.j2
+        dest: "{{ ddos_notify_unit_path }}"
+        owner: root
+        group: root
+        mode: "0644"
+      notify: Restart ddos notify
+
+    - name: Ensure DDoS notify service state
+      systemd:
+        name: "{{ ddos_notify_service_name }}"
+        enabled: true
+        state: "{{ ddos_notify_service_state }}"
+        daemon_reload: true
+      when: ddos_notify_manage_service | default(true)

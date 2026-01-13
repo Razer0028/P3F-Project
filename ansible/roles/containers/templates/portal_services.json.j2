@@ -1,0 +1,83 @@
+{
+  "enabled": {{ containers_enabled | to_json }},
+  "monitor_containers": [],
+  "auto_stop_enabled": false,
+  "auto_stop_minutes": 10,
+  "services": {
+    "minecraft": {
+      "type": "game",
+      "label": "Minecraft (Java版)",
+      "container": "minecraft_server",
+      "compose_dir": "{{ containers_root }}/minecraft",
+      "archive": "minecraft.tar.gz",
+      "img": "/images/minecraft.png",
+      "hostport": "yourdomain.com",
+      "howto": "Minecraft(Java版) → マルチプレイ → サーバー追加 → アドレスに「yourdomain.com」を入力。",
+      "password": null,
+      "extra": null,
+      "public": true,
+      "supports_cmd": true,
+      "tips": ["list", "save-all", "whitelist reload"],
+      "config_files": {
+        "server.properties": "server.properties",
+        "whitelist.json": "whitelist.json",
+        "ops.json": "ops.json",
+        "banned-players.json": "banned-players.json",
+        "banned-ips.json": "banned-ips.json"
+      }
+    },
+    "valheim": {
+      "type": "game",
+      "label": "Valheim",
+      "container": "valheim_server",
+      "compose_dir": "{{ containers_root }}/valheim_server",
+      "archive": "valheim.tar.gz",
+      "img": "/images/valheim.png",
+      "hostport": "yourdomain.com:2456",
+      "howto": "Valheim → アドレス「yourdomain.com:2456」。Steamの「表示→サーバー追加」はポート2457で。",
+      "password": null,
+      "extra": "※ パスワードは他人に無断で拡散しないでください。",
+      "public": true,
+      "supports_cmd": false,
+      "tips": [],
+      "config_files": {
+        "adminlist.txt": "adminlist.txt",
+        "permittedlist.txt": "permittedlist.txt",
+        "bannedlist.txt": "bannedlist.txt"
+      }
+    },
+    "7dtd": {
+      "type": "game",
+      "label": "7 Days to Die",
+      "container": "7dtd-server",
+      "compose_dir": "{{ containers_root }}/7dtd_server",
+      "archive": "7dtd.tar.gz",
+      "img": "/images/7dtd.png",
+      "hostport": "yourdomain.com:26900",
+      "howto": "7DTD → 「IPに接続」から「yourdomain.com:26900」。",
+      "password": null,
+      "extra": null,
+      "public": true,
+      "supports_cmd": true,
+      "tips": ["help", "listplayers", "saveworld"],
+      "config_files": {
+        "serverconfig.xml": "serverconfig.xml",
+        "serveradmin.xml": "serveradmin.xml"
+      }
+    },
+    "web_portal": {
+      "type": "portal",
+      "label": "Web Portal",
+      "container": "web_portal",
+      "compose_dir": "{{ containers_root }}/web",
+      "public": false
+    },
+    "player_monitor": {
+      "type": "monitor",
+      "label": "Player Monitor",
+      "container": "player_monitor",
+      "compose_dir": "{{ containers_root }}/monitor",
+      "public": false
+    }
+  }
+}
