@@ -34,6 +34,17 @@
         path: "{{ frr_daemons_path }}"
       register: frr_daemons_stat
 
+    - name: Build FRR config payloads
+      set_fact:
+        frr_config_final: >-
+          {{ lookup('template', 'frr.conf.j2')
+             if (frr_generate_config | default(false))
+             else (frr_config_content | default('')) }}
+        frr_daemons_final: >-
+          {{ lookup('template', 'daemons.j2')
+             if (frr_generate_config | default(false))
+             else (frr_daemons_content | default('')) }}
+
     - name: Select frr.conf owner/group
       set_fact:
         frr_conf_owner: "{{ frr_conf_stat.stat.pw_name | default(frr_owner_default) }}"
@@ -57,33 +68,33 @@
     - name: Validate FRR config variables
       assert:
         that:
-          - frr_config_content | length > 0
-          - frr_daemons_content | length > 0
-        fail_msg: "frr_config_content and frr_daemons_content must be set"
+          - frr_config_final | length > 0
+          - frr_daemons_final | length > 0
+        fail_msg: "frr_config_content/daemons or frr_generate_config must be set"
       when: frr_require_vars | default(false)
 
     - name: Deploy frr.conf
       copy:
         dest: "{{ frr_conf_path }}"
-        content: "{{ frr_config_content }}"
+        content: "{{ frr_config_final }}"
         owner: "{{ frr_conf_owner }}"
         group: "{{ frr_conf_group }}"
         mode: "0640"
         force: "{{ frr_allow_overwrite | default(false) }}"
         backup: "{{ frr_allow_overwrite | default(false) }}"
-      when: frr_config_content | length > 0
+      when: frr_config_final | length > 0
       notify: Restart frr
 
     - name: Deploy daemons
       copy:
         dest: "{{ frr_daemons_path }}"
-        content: "{{ frr_daemons_content }}"
+        content: "{{ frr_daemons_final }}"
         owner: "{{ frr_daemons_owner }}"
         group: "{{ frr_daemons_group }}"
         mode: "0640"
         force: "{{ frr_allow_overwrite | default(false) }}"
         backup: "{{ frr_allow_overwrite | default(false) }}"
-      when: frr_daemons_content | length > 0
+      when: frr_daemons_final | length > 0
       notify: Restart frr
 
     - name: Ensure FRR service state

@@ -27,3 +27,13 @@ frr_daemons_group_default: frr
 
 frr_config_content: ""
 frr_daemons_content: ""
+
+# Optional auto-generated BFD-only config.
+frr_generate_config: false
+frr_hostname: "{{ inventory_hostname }}"
+frr_log: "syslog informational"
+frr_bfd_peers: []
+frr_bfd_interface: "wg0"
+frr_bfd_min_rx: 300
+frr_bfd_min_tx: 300
+frr_bfd_multiplier: 3

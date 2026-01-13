@@ -1,0 +1,18 @@
+frr defaults traditional
+hostname {{ frr_hostname | default(inventory_hostname) }}
+log {{ frr_log | default("syslog informational") }}
+service integrated-vtysh-config
+!
+{% if frr_bfd_peers | length > 0 %}
+bfd
+{% for peer in frr_bfd_peers %}
+{% set interface_suffix = (' interface ' ~ frr_bfd_interface) if frr_bfd_interface else '' %}
+ peer {{ peer }}{{ interface_suffix }}
+  detect-multiplier {{ frr_bfd_multiplier }}
+  receive-interval {{ frr_bfd_min_rx }}
+  transmit-interval {{ frr_bfd_min_tx }}
+  no shutdown
+ !
+{% endfor %}
+!
+{% endif %}

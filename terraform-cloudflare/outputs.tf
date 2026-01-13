@@ -19,11 +19,11 @@ output "failover_record_name" {
 }
 
 output "failover_record_value" {
-  value = var.cf_manage_failover_record ? cloudflare_record.failover[0].value : null
+  value = var.cf_manage_failover_record ? cloudflare_record.failover[0].content : null
 }
 
 output "vps_tunnel_id" {
-  value = local.vps_tunnel_enabled ? cloudflare_tunnel.vps[0].id : null
+  value = local.vps_tunnel_enabled ? cloudflare_zero_trust_tunnel_cloudflared.vps[0].id : null
 }
 
 output "vps_tunnel_target" {
@@ -36,7 +36,7 @@ output "vps_tunnel_credentials_json" {
 }
 
 output "ec2_tunnel_id" {
-  value = local.ec2_tunnel_enabled ? cloudflare_tunnel.ec2[0].id : null
+  value = local.ec2_tunnel_enabled ? cloudflare_zero_trust_tunnel_cloudflared.ec2[0].id : null
 }
 
 output "ec2_tunnel_target" {

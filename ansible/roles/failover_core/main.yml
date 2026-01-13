@@ -54,10 +54,6 @@ failover_wg0_bfd_peer: "10.100.0.1"
 failover_vps_ip: ""
 failover_vps_health_port: 18080
 
-failover_vps_health_route_enabled: true
-failover_vps_health_route_table: 51820
-failover_vps_health_route_interval: 30
-
 failover_player_json: "{{ containers_root }}/monitor/opt_serveradmin/status/current_players.json"
 failover_player_threshold: 25
 failover_player_check_interval: 60

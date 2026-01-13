@@ -31,6 +31,8 @@ portctl_apply_rules: true
 portctl_ufw_rules:
   - "allow in on wg0 to any port 3784 proto udp"
   - "allow in on wg0 to any port 3785 proto udp"
+  # Health check for failback (adjust CIDR/interface as needed).
+  - "allow 18080/tcp"
 
 # Suricata
 suricata_allow_overwrite: true

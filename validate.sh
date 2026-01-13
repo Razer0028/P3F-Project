@@ -25,9 +25,9 @@ has_group() {
   awk -v group="$group" '
     BEGIN { found = 0 }
     /^[[:space:]]*#/ { next }
-    /^\[/ { found = ($0 == group) ? 1 : 0; next }
-    found && NF { found = 2; exit }
-    END { exit (found == 2) ? 0 : 1 }
+    /^\[/ { found = ($0 == group); next }
+    found && NF { exit 0 }
+    END { exit found ? 0 : 1 }
   ' "$INV"
 }
 
@@ -68,6 +68,8 @@ run_group vps "systemctl is-active suricata.service || true"
 run_group vps "systemctl is-active frr.service || true"
 run_group ec2 "systemctl is-active suricata.service || true"
 run_group ec2 "systemctl is-active ssh.service || true"
+run_group onprem "command -v vtysh >/dev/null 2>&1 && vtysh -c 'show bfd peers' || true"
+run_group vps "command -v vtysh >/dev/null 2>&1 && vtysh -c 'show bfd peers' || true"
 
 # DNS checks
 run_group vps "grep -E '^nameserver' /etc/resolv.conf || true"

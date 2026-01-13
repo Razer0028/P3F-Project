@@ -31,10 +31,6 @@ VPS_IP = {{ failover_vps_ip | tojson }}
 VPS_HEALTH_PORT = {{ failover_vps_health_port }}
 VPS_HEALTH_URL = "http://" + VPS_IP + ":" + str(VPS_HEALTH_PORT) + "/health"
 
-VPS_HEALTH_ROUTE_ENABLED = {{ 'True' if failover_vps_health_route_enabled else 'False' }}
-VPS_HEALTH_ROUTE_TABLE = {{ failover_vps_health_route_table }}
-VPS_HEALTH_ROUTE_INTERVAL = {{ failover_vps_health_route_interval }}
-
 PLAYER_JSON = {{ failover_player_json | tojson }}
 PLAYER_THRESHOLD = {{ failover_player_threshold }}
 PLAYER_CHECK_INTERVAL = {{ failover_player_check_interval }}
@@ -54,8 +50,8 @@ POST_SWITCH_GRACE = {{ failover_post_switch_grace }}
 # Failback policy: set to "yes" to enable automatic failback to VPS.
 AUTO_FAILBACK = {{ failover_auto_failback | tojson }}
 FAILBACK_REQUEST_FILE = {{ failover_failback_request_file | tojson }}
-STARTUP_FORCE_VPS = {{ 'True' if failover_startup_force_vps else 'False' }}
-BFD_REQUIRE_UP_ONCE = {{ 'True' if failover_bfd_require_up_once else 'False' }}
+STARTUP_FORCE_VPS = {{ failover_startup_force_vps | tojson }}
+BFD_REQUIRE_UP_ONCE = {{ failover_bfd_require_up_once | tojson }}
 
 attack_mode = False
 attack_reason = None
@@ -71,7 +67,6 @@ failback_ready_notice = False
 prev_bfd_down = None
 prev_ec2_state = None
 prev_vps_health = None
-vps_route_last_set = 0.0
 bfd_seen_up = False
 bfd_wait_logged = False
 
@@ -121,57 +116,13 @@ def flush_routing_cache():
     run("ip route flush cache 2>/dev/null", 3)
     log("Routing cache flushed")
 
-
-def get_default_route():
-    out = run("ip route show default", 3)
-    for line in out.splitlines():
-        if not line.startswith("default"):
-            continue
-        parts = line.split()
-        gw = None
-        dev = None
-        for idx, token in enumerate(parts):
-            if token == "via" and idx + 1 < len(parts):
-                gw = parts[idx + 1]
-            if token == "dev" and idx + 1 < len(parts):
-                dev = parts[idx + 1]
-        if dev:
-            return gw, dev
-    return None, None
-
-
-def ensure_vps_health_route():
-    global vps_route_last_set
-    if not VPS_HEALTH_ROUTE_ENABLED:
-        return
-    now = time.time()
-    if VPS_HEALTH_ROUTE_INTERVAL > 0 and now - vps_route_last_set < VPS_HEALTH_ROUTE_INTERVAL:
-        return
-    gw, dev = get_default_route()
-    if not dev:
-        return
-    cmd = "ip route replace " + VPS_IP + "/32 "
-    if gw:
-        cmd += "via " + gw + " "
-    cmd += "dev " + dev + " table " + str(VPS_HEALTH_ROUTE_TABLE)
-    run(cmd, 3)
-    vps_route_last_set = now
-
-
 def wait_wg_handshake(dev):
     log("Waiting for " + dev + " handshake (" + str(WG_HANDSHAKE_WAIT) + "s)")
     time.sleep(WG_HANDSHAKE_WAIT)
-    out = run("wg show " + dev + " latest-handshakes", 3).strip()
-    for line in out.splitlines():
-        parts = line.split()
-        if len(parts) < 2:
-            continue
-        try:
-            if int(parts[-1]) > 0:
-                log(dev + " handshake confirmed")
-                return True
-        except ValueError:
-            continue
+    out = run("wg show " + dev + " latest-handshakes", 3)
+    if out:
+        log(dev + " handshake confirmed")
+        return True
     log(dev + " handshake pending")
     return False
 
@@ -354,7 +305,7 @@ def ec2_wait_running(timeout=120):
     return False
 
 def bfd_status():
-    out = run("vtysh -c 'show bfd peers json'", 3)
+    out = run("vtysh -c show bfd peers json", 3)
     try:
         peers = json.loads(out)
         for p in peers:
@@ -394,7 +345,6 @@ def bfd_is_down():
 
 def vps_health_ok():
     global prev_vps_health
-    ensure_vps_health_route()
     try:
         req = urllib.request.Request(VPS_HEALTH_URL)
         with urllib.request.urlopen(req, timeout=3) as resp:

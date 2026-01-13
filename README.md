@@ -37,6 +37,8 @@ IaC workspace for the on-prem + VPS + EC2 failover stack.
 - WireGuard samples assume `10.100.0.0/24` (replace to fit your network).
 - Admin allow CIDRs should include WG/LAN; empty list blocks admin access.
 - LAN CIDRs are auto-detected on the portal host when checking status.
+- BFD uses UDP 3784/3785 on wg0; ensure it is allowed on the VPS.
+- Failback health uses TCP 18080 on the VPS; allow it (or restrict to your on-prem IP).
 
 ## Vault secrets (host_vars/*.yml)
 
@@ -46,6 +48,7 @@ IaC workspace for the on-prem + VPS + EC2 failover stack.
 - Suricata rules (if custom).
 - DDoS notify (VPS only): notify targets (uses the shared Discord webhook).
 - Admin portal credentials (required).
+- Failover AWS credentials default to profile "failover" to avoid overwriting Terraform/admin credentials.
 
 ## Public release checklist
 
@@ -126,9 +129,9 @@ These live in ~/.config/edge-stack/ansible/host_vars/*.yml and are encrypted wit
   - wireguard_raw_configs or wireguard_configs
   - wireguard_primary (optional)
 
-- FRR (VPS only)
-  - frr_config_content
-  - frr_daemons_content
+- FRR (VPS + on-prem for BFD)
+  - Use `frr_generate_config: true` plus `frr_bfd_peers` and `frr_bfd_interface`, or
+  - Provide `frr_config_content` and `frr_daemons_content` manually.
 
 - Suricata (VPS, EC2)
   - suricata_custom_rules_content
@@ -157,7 +160,8 @@ These live in ~/.config/edge-stack/ansible/host_vars/*.yml and are encrypted wit
 
 - Auto-failback is controlled by failover_auto_failback.
 - Manual failback uses failover_failback_request_file; create the file to request failback.
-- On startup, the script reconciles wg0/wg1 and routes to VPS if auto-failback is enabled.
+- Failover triggers on BFD down; failback checks the VPS health endpoint (port 18080).
+- On startup, the script reconciles wg0/wg1 and routes to VPS when startup force is enabled.
 
 ## Backups
 
