@@ -1497,7 +1497,7 @@ GET  /api/jobs/&lt;job_id&gt;/logs</code></pre>
                         <label>
                           <span class="lang-en">VPS origin service</span>
                           <span class="lang-ja">VPS 転送先サービス</span>
-                          <input id="cf_vps_origin" type="text" value="http://10.100.0.2:80" />
+                          <input id="cf_vps_origin" type="text" value="" />
                         </label>
                         <label>
                           <span class="lang-en">VPS credentials JSON</span>
@@ -1512,7 +1512,7 @@ GET  /api/jobs/&lt;job_id&gt;/logs</code></pre>
                         <label>
                           <span class="lang-en">EC2 origin service</span>
                           <span class="lang-ja">EC2 転送先サービス</span>
-                          <input id="cf_ec2_origin" type="text" value="http://10.100.0.2:80" />
+                          <input id="cf_ec2_origin" type="text" value="" />
                         </label>
                         <label>
                           <span class="lang-en">EC2 credentials JSON</span>
@@ -1698,7 +1698,7 @@ GET  /api/jobs/&lt;job_id&gt;/logs</code></pre>
                           <label>
                             <span class="lang-en">Primary notify IP</span>
                             <span class="lang-ja">通知先IP（Primary）</span>
-                            <input id="ddos_notify_primary_ip" type="text" value="" placeholder="10.100.0.2" />
+                            <input id="ddos_notify_primary_ip" type="text" value="" placeholder="e.g. 10.100.0.2" />
                           </label>
                           <label>
                             <span class="lang-en">Fallback notify IP (optional)</span>
@@ -1762,7 +1762,7 @@ GET  /api/jobs/&lt;job_id&gt;/logs</code></pre>
                         <label>
                           <span class="lang-en">Forward destination IP</span>
                           <span class="lang-ja">転送先IP</span>
-                          <input id="port_forward_dest_ip" type="text" value="10.100.0.2" placeholder="10.100.0.2" />
+                          <input id="port_forward_dest_ip" type="text" value="" placeholder="e.g. 10.100.0.2" />
                         </label>
                         <label>
                           <span class="lang-en">Custom forward rules (one per line)</span>

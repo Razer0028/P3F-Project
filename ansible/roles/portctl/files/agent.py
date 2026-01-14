@@ -10,7 +10,7 @@ SOCK_PATH = "/run/portctl.sock"
 RULES_FILE = "/opt/portctl/rules.json"
 BEFORE_RULES = "/etc/ufw/before.rules"
 CONFIG_FILE = "/etc/portctl/config.json"
-DEFAULT_DEST_IP = "10.100.0.2"
+DEFAULT_DEST_IP = ""
 SKIP_PREFIXES = ("lo", "wg", "docker", "br", "veth", "virbr", "tun", "tap")
 
 
@@ -162,6 +162,8 @@ def list_forward():
 def add_forward(ext_port, protocol, dest_ip, dest_port, force=False):
     config = load_config()
     dest_ip = dest_ip or default_dest_ip(config)
+    if not dest_ip:
+        return {"status": "error", "message": "転送先IPを指定してください"}
     main_if = detect_public_interface(config)
 
     if not validate_port(str(ext_port)):

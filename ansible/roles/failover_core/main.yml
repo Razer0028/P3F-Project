@@ -49,7 +49,7 @@ failover_aws_write_config: true
 
 failover_wg0: "wg0"
 failover_wg1: "wg1"
-failover_wg0_bfd_peer: "10.100.0.1"
+failover_wg0_bfd_peer: ""
 
 failover_vps_ip: ""
 failover_vps_health_port: 18080

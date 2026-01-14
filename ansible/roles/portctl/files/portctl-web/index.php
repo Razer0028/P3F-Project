@@ -115,7 +115,7 @@ if (is_readable('/etc/portctl/config.json')) {
         $config = $decoded;
     }
 }
-$default_dest_ip = $config['default_dest_ip'] ?? '10.100.0.2';
+$default_dest_ip = $config['default_dest_ip'] ?? '';
 ?>
 <!DOCTYPE html>
 <html lang="ja">
@@ -246,7 +246,7 @@ $default_dest_ip = $config['default_dest_ip'] ?? '10.100.0.2';
                 </div>
                 <div class="form-group">
                     <label>Destination IP</label>
-                    <input type="text" name="dest_ip" value="<?= htmlspecialchars($default_dest_ip) ?>">
+                    <input type="text" name="dest_ip" value="<?= htmlspecialchars($default_dest_ip) ?>" placeholder="e.g. 10.100.0.2">
                 </div>
                 <div class="form-group">
                     <label>Destination Port</label>

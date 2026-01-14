@@ -12,9 +12,10 @@
           - failover_cf_record_id | length > 0
           - failover_dns_record_name | length > 0
           - failover_vps_ip | length > 0
+          - failover_wg0_bfd_peer | length > 0
         fail_msg: >-
           failover_core requires instance_id/ec2_ip/cf_token/cf_zone_id/
-          cf_record_id/dns_record_name/vps_ip to be set.
+          cf_record_id/dns_record_name/vps_ip/wg0_bfd_peer to be set.
       when: failover_core_require_vars | default(true)
 
     - name: Install failover core packages

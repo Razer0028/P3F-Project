@@ -3,7 +3,6 @@ role_onprem: true
 wireguard_manage: true
 failover_core_manage: true
 
-# --- overrides for full stack test ---
 docker_manage: true
 containers_manage: true
 containers_start: true
@@ -14,10 +13,7 @@ containers_enabled:
   - web_portal
   - player_monitor
 web_portal_admin_enable: true
-web_portal_admin_allow_cidrs:
-  - 10.100.0.0/24
-  - 10.0.0.0/24
-  - 192.168.1.0/24
+web_portal_admin_allow_cidrs: []
 backups_manage: false
 
 # docker compose fallback

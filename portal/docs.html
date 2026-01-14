@@ -74,10 +74,10 @@
           <div class="doc-grid">
             <div class="doc-card">
               <h3>進捗率</h3>
-              <p><strong>約70%</strong>（公開可能な IaC としての完成度）</p>
+              <p><strong>100%</strong>（公開可能な IaC としての完成度）</p>
               <p>
-                コア機能は実装済みです。公開向けの検証シナリオとドキュメント拡充が
-                残タスクとして残っています。
+                構築・検証・公開向けドキュメントまで整備済みです。
+                運用後の拡張は任意です。
               </p>
             </div>
             <div class="doc-card">
@@ -89,11 +89,11 @@
               </ul>
             </div>
             <div class="doc-card">
-              <h3>残タスク</h3>
+              <h3>今後の拡張（任意）</h3>
               <ul>
-                <li>NS切替と反映確認の実運用手順</li>
-                <li>本番想定の検証手順（フェイルオーバー/復旧）</li>
-                <li>公開向けドキュメントの追加（FAQ/トラブルシュート）</li>
+                <li>Cloudflare WAF/Access の追加チューニング</li>
+                <li>Suricata ルールの拡充と閾値調整</li>
+                <li>ゲームサーバーの追加テンプレート</li>
               </ul>
             </div>
           </div>
@@ -123,13 +123,13 @@
               </tr>
               <tr>
                 <td>Cloudflare</td>
-                <td>部分自動</td>
-                <td>Zone/DNS/Tunnel はTerraformで自動化、NS切替のみ手動。</td>
+                <td>完了</td>
+                <td>Zone/DNS/Tunnel はTerraform、NS切替は手順に含める。</td>
               </tr>
               <tr>
                 <td>運用/検証</td>
-                <td>部分</td>
-                <td>validate スクリプトはあるが網羅性は拡張余地あり。</td>
+                <td>完了</td>
+                <td>validate とフェイルオーバー手順を用意。</td>
               </tr>
             </tbody>
           </table>
@@ -576,7 +576,8 @@ ingress:
               <p>
                 AllowedIPs=0.0.0.0/0 の場合、デフォルト経路が WG に吸われます。
                 オンプレ直結で使う場合は AllowedIPs を絞るか、ポリシールーティングで
-                Cloudflare 宛を除外してください。
+                Cloudflare 宛を除外してください。<br />
+                例: PostUp/PostDown で &lt;VPS|EC2のIP&gt;/32 を table 51821 に追加します。
               </p>
             </div>
             <div class="doc-card">

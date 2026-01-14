@@ -447,7 +447,7 @@ function buildPortPlan() {
   const forwardRules = [];
   const forwardKeySet = new Set();
   const forwardEnabled = value(fields.portForwardEnable);
-  const destIp = value(fields.portForwardDestIp) || "10.100.0.2";
+  const destIp = value(fields.portForwardDestIp) || "";
 
   portProfiles.forEach((profile) => {
     const input = document.getElementById(profile.id);
@@ -2054,7 +2054,7 @@ function applyAutoAdminAllowCidrs(payload) {
     return;
   }
   const lanCidrs = Array.isArray(payload.lan_cidrs) ? payload.lan_cidrs : [];
-  const defaults = ["10.100.0.0/24", ...lanCidrs];
+  const defaults = [...lanCidrs];
   const unique = [];
   defaults.forEach((cidr) => {
     if (cidr && !unique.includes(cidr)) {

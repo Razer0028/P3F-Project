@@ -5,6 +5,7 @@ Deploys the failover controller script and optional UDP DDoS receiver, then enab
 ## Variables
 
 Required for real use:
+- `failover_wg0_bfd_peer`
 - `failover_instance_id`
 - `failover_ec2_ip`
 - `failover_cf_token`

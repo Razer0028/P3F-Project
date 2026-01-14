@@ -11,6 +11,8 @@
 ## WireGuard 切替
 - 同時に wg0/wg1 を有効にしない
 - `systemctl stop wg-quick@wg0` / `systemctl start wg-quick@wg1`
+- AllowedIPs を `0.0.0.0/0` にする場合、Endpoint への経路は LAN 側に固定する
+  - 例: `PostUp/PostDown` で `<VPS|EC2のIP>/32` を table 51821 に追加
 
 ## フェイルオーバー
 - failover_core が DNS と wg0/wg1 を制御

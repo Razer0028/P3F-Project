@@ -3,6 +3,24 @@ Address = {{ item.address }}
 PrivateKey = {{ item.private_key }}
 {% if item.listen_port is defined %}ListenPort = {{ item.listen_port }}{% endif %}
 {% if item.dns is defined %}DNS = {{ item.dns }}{% endif %}
+{% if item.post_up is defined %}
+{% if item.post_up is string %}
+PostUp = {{ item.post_up }}
+{% else %}
+{% for cmd in item.post_up %}
+PostUp = {{ cmd }}
+{% endfor %}
+{% endif %}
+{% endif %}
+{% if item.post_down is defined %}
+{% if item.post_down is string %}
+PostDown = {{ item.post_down }}
+{% else %}
+{% for cmd in item.post_down %}
+PostDown = {{ cmd }}
+{% endfor %}
+{% endif %}
+{% endif %}
 
 {% for peer in item.peers %}
 [Peer]

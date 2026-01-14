@@ -2,6 +2,13 @@
 - name: Portctl configuration
   when: portctl_manage | default(false)
   block:
+    - name: Validate portctl variables
+      assert:
+        that:
+          - not (portctl_enable_web_wg | default(true)) or (portctl_web_wg_bind | length > 0)
+        fail_msg: >-
+          portctl_web_wg_bind must be set when portctl_enable_web_wg is true.
+
     - name: Install portctl packages
       apt:
         name: "{{ portctl_packages }}"
