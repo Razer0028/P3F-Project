@@ -2,6 +2,11 @@
 - name: Failover core configuration
   when: failover_core_manage | default(false)
   block:
+    - name: Set default BFD peer for failover core
+      set_fact:
+        failover_wg0_bfd_peer: '{{ (frr_bfd_peers | default([])) | first | default(''10.100.0.1'') }}'
+      when: (failover_wg0_bfd_peer | default('')) | length == 0
+
     - name: Validate failover core variables
       assert:
         that:

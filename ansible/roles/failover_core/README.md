@@ -1,11 +1,11 @@
 # failover_core
 
-Deploys the failover controller script and optional UDP DDoS receiver, then enables the systemd units.
+Deploys the failover controller script and optional UDP DDoS receiver, and manages the systemd units.
 
 ## Variables
 
 Required for real use:
-- `failover_wg0_bfd_peer`
+- `failover_wg0_bfd_peer` (defaults to first `frr_bfd_peers` or 10.100.0.1)
 - `failover_instance_id`
 - `failover_ec2_ip`
 - `failover_cf_token`
@@ -17,6 +17,8 @@ Required for real use:
 Key toggles:
 - `failover_core_manage` (default: false)
 - `failover_core_require_vars` (default: true)
+- `failover_core_enable` (default: false)
+- `failover_core_state` (default: stopped)
 - `failover_auto_failback` (default: "no")
 - `failover_startup_force_vps` (default: true)
 - `failover_bfd_require_up_once` (default: true)

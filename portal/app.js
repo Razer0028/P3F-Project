@@ -724,6 +724,8 @@ wireguard_allow_overwrite: false
 
 # Failover core
 failover_core_manage: ${failoverManage}
+failover_core_enable: ${failoverManage}
+failover_core_state: ${failoverManage === "true" ? "started" : "stopped"}
 
 # FRR
 frr_manage: ${frrManage}
@@ -2461,6 +2463,13 @@ function updatePlaceholders(lang) {
   });
 }
 
+function applySetupMode(mode) {
+  if (!mode || !document.body) {
+    return;
+  }
+  document.body.dataset.setupMode = mode;
+}
+
 function setPage(page) {
   if (!page) {
     return;
@@ -2468,13 +2477,22 @@ function setPage(page) {
   const panels = document.querySelectorAll("section.panel[data-page]");
   const tabs = document.querySelectorAll(".page-tab");
   panels.forEach((panel) => {
-    panel.hidden = panel.dataset.page !== page;
+    const pages = (panel.dataset.page || "")
+      .split(/\s+/)
+      .filter(Boolean);
+    panel.hidden = !pages.includes(page);
   });
   tabs.forEach((tab) => {
     const active = tab.dataset.page === page;
     tab.classList.toggle("active", active);
     tab.setAttribute("aria-pressed", active ? "true" : "false");
   });
+  if (page === "beginner" || page === "custom") {
+    applySetupMode(page);
+    if (window.localStorage) {
+      localStorage.setItem("portalSetupMode", page);
+    }
+  }
   if (window.localStorage) {
     localStorage.setItem("portalPage", page);
   }
@@ -3455,9 +3473,13 @@ const browserLang = (navigator.language || "").toLowerCase().startsWith("ja")
   : "en";
 const storedPage = window.localStorage ? localStorage.getItem("portalPage") : null;
 const storedSection = window.localStorage ? localStorage.getItem("portalFormSection") : null;
-const defaultPage = storedPage && document.querySelector(`.page-tab[data-page="${storedPage}"]`)
-  ? storedPage
-  : "configure";
+const storedSetupMode = window.localStorage ? localStorage.getItem("portalSetupMode") : null;
+const normalizedStoredPage = storedPage === "configure" ? "custom" : storedPage;
+const defaultPage = normalizedStoredPage && document.querySelector(`.page-tab[data-page="${normalizedStoredPage}"]`)
+  ? normalizedStoredPage
+  : (storedSetupMode && document.querySelector(`.page-tab[data-page="${storedSetupMode}"]`)
+    ? storedSetupMode
+    : "beginner");
 const defaultSection = storedSection && document.querySelector(`.form-tab[data-form-section="${storedSection}"]`)
   ? storedSection
   : "basics";
@@ -3467,6 +3489,7 @@ syncAmiMode();
 syncDdosNotify();
 syncUploadTargetLabels();
 syncUploadKeyName();
+applySetupMode(storedSetupMode || "beginner");
 setPage(defaultPage);
 setFormSection(defaultSection);
 setLanguage(storedLang || browserLang);

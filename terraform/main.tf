@@ -181,7 +181,7 @@ data "aws_iam_policy_document" "failover" {
   count = var.create_failover_iam ? 1 : 0
 
   statement {
-    actions   = ["ec2:DescribeInstances"]
+    actions   = ["ec2:DescribeInstances, ec2:DescribeInstanceStatus"]
     resources = ["*"]
   }
 

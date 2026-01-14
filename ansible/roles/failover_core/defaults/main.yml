@@ -1,8 +1,8 @@
 ---
 failover_core_manage: false
 failover_core_require_vars: true
-failover_core_enable: true
-failover_core_state: started
+failover_core_enable: false
+failover_core_state: stopped
 failover_core_restart_on_change: true
 failover_core_update_cache: true
 

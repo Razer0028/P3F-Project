@@ -29,6 +29,18 @@ body[data-lang="ja"] .lang-en {
   display: none;
 }
 
+body[data-setup-mode="beginner"] .advanced-only {
+  display: none !important;
+}
+
+body[data-setup-mode="beginner"] .custom-only {
+  display: none !important;
+}
+
+body[data-setup-mode="custom"] .beginner-only {
+  display: none !important;
+}
+
 .backdrop {
   position: fixed;
   inset: 0;
@@ -155,6 +167,33 @@ section.panel[hidden] {
 .panel h2 {
   margin-top: 0;
   font-size: 1.3rem;
+}
+
+.mode-banner {
+  display: grid;
+  gap: 6px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+}
+
+.mode-banner strong {
+  font-size: 0.95rem;
+}
+
+.mode-banner p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+body[data-setup-mode="beginner"] .mode-banner.beginner-only {
+  border-color: rgba(244, 184, 96, 0.6);
+}
+
+body[data-setup-mode="custom"] .mode-banner.custom-only {
+  border-color: rgba(141, 214, 191, 0.6);
 }
 
 .steps ol {
