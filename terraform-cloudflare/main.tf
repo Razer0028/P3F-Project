@@ -70,9 +70,6 @@ resource "cloudflare_zero_trust_tunnel_cloudflared" "vps" {
   name       = var.cf_vps_tunnel_name
   secret     = base64encode(random_password.vps_tunnel_secret[0].result)
 
-  lifecycle {
-    ignore_changes = [secret]
-  }
 }
 
 resource "cloudflare_zero_trust_tunnel_cloudflared" "ec2" {
@@ -81,9 +78,6 @@ resource "cloudflare_zero_trust_tunnel_cloudflared" "ec2" {
   name       = var.cf_ec2_tunnel_name
   secret     = base64encode(random_password.ec2_tunnel_secret[0].result)
 
-  lifecycle {
-    ignore_changes = [secret]
-  }
 }
 
 resource "cloudflare_record" "vps_tunnel" {
