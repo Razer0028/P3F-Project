@@ -1127,7 +1127,7 @@ function renderCloudflaredVaultSnippet(target) {
 
   const tunnelId = value(isVps ? fields.cfVpsTunnelId : fields.cfEc2TunnelId) || "REPLACE_ME";
   const hostname = value(isVps ? fields.cfVpsHostname : fields.cfEc2Hostname) || "YOUR_DOMAIN";
-  const origin = value(isVps ? fields.cfVpsOrigin : fields.cfEc2Origin) || "http://127.0.0.1:8080";
+  const origin = value(isVps ? fields.cfVpsOrigin : fields.cfEc2Origin) || "http://10.100.0.2:8082";
   const credsRaw = value(isVps ? fields.cfVpsCredentials : fields.cfEc2Credentials);
   const creds = credsRaw || '{"AccountTag":"REPLACE_ME","TunnelSecret":"REPLACE_ME","TunnelID":"REPLACE_ME"}';
 

@@ -20,14 +20,6 @@ prompt() {
   printf "%s" "$val"
 }
 
-default_gateway() {
-  ip route show default 0.0.0.0/0 2>/dev/null | awk '/default/ {print $3; exit}'
-}
-
-default_interface() {
-  ip route show default 0.0.0.0/0 2>/dev/null | awk '/default/ {print $5; exit}'
-}
-
 iface_name="$(prompt "Interface name" "wg0")"
 iface_address="$(prompt "Interface address" "10.100.0.2/32")"
 listen_port="$(prompt "Listen port (optional)" "")"
@@ -40,32 +32,6 @@ peer_keepalive="$(prompt "PersistentKeepalive (optional)" "25")"
 if [ -z "$peer_public" ]; then
   peer_public="REPLACE_ME"
   echo "WARN: peer public key is empty; using REPLACE_ME." >&2
-fi
-
-post_up_lines=()
-post_down_lines=()
-if [[ "$peer_allowed" == *"0.0.0.0/0"* ]]; then
-  endpoint_host="${peer_endpoint%:*}"
-  endpoint_ip=""
-  if [[ "$endpoint_host" =~ ^[0-9.]+$ ]]; then
-    endpoint_ip="$endpoint_host"
-  fi
-  endpoint_ip="$(prompt "Endpoint IP for policy route (optional)" "$endpoint_ip")"
-  if [ -n "$endpoint_ip" ]; then
-    gw="$(default_gateway)"
-    iface="$(default_interface)"
-    if [ -z "$gw" ]; then
-      gw="$(prompt "Default gateway" "")"
-    fi
-    if [ -z "$iface" ]; then
-      iface="$(prompt "Default interface" "")"
-    fi
-    table_id="$(prompt "Policy route table ID" "51821")"
-    if [ -n "$gw" ] && [ -n "$iface" ]; then
-      post_up_lines+=("ip route add ${endpoint_ip}/32 via ${gw} dev ${iface} table ${table_id}")
-      post_down_lines+=("ip route del ${endpoint_ip}/32 via ${gw} dev ${iface} table ${table_id}")
-    fi
-  fi
 fi
 
 private_key="$(wg genkey)"
@@ -87,16 +53,6 @@ fi
 echo "      PrivateKey = ${private_key}"
 if [ -n "$dns_value" ]; then
   echo "      DNS = ${dns_value}"
-fi
-if [ "${#post_up_lines[@]}" -gt 0 ]; then
-  for line in "${post_up_lines[@]}"; do
-    echo "      PostUp = ${line}"
-  done
-fi
-if [ "${#post_down_lines[@]}" -gt 0 ]; then
-  for line in "${post_down_lines[@]}"; do
-    echo "      PostDown = ${line}"
-  done
 fi
 echo ""
 echo "      [Peer]"

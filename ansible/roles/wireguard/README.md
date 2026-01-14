@@ -21,5 +21,3 @@ Optional:
 - wireguard_allow_overwrite: false (default)
 - wireguard_enable_on_boot: true
 - wireguard_primary: wg0
-- post_up / post_down: string or list (adds PostUp/PostDown lines)
-  - example: "ip route add <peer-ip>/32 via <lan-gw> table 51821"

@@ -17,6 +17,9 @@ portctl_rules_path: /opt/portctl/rules.json
 portctl_config_path: /etc/portctl/config.json
 portctl_default_dest_ip: ""
 portctl_public_interface: ""
+portctl_nat_enable: false
+portctl_nat_source: ""
+portctl_nat_interface: ""
 portctl_ufw_rules: []
 portctl_forward_rules: []
 

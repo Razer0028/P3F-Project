@@ -150,6 +150,33 @@ def default_dest_ip(config):
     value = (config.get("default_dest_ip") or "").strip()
     return value if value else DEFAULT_DEST_IP
 
+def ensure_nat_rule(config):
+    if not config.get("nat_enable"):
+        return
+    if not os.path.exists(BEFORE_RULES):
+        return
+    source = (config.get("nat_source") or "").strip()
+    if not source:
+        return
+    iface = (config.get("nat_interface") or "").strip()
+    if not iface:
+        iface = detect_public_interface(config)
+    if not iface:
+        return
+    nat_rule = f"-A POSTROUTING -s {source} -o {iface} -j MASQUERADE"
+    with open(BEFORE_RULES, "r") as f:
+        content = f.read()
+    if nat_rule in content:
+        return
+    marker = "*nat"
+    if marker not in content:
+        nat_block = "*nat\n:PREROUTING ACCEPT [0:0]\n:POSTROUTING ACCEPT [0:0]\nCOMMIT\n\n"
+        content = nat_block + content
+    new_content = content.replace(marker, marker + "\n" + nat_rule)
+    with open(BEFORE_RULES, "w") as f:
+        f.write(new_content)
+    reload_ufw()
+
 
 def reload_ufw():
     run_cmd("ufw reload")
@@ -164,6 +191,7 @@ def add_forward(ext_port, protocol, dest_ip, dest_port, force=False):
     dest_ip = dest_ip or default_dest_ip(config)
     if not dest_ip:
         return {"status": "error", "message": "転送先IPを指定してください"}
+    ensure_nat_rule(config)
     main_if = detect_public_interface(config)
 
     if not validate_port(str(ext_port)):
@@ -342,6 +370,7 @@ def main():
     sock.listen(5)
 
     try:
+        ensure_nat_rule(load_config())
         apply_existing_rules()
     except Exception as e:
         print(f"Failed to apply existing rules: {e}")

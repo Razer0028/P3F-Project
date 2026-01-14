@@ -46,7 +46,6 @@ ansible-vault edit ~/.config/edge-stack/ansible/host_vars/ec2-1.yml
 ```
 
 補足: 例のアドレスは `10.100.0.0/24` を前提にしています。環境に合わせて編集してください。
-補足: AllowedIPs=0.0.0.0/0 の場合、ウィザードで Endpoint IP を入力すると PostUp/PostDown を追加します。
 
 ## 4. 反映（Ansible）
 最初は base を適用し、その後必要なロールを適用します。

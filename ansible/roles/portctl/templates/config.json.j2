@@ -1,4 +1,7 @@
 {
-  "default_dest_ip": "{{ portctl_default_dest_ip }}"{% if portctl_public_interface | length > 0 %},
-  "public_interface": "{{ portctl_public_interface }}"{% endif %}
+  "default_dest_ip": "{{ portctl_default_dest_ip }}",
+  "public_interface": "{{ portctl_public_interface }}",
+  "nat_enable": {{ portctl_nat_enable | default(false) | to_json }},
+  "nat_source": "{{ portctl_nat_source }}",
+  "nat_interface": "{{ portctl_nat_interface }}"
 }
