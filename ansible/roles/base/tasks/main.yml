@@ -1,4 +1,17 @@
 ---
+- name: Bootstrap resolv.conf (optional)
+  copy:
+    dest: /etc/resolv.conf
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # Managed by IaC (bootstrap resolv.conf)
+      {% for ns in (resolvconf_nameservers | default([])) %}
+      nameserver {{ ns }}
+      {% endfor %}
+  when: resolvconf_bootstrap | default(false)
+
 - name: Ensure base packages are installed
   apt:
     name:

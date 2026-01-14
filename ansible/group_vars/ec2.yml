@@ -1,2 +1,7 @@
 ---
 role_ec2: true
+resolvconf_manage: true
+resolvconf_bootstrap: true
+resolvconf_nameservers:
+  - 169.254.169.253
+  - 1.1.1.1
