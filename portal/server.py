@@ -372,6 +372,34 @@ def detect_lan_cidrs():
     return cidrs
 
 
+def detect_wg_ips():
+    try:
+        output = subprocess.check_output(
+            ["ip", "-o", "-f", "inet", "addr", "show"],
+            text=True,
+        )
+    except Exception:
+        return {}
+
+    wg_ips = {}
+    for line in output.splitlines():
+        parts = line.split()
+        if "inet" not in parts:
+            continue
+        ifname = parts[1]
+        if not ifname.startswith("wg"):
+            continue
+        try:
+            inet_index = parts.index("inet")
+            addr = parts[inet_index + 1]
+        except (ValueError, IndexError):
+            continue
+        ip = addr.split("/")[0]
+        if ip and ifname not in wg_ips:
+            wg_ips[ifname] = ip
+    return wg_ips
+
+
 
 def read_log_tail(path):
     if not path.exists():
@@ -1087,6 +1115,7 @@ class PortalHandler(http.server.SimpleHTTPRequestHandler):
                 "vault_files": vault_files,
                 "ssh_keys": ssh_keys,
                 "lan_cidrs": detect_lan_cidrs(),
+                "wg_ips": detect_wg_ips(),
                 "tools": tools,
             },
         )

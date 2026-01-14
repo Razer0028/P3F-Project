@@ -3,20 +3,42 @@
   when: docker_manage | default(false)
   block:
     - name: Check for docker binary
-      shell: |
-        set -o pipefail
-        command -v docker
+      command: command -v docker
       register: docker_binary
       changed_when: false
       failed_when: false
 
+    - name: Check docker package availability
+      command: apt-cache show {{ item }}
+      register: docker_pkg_checks
+      changed_when: false
+      failed_when: false
+      loop: "{{ docker_packages }}"
+      when: (docker_install_if_missing | default(true) | bool) and docker_binary.rc != 0
+
+    - name: Select docker packages to install
+      set_fact:
+        docker_packages_to_install: "{{ docker_pkg_checks.results | selectattr('rc', 'equalto', 0) | map(attribute='item') | list }}"
+      when: (docker_install_if_missing | default(true) | bool) and docker_binary.rc != 0
+
+    - name: Fail when no docker packages are available
+      fail:
+        msg: "No docker packages found in apt cache. Check apt sources or set docker_packages."
+      when:
+        - (docker_install_if_missing | default(true) | bool)
+        - docker_binary.rc != 0
+        - docker_packages_to_install | default([]) | length == 0
+
     - name: Install docker packages when missing
       apt:
-        name: "{{ docker_packages }}"
+        name: "{{ docker_packages_to_install | default(docker_packages) }}"
         state: present
         update_cache: "{{ docker_update_cache | default(true) }}"
         cache_valid_time: "{{ (docker_update_cache | default(true)) | ternary(3600, omit) }}"
-      when: (docker_install_if_missing | default(true) | bool) and docker_binary.rc != 0
+      when:
+        - (docker_install_if_missing | default(true) | bool)
+        - docker_binary.rc != 0
+        - docker_packages_to_install | default(docker_packages) | length > 0
 
     - name: Ensure docker group exists
       group:

@@ -441,13 +441,19 @@ function parseForwardRules(raw, destIp) {
   return rules;
 }
 
+function resolveAutoPortForwardDestIp() {
+  const status = lastStatusPayload || {};
+  const wgIps = status.wg_ips || {};
+  return wgIps.wg0 || "";
+}
+
 function buildPortPlan() {
   const allowedTcp = new Set([22]);
   const allowedUdp = new Set([51820]);
   const forwardRules = [];
   const forwardKeySet = new Set();
   const forwardEnabled = value(fields.portForwardEnable);
-  const destIp = value(fields.portForwardDestIp) || "";
+  const destIp = value(fields.portForwardDestIp) || resolveAutoPortForwardDestIp() || "";
 
   portProfiles.forEach((profile) => {
     const input = document.getElementById(profile.id);
@@ -655,6 +661,7 @@ function renderGroupVars() {
   const suricataManage = value(fields.enableSuricata) ? "true" : "false";
   const cloudflaredManage = value(fields.enableCloudflared) ? "true" : "false";
   const portctlManage = value(fields.enablePortctl) ? "true" : "false";
+  const sysctlForwardManage = (wireguardManage === "true" || portctlManage === "true") ? "true" : "false";
   const portPlan = buildPortPlan();
   const portctlDefaultDestIp = portPlan.destIp;
   const portctlUfwRulesBlock = portPlan.ufwRules.length
@@ -705,6 +712,9 @@ web_portal_admin_enable: ${adminEnable}
 ${adminAllowBlock}
 ${adminDenyBlock}
 web_portal_discord_webhook: "${escapeYamlString(discordWebhook)}"
+
+# Sysctl
+sysctl_forward_manage: ${sysctlForwardManage}
 
 # WireGuard
 wireguard_manage: ${wireguardManage}
@@ -1890,6 +1900,7 @@ async function loadStatus() {
     }
     lastStatusPayload = payload;
     applyAutoAdminAllowCidrs(payload);
+    applyAutoPortForwardDestIp(payload);
     guidedState.preflight = true;
     const files = payload.files || {};
     const plan = getPlanOptions();
@@ -2041,6 +2052,22 @@ function syncUploadTargetLabels() {
   const ec2Option = targetSelect.querySelector('option[value="ec2"]');
   if (ec2Option) {
     ec2Option.textContent = `EC2 (${options.ec2})`;
+  }
+}
+
+function applyAutoPortForwardDestIp(payload) {
+  const input = document.getElementById("port_forward_dest_ip");
+  if (!input || input.dataset.manual === "true") {
+    return;
+  }
+  const current = (input.value || "").trim();
+  if (current) {
+    return;
+  }
+  const wgIps = payload && payload.wg_ips ? payload.wg_ips : {};
+  const wg0 = wgIps.wg0;
+  if (wg0) {
+    input.value = wg0;
   }
 }
 
@@ -3381,6 +3408,13 @@ if (uploadTargetInput) {
   uploadTargetInput.addEventListener("change", () => {
     syncUploadTargetLabels();
     syncUploadKeyName();
+  });
+}
+
+const portForwardDestInput = document.getElementById("port_forward_dest_ip");
+if (portForwardDestInput) {
+  portForwardDestInput.addEventListener("input", () => {
+    portForwardDestInput.dataset.manual = "true";
   });
 }
 

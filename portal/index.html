@@ -1719,8 +1719,8 @@ GET  /api/jobs/&lt;job_id&gt;/logs</code></pre>
                           <span class="lang-ja">ポート設定（SG/UFW/転送）</span>
                         </legend>
                         <p class="note">
-                          <span class="lang-en">Defaults: SSH 22/tcp and WireGuard 51820/udp are always allowed.</span>
-                          <span class="lang-ja">デフォルト: SSH 22/tcp と WireGuard 51820/udp は常に許可します。</span>
+                          <span class="lang-en">Defaults: SSH 22/tcp and WireGuard 51820/udp are always allowed. If wg0 has an IP, the destination auto-fills.</span>
+                          <span class="lang-ja">デフォルト: SSH 22/tcp と WireGuard 51820/udp は常に許可します。wg0のIPが取得できる場合は転送先IPが自動入力されます。</span>
                         </p>
                         <div class="port-grid">
                           <label class="inline">

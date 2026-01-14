@@ -2,6 +2,82 @@
 - name: Portctl configuration
   when: portctl_manage | default(false)
   block:
+
+    - name: Detect portctl public interface
+      set_fact:
+        portctl_public_interface: "{{ ansible_default_ipv4.interface }}"
+      when: portctl_public_interface | default("") | length == 0
+
+    - name: Detect portctl NAT interface
+      set_fact:
+        portctl_nat_interface: "{{ portctl_public_interface }}"
+      when:
+        - portctl_nat_interface | default("") | length == 0
+        - portctl_public_interface | default("") | length > 0
+
+    - name: Derive portctl WG bind from wireguard configs
+      set_fact:
+        portctl_web_wg_bind: >-
+          {{
+            (wireguard_configs | default([])
+              | selectattr('name', 'equalto', portctl_wg_interface)
+              | map(attribute='address')
+              | list
+              | first
+              | default('')) | regex_replace('/.*$', '')
+          }}
+      when:
+        - portctl_web_wg_bind | default("") | length == 0
+        - wireguard_configs is defined
+
+    - name: Select portctl WG raw config content
+      set_fact:
+        portctl_wg_raw_content: >-
+          {{
+            (wireguard_raw_configs | default([])
+              | selectattr('name', 'equalto', portctl_wg_interface)
+              | map(attribute='content')
+              | list
+              | first
+              | default(''))
+          }}
+      when:
+        - portctl_web_wg_bind | default("") | length == 0
+        - wireguard_raw_configs is defined
+
+    - name: Parse portctl WG address from raw config
+      set_fact:
+        portctl_web_wg_bind: >-
+          {{
+            (
+              portctl_wg_raw_content.splitlines()
+              | map('trim')
+              | select('match', '^Address\s*=')
+              | map('regex_replace', '^Address\s*=\s*', '')
+              | map('regex_replace', '/.*$', '')
+              | list
+              | first
+              | default('')
+            )
+          }}
+      when:
+        - portctl_web_wg_bind | default("") | length == 0
+        - portctl_wg_raw_content | default("") | length > 0
+    - name: Detect portctl WG bind address from live interface
+      command: ip -o -f inet addr show dev {{ portctl_wg_interface }}
+      register: portctl_wg_addr_raw
+      changed_when: false
+      failed_when: false
+      when:
+        - portctl_web_wg_bind | default("") | length == 0
+        - portctl_enable_web_wg | default(true)
+
+    - name: Set portctl_web_wg_bind from live interface
+      set_fact:
+        portctl_web_wg_bind: "{{ (portctl_wg_addr_raw.stdout | regex_search('\\d+\\.\\d+\\.\\d+\\.\\d+')) | default('') }}"
+      when:
+        - portctl_web_wg_bind | default("") | length == 0
+        - portctl_wg_addr_raw is defined and portctl_wg_addr_raw.rc == 0
     - name: Validate portctl variables
       assert:
         that:

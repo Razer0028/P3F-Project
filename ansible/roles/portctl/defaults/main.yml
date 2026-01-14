@@ -28,6 +28,7 @@ portctl_web_port: 9000
 portctl_web_wg_bind: ""
 portctl_web_local_bind: "127.0.0.1"
 portctl_wg_service: "wg-quick@wg0.service"
+portctl_wg_interface: "wg0"
 portctl_enable_web_wg: true
 portctl_enable_web_local: true
 

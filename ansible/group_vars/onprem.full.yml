@@ -15,9 +15,8 @@ containers_enabled:
   - player_monitor
 web_portal_admin_enable: true
 web_portal_admin_allow_cidrs:
-  - 10.100.0.0/24
-  - 10.0.0.0/24
-  - 192.168.1.0/24
+  - "<WG_CIDR>"
+  - "<LAN_CIDR>"
 backups_manage: false
 
 # docker compose fallback

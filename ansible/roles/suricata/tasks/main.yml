@@ -51,6 +51,49 @@
         path: "{{ suricata_custom_rules_path }}"
       register: suricata_rules_stat
 
+    - name: Reinstall Suricata when config is missing
+      command: >-
+        apt-get -y --reinstall install {{ suricata_packages | join(' ') }}
+      register: suricata_reinstall
+      changed_when: suricata_reinstall.rc == 0
+      when:
+        - suricata_install_if_missing | default(true)
+        - not suricata_yaml_stat.stat.exists
+
+    - name: Re-check suricata.yaml metadata after reinstall
+      stat:
+        path: "{{ suricata_yaml_path }}"
+      register: suricata_yaml_stat_after_reinstall
+      when:
+        - suricata_install_if_missing | default(true)
+        - not suricata_yaml_stat.stat.exists
+
+    - name: Update suricata.yaml metadata after reinstall
+      set_fact:
+        suricata_yaml_stat: "{{ suricata_yaml_stat_after_reinstall }}"
+      when: suricata_yaml_stat_after_reinstall.stat.exists | default(false)
+
+    - name: Deploy default suricata.yaml when missing
+      copy:
+        src: suricata.yaml
+        dest: "{{ suricata_yaml_path }}"
+        owner: root
+        group: root
+        mode: "0644"
+      when: not suricata_yaml_stat.stat.exists
+      notify: Restart suricata
+
+    - name: Re-check suricata.yaml metadata after template
+      stat:
+        path: "{{ suricata_yaml_path }}"
+      register: suricata_yaml_stat_after_template
+      when: not suricata_yaml_stat.stat.exists
+
+    - name: Update suricata.yaml metadata after template
+      set_fact:
+        suricata_yaml_stat: "{{ suricata_yaml_stat_after_template }}"
+      when: suricata_yaml_stat_after_template.stat.exists | default(false)
+
     - name: Warn when suricata.yaml exists and overwrite is disabled
       debug:
         msg: "Existing {{ suricata_yaml_path }} found; set suricata_allow_overwrite: true to replace"
@@ -92,6 +135,11 @@
       when: suricata_custom_rules_content | length > 0
       notify: Restart suricata
 
+
+    - name: Detect Suricata interface when unset
+      set_fact:
+        suricata_interface: "{{ ansible_default_ipv4.interface }}"
+      when: suricata_interface | default("") | length == 0
 
     - name: Update Suricata interface in config
       replace:
