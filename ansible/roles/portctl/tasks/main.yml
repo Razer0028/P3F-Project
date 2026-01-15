@@ -77,7 +77,8 @@
         portctl_web_wg_bind: "{{ (portctl_wg_addr_raw.stdout | regex_search('\\d+\\.\\d+\\.\\d+\\.\\d+')) | default('') }}"
       when:
         - portctl_web_wg_bind | default("") | length == 0
-        - portctl_wg_addr_raw is defined and portctl_wg_addr_raw.rc == 0
+        - portctl_wg_addr_raw is defined
+        - (portctl_wg_addr_raw.rc | default(1)) == 0
     - name: Validate portctl variables
       assert:
         that:

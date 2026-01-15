@@ -17,6 +17,7 @@ import ipaddress
 import csv
 import io
 import configparser
+import secrets
 from urllib.parse import urlparse, parse_qs
 
 ALLOWED_UPLOAD_TARGETS = {
@@ -59,6 +60,9 @@ OUTPUT_TFVARS_CF_PATH = OUTPUT_ROOT / "terraform-cloudflare" / "terraform.tfvars
 SURICATA_CUSTOM_RULES_PATH = os.environ.get("PORTAL_SURICATA_RULES", "/home/gameadmin/Uploads/portal_uploads/custom.rules.txt")
 SURICATA_CUSTOM_RULES_DEST = "/etc/suricata/rules/custom.rules"
 SURICATA_RULES_MARKER = "# Managed by portal: suricata rules"
+
+FAILOVER_HOST_VARS_REL = "ansible/host_vars/onprem-1.yml"
+FAILOVER_RULES_MARKER = "# Managed by portal: failover core"
 
 def response_json(handler, status, payload):
     data = json.dumps(payload).encode("utf-8")
@@ -118,6 +122,101 @@ def inventory_has_group(text, group):
     return False
 
 
+
+
+def escape_yaml(value):
+    if value is None:
+        return "\"\""
+    text = str(value)
+    text = text.replace("\\", "\\\\").replace('"', '\\"')
+    return f"\"{text}\""
+
+
+def parse_yaml_value(text, key):
+    if not text:
+        return ""
+    prefix = f"{key}:"
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        if not stripped.startswith(prefix):
+            continue
+        value = stripped.split(":", 1)[1].strip()
+        if value.startswith(("\"", "'")) and value.endswith(("\"", "'")):
+            value = value[1:-1]
+        return value
+    return ""
+
+
+def parse_inventory_group_ip(text, group):
+    if not text:
+        return ""
+    header = f"[{group}]"
+    found = False
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        if stripped.startswith("[") and stripped.endswith("]"):
+            found = (stripped == header)
+            continue
+        if found:
+            parts = stripped.split()
+            if not parts:
+                continue
+            host = ""
+            for token in parts[1:]:
+                if token.startswith("ansible_host="):
+                    host = token.split("=", 1)[1]
+                    break
+            if not host:
+                host = parts[0]
+            return host
+    return ""
+
+
+def read_tfvars_value(path, key):
+    if not path or not path.exists():
+        return ""
+    prefix = f"{key} ="
+    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        if not stripped.startswith(prefix):
+            continue
+        value = stripped.split("=", 1)[1].strip()
+        if value.startswith(("\"", "'")) and value.endswith(("\"", "'")):
+            value = value[1:-1]
+        return value
+    return ""
+
+
+def terraform_output_json(terraform_dir):
+    try:
+        output = subprocess.check_output(
+            ["terraform", "output", "-json"],
+            cwd=str(terraform_dir),
+            text=True,
+        )
+    except Exception:
+        return {}
+    try:
+        return json.loads(output)
+    except json.JSONDecodeError:
+        return {}
+
+
+def terraform_output_value(output_json, key):
+    if not isinstance(output_json, dict):
+        return ""
+    entry = output_json.get(key)
+    if isinstance(entry, dict) and "value" in entry:
+        return entry.get("value")
+    return entry
+
+
 def build_suricata_host_vars(rules_text):
     cleaned = rules_text.replace("\r\n", "\n").rstrip("\n")
     if not cleaned:
@@ -163,6 +262,88 @@ def maybe_write_suricata_host_vars(output_root, inventory_text, group_vars_text)
         record_secret_path(abs_path)
         saved[rel_path] = {"bytes": len(content.encode("utf-8"))}
     return saved
+
+
+
+
+def maybe_write_failover_host_vars(output_root, repo_root, inventory_text, group_vars_text):
+    if not parse_yaml_bool(group_vars_text, "failover_core_manage"):
+        return {}
+    if not inventory_has_group(inventory_text, "onprem"):
+        return {}
+
+    failover_path = resolve_output_path(output_root, FAILOVER_HOST_VARS_REL)
+    if not failover_path:
+        return {}
+
+    tfvars_path = output_root / "terraform" / "terraform.tfvars"
+    region = read_tfvars_value(tfvars_path, "aws_region")
+    if not region:
+        region = parse_yaml_value(group_vars_text, "aws_region")
+
+    vps_ip = parse_inventory_group_ip(inventory_text, "vps")
+    cf_token = read_cloudflare_token()
+
+    tf_outputs = terraform_output_json(repo_root / "terraform")
+    instance_id = terraform_output_value(tf_outputs, "instance_id") or ""
+    public_ip = terraform_output_value(tf_outputs, "public_ip") or ""
+    access_key_id = terraform_output_value(tf_outputs, "failover_access_key_id") or ""
+    secret_access_key = terraform_output_value(tf_outputs, "failover_secret_access_key") or ""
+
+    cf_outputs = terraform_output_json(repo_root / "terraform-cloudflare")
+    zone_id = terraform_output_value(cf_outputs, "zone_id") or ""
+    record_id = terraform_output_value(cf_outputs, "failover_record_id") or ""
+    record_name = terraform_output_value(cf_outputs, "failover_record_name") or ""
+
+    required = [
+        instance_id,
+        public_ip,
+        cf_token,
+        zone_id,
+        record_id,
+        record_name,
+        vps_ip,
+        region,
+        access_key_id,
+        secret_access_key,
+    ]
+    if not all(required):
+        return {}
+
+    if failover_path.exists():
+        try:
+            existing = failover_path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            existing = ""
+        if FAILOVER_RULES_MARKER not in existing.splitlines()[:2]:
+            return {}
+
+    content = "\n".join(
+        [
+            FAILOVER_RULES_MARKER,
+            f"failover_instance_id: {escape_yaml(instance_id)}",
+            f"failover_region: {escape_yaml(region)}",
+            f"failover_ec2_ip: {escape_yaml(public_ip)}",
+            f"failover_cf_token: {escape_yaml(cf_token)}",
+            f"failover_cf_zone_id: {escape_yaml(zone_id)}",
+            f"failover_cf_record_id: {escape_yaml(record_id)}",
+            f"failover_dns_record_name: {escape_yaml(record_name)}",
+            f"failover_vps_ip: {escape_yaml(vps_ip)}",
+            "failover_aws_profile: \"failover\"",
+            f"failover_aws_access_key_id: {escape_yaml(access_key_id)}",
+            f"failover_aws_secret_access_key: {escape_yaml(secret_access_key)}",
+            "failover_aws_session_token: \"\"",
+            "failover_core_enable: true",
+            "failover_core_state: started",
+            "",
+        ]
+    )
+
+    failover_path.parent.mkdir(parents=True, exist_ok=True)
+    failover_path.write_text(content, encoding="utf-8")
+    os.chmod(failover_path, 0o600)
+    record_secret_path(failover_path)
+    return {FAILOVER_HOST_VARS_REL: {"bytes": len(content.encode("utf-8"))}}
 
 
 def load_secret_meta():
@@ -317,6 +498,20 @@ def write_aws_config(profile, region):
     os.chmod(config_path, 0o600)
     record_secret_path(config_path)
     return config_path
+
+
+
+
+def ensure_vault_pass():
+    vault_path = pathlib.Path(VAULT_PASS_PATH).expanduser()
+    if vault_path.exists():
+        return vault_path, False
+    vault_path.parent.mkdir(parents=True, exist_ok=True)
+    token = secrets.token_urlsafe(24)
+    vault_path.write_text(token + "\n", encoding="utf-8")
+    os.chmod(vault_path, 0o600)
+    record_secret_path(vault_path)
+    return vault_path, True
 
 
 def ensure_ssh_agent():
@@ -697,6 +892,18 @@ class PortalState:
                 except Exception as exc:  # pragma: no cover
                     log.write(f"\nExecution error: {exc}\n")
                     return_code = 1
+                if return_code == 0 and action in {"tf-apply", "tf-cf-apply"}:
+                    try:
+                        inventory_text = OUTPUT_INVENTORY_PATH.read_text(encoding="utf-8", errors="replace") if OUTPUT_INVENTORY_PATH.exists() else ""
+                        group_vars_text = OUTPUT_GROUP_VARS_PATH.read_text(encoding="utf-8", errors="replace") if OUTPUT_GROUP_VARS_PATH.exists() else ""
+                        saved = maybe_write_failover_host_vars(self.output_root, self.repo_root, inventory_text, group_vars_text)
+                        if saved:
+                            log.write("\nPortal updated failover host_vars:\n")
+                            for rel_path in saved:
+                                log.write(f"- {rel_path}\n")
+                    except Exception as exc:
+                        log.write(f"\nPortal failed to update failover host_vars: {exc}\n")
+
                 if return_code == 0 and cleanup:
                     removed = cleanup_secrets()
                     if removed:
@@ -1091,6 +1298,10 @@ class PortalHandler(http.server.SimpleHTTPRequestHandler):
         if extra_saved:
             saved.update(extra_saved)
 
+        failover_saved = maybe_write_failover_host_vars(self.state.output_root, self.state.repo_root, inventory_text, group_vars_text)
+        if failover_saved:
+            saved.update(failover_saved)
+
         response_json(self, 200, {"ok": True, "saved": saved})
 
     def _handle_run(self):
@@ -1120,6 +1331,9 @@ class PortalHandler(http.server.SimpleHTTPRequestHandler):
             if action == "tf-destroy" and confirm != "DESTROY":
                 response_json(self, 400, {"ok": False, "error": "Confirm word required (DESTROY)"})
                 return
+
+        if action.startswith("ansible") or action == "validate":
+            ensure_vault_pass()
 
         if action in {'tf-plan', 'tf-apply', 'tf-destroy'}:
             if not OUTPUT_TFVARS_PATH.exists():
