@@ -392,12 +392,44 @@ make validate</code></pre>
 
         <section id="portal" class="doc-section">
           <h2>11. ポータル利用</h2>
+          <p>
+            ポータルはローカル/LAN専用です。保存/実行/事前チェックにはポータルトークンが必要です。
+            構築後に secrets を残したくない場合は Cleanup を実行してください。
+          </p>
           <ul>
             <li>ガイド付き: 手順を順番に実行</li>
             <li>カスタム: 必要な操作だけ選択</li>
           </ul>
+          <h3>入力ガイド（初心者）</h3>
+          <ul>
+            <li>オンプレIP（LAN側のIP）と VPS パブリックIP</li>
+            <li>ドメイン/ゾーン名、Cloudflare アカウントID</li>
+            <li>管理ポータルのユーザー/パスワード（必須）</li>
+            <li>AWS CSV（EC2自動構築を使う場合）</li>
+            <li>Cloudflare APIトークン（DNS/Tunnel 用）</li>
+            <li>VPS/EC2 の SSH 秘密鍵（EC2は生成も可）</li>
+          </ul>
+          <h3>入力ガイド（カスタム）</h3>
+          <ul>
+            <li>WireGuard IP設計/鍵、FRR/BFD設定</li>
+            <li>Suricata ルール、Portctlの転送/UFwルール</li>
+            <li>Terraform の VPC/AMI/SG/EIP/ポート上書き</li>
+            <li>Cloudflared ingress の詳細設定</li>
+          </ul>
+          <h3>アップロード/保存先</h3>
+          <ul>
+            <li>SSH鍵: <code>~/.ssh/&lt;key_name&gt;</code></li>
+            <li>AWS CSV: <code>~/.aws/credentials</code></li>
+            <li>Cloudflareトークン: <code>~/.config/edge-stack/cloudflare_token</code></li>
+            <li>生成ファイル: <code>~/.config/edge-stack/ansible/*</code></li>
+          </ul>
           <div class="doc-note">
-            ポータルはローカル/LAN 専用で使ってください。
+            failover_core は既定で停止状態です。検証完了後に
+            <code>failover_core_enable=true</code> / <code>failover_core_state=started</code>
+            で有効化してください。
+          </div>
+          <div class="doc-note">
+            管理ポータルは LAN/WG のみからアクセス可能にしてください。
           </div>
         </section>
 

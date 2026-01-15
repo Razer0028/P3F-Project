@@ -986,7 +986,7 @@ function renderChecklist() {
       "- failover_core_enable",
       "- failover_aws_access_key_id",
       "- failover_aws_secret_access_key",
-      "- failover_aws_profile (optional)",
+      "- failover_aws_profile (optional, default=default)",
     );
   }
   onpremItems.push("- web_portal_admin_user", "- web_portal_admin_password");
@@ -1086,7 +1086,7 @@ function renderFailoverAwsVaultSnippet() {
     : "# Get values from Terraform outputs: failover_access_key_id / failover_secret_access_key\n";
   return header +
     note +
-    "failover_aws_profile: \"failover\"\n" +
+    "failover_aws_profile: \"default\"\n" +
     "failover_aws_access_key_id: \"REPLACE_ME\"\n" +
     "failover_aws_secret_access_key: \"REPLACE_ME\"\n" +
     "failover_aws_session_token: \"\"\n";

@@ -17,7 +17,7 @@ failover_vps_health_route_interval: 30
 failover_core_state: started
 failover_core_enable: true
 failover_aws_manage: true
-failover_aws_profile: "failover"
+failover_aws_profile: default
 failover_aws_access_key_id: "REPLACE_ME"
 failover_aws_secret_access_key: "REPLACE_ME"
 failover_aws_session_token: ""

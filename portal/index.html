@@ -167,32 +167,32 @@
         </h2>
         <ol>
           <li>
-            <span class="lang-en">Start the portal with <code>make portal</code> or <code>make portal-lan</code>, copy the token, and paste it into the Portal token fields.</span>
+            <span class="lang-en">Start the portal with <code>make portal</code> or <code>make portal-lan</code>, copy the token, and paste it into the token fields.</span>
             <span class="lang-ja"><code>make portal</code> または <code>make portal-lan</code> で起動し、トークンを控えて各トークン欄に貼り付けます。</span>
           </li>
           <li>
-            <span class="lang-en">Fill Project Inputs, click Generate files, then use Save all to server.</span>
-            <span class="lang-ja">入力フォーム→ファイル生成→「サーバーに保存」を実行。</span>
+            <span class="lang-en">Choose Beginner or Custom, then fill the basics (on-prem IP, VPS IP, zone/domain, admin user/password).</span>
+            <span class="lang-ja">初心者/カスタムを選び、基本項目（オンプレIP、VPS IP、ドメイン/ゾーン、管理者ID/パスワード）を入力します。</span>
           </li>
           <li>
-            <span class="lang-en">Create the vault password file once on the portal host.</span>
-            <span class="lang-ja">ポータルホストでVaultパスワードファイルを作成します。</span>
+            <span class="lang-en">Upload AWS CSV (EC2 auto), Cloudflare token, and SSH keys (VPS/EC2). You can generate the EC2 key here.</span>
+            <span class="lang-ja">AWSのCSV（EC2自動構築用）、Cloudflareトークン、SSH鍵（VPS/EC2）をアップロードします。EC2鍵は生成も可能です。</span>
           </li>
           <li>
-            <span class="lang-en">Upload SSH private keys (VPS/EC2) if needed.</span>
-            <span class="lang-ja">必要ならSSH秘密鍵（VPS/EC2）をアップロード。</span>
+            <span class="lang-en">Generate outputs, then use Save all to server.</span>
+            <span class="lang-ja">出力を生成して「サーバーに保存」を実行します。</span>
           </li>
           <li>
-            <span class="lang-en">Fill vault secrets (onprem/vps/ec2) with <code>ansible-vault edit</code>.</span>
-            <span class="lang-ja"><code>ansible-vault edit</code> でVault秘密情報を入力。</span>
+            <span class="lang-en">Create <code>~/.config/edge-stack/vault_pass</code> and fill host_vars with <code>ansible-vault edit</code>.</span>
+            <span class="lang-ja"><code>~/.config/edge-stack/vault_pass</code> を作成し、<code>ansible-vault edit</code> でhost_varsを埋めます。</span>
           </li>
           <li>
-            <span class="lang-en">Run Preflight Check and fix any missing items.</span>
-            <span class="lang-ja">事前チェックを実行し、未設定を補完。</span>
+            <span class="lang-en">Run Preflight Check to confirm files, keys, and tools.</span>
+            <span class="lang-ja">事前チェックでファイル/鍵/ツールを確認します。</span>
           </li>
           <li>
-            <span class="lang-en">Run tasks in order: Ansible base → vps → ec2 → onprem, then validate.</span>
-            <span class="lang-ja">Ansible base → vps → ec2 → onprem の順で実行し、最後に検証。</span>
+            <span class="lang-en">Run tasks in order (Terraform → Ansible base → vps → ec2 → onprem → validate). Enable failover_core after validation.</span>
+            <span class="lang-ja">Terraform → Ansible base → vps → ec2 → onprem → validate の順で実行し、検証後に failover_core を有効化します。</span>
           </li>
         </ol>
         <p class="note">
@@ -1248,6 +1248,92 @@ GET  /api/jobs/&lt;job_id&gt;/logs</code></pre>
             <span class="lang-en">All inputs are available, including advanced network and Terraform options.</span>
             <span class="lang-ja">ネットワークやTerraformの詳細設定も含め、全項目を調整できます。</span>
           </p>
+        </div>
+        <div class="guide-grid input-guide">
+          <div class="guide-card beginner-only">
+            <strong>
+              <span class="lang-en">Beginner: required inputs</span>
+              <span class="lang-ja">初心者: 必須入力</span>
+            </strong>
+            <ul>
+              <li>
+                <span class="lang-en">On-prem IP (LAN address used for SSH)</span>
+                <span class="lang-ja">オンプレIP（LAN側の接続IP）</span>
+              </li>
+              <li>
+                <span class="lang-en">VPS public IP</span>
+                <span class="lang-ja">VPSパブリックIP</span>
+              </li>
+              <li>
+                <span class="lang-en">Zone/domain + Cloudflare account ID</span>
+                <span class="lang-ja">ゾーン/ドメイン + CloudflareアカウントID</span>
+              </li>
+              <li>
+                <span class="lang-en">Admin portal user/password (required)</span>
+                <span class="lang-ja">管理ポータルのユーザー/パスワード（必須）</span>
+              </li>
+            </ul>
+          </div>
+          <div class="guide-card beginner-only">
+            <strong>
+              <span class="lang-en">Beginner: required uploads</span>
+              <span class="lang-ja">初心者: 必須アップロード</span>
+            </strong>
+            <ul>
+              <li>
+                <span class="lang-en">AWS CSV (for EC2 auto build)</span>
+                <span class="lang-ja">AWSのCSV（EC2自動構築用）</span>
+              </li>
+              <li>
+                <span class="lang-en">Cloudflare API token (DNS/Tunnel)</span>
+                <span class="lang-ja">Cloudflare APIトークン（DNS/Tunnel）</span>
+              </li>
+              <li>
+                <span class="lang-en">SSH private keys (VPS/EC2) or generate EC2 key here</span>
+                <span class="lang-ja">SSH秘密鍵（VPS/EC2）またはEC2鍵を生成</span>
+              </li>
+            </ul>
+          </div>
+          <div class="guide-card custom-only">
+            <strong>
+              <span class="lang-en">Custom: advanced inputs</span>
+              <span class="lang-ja">カスタム: 追加入力</span>
+            </strong>
+            <ul>
+              <li>
+                <span class="lang-en">WireGuard IP plan + keys, FRR/BFD configs</span>
+                <span class="lang-ja">WireGuardのIP設計/鍵、FRR/BFD設定</span>
+              </li>
+              <li>
+                <span class="lang-en">Suricata custom rules + Portctl forward/UFw rules</span>
+                <span class="lang-ja">Suricataルール + Portctl転送/UFwルール</span>
+              </li>
+              <li>
+                <span class="lang-en">Terraform (VPC/AMI/SG) overrides as needed</span>
+                <span class="lang-ja">TerraformのVPC/AMI/SGの上書き</span>
+              </li>
+            </ul>
+          </div>
+          <div class="guide-card">
+            <strong>
+              <span class="lang-en">Where uploads are saved</span>
+              <span class="lang-ja">アップロードの保存先</span>
+            </strong>
+            <ul>
+              <li>
+                <span class="lang-en">SSH keys → <code>~/.ssh/&lt;key_name&gt;</code></span>
+                <span class="lang-ja">SSH鍵 → <code>~/.ssh/&lt;key_name&gt;</code></span>
+              </li>
+              <li>
+                <span class="lang-en">AWS CSV → <code>~/.aws/credentials</code></span>
+                <span class="lang-ja">AWS CSV → <code>~/.aws/credentials</code></span>
+              </li>
+              <li>
+                <span class="lang-en">Cloudflare token → <code>~/.config/edge-stack/cloudflare_token</code></span>
+                <span class="lang-ja">Cloudflareトークン → <code>~/.config/edge-stack/cloudflare_token</code></span>
+              </li>
+            </ul>
+          </div>
         </div>
         <div id="input_warnings" class="input-warnings" aria-live="polite"></div>
         <form id="setup-form" autocomplete="off">

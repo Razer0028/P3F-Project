@@ -48,7 +48,7 @@ IaC workspace for the on-prem + VPS + EC2 failover stack.
 - Suricata rules (if custom).
 - DDoS notify (VPS only): notify targets (uses the shared Discord webhook).
 - Admin portal credentials (required).
-- Failover AWS credentials default to profile "failover" to avoid overwriting Terraform/admin credentials.
+- Failover AWS credentials default to profile default. If you want to keep Terraform/admin credentials separate, set failover_aws_profile to a dedicated name (e.g. failover).
 
 ## Public release checklist
 

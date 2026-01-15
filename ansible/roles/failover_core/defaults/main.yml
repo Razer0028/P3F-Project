@@ -37,7 +37,7 @@ failover_cf_zone_id: ""
 failover_cf_record_id: ""
 failover_dns_record_name: ""
 failover_aws_manage: true
-failover_aws_profile: "failover"
+failover_aws_profile: default
 failover_aws_access_key_id: ""
 failover_aws_secret_access_key: ""
 failover_aws_session_token: ""
