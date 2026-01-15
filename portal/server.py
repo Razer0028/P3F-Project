@@ -56,6 +56,9 @@ OUTPUT_HOST_VARS_DIR = OUTPUT_ANSIBLE_DIR / "host_vars"
 OUTPUT_TFVARS_PATH = OUTPUT_ROOT / "terraform" / "terraform.tfvars"
 OUTPUT_TFVARS_CF_PATH = OUTPUT_ROOT / "terraform-cloudflare" / "terraform.tfvars"
 
+SURICATA_CUSTOM_RULES_PATH = os.environ.get("PORTAL_SURICATA_RULES", "/home/gameadmin/Uploads/portal_uploads/custom.rules.txt")
+SURICATA_CUSTOM_RULES_DEST = "/etc/suricata/rules/custom.rules"
+SURICATA_RULES_MARKER = "# Managed by portal: suricata rules"
 
 def response_json(handler, status, payload):
     data = json.dumps(payload).encode("utf-8")
@@ -79,6 +82,87 @@ def write_json(path, payload):
     path.write_text(json.dumps(payload, indent=2, ensure_ascii=False))
 
 
+
+
+
+
+def parse_yaml_bool(text, key):
+    if not text:
+        return False
+    prefix = f"{key}:"
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        if not stripped.startswith(prefix):
+            continue
+        value = stripped.split(":", 1)[1].strip().lower()
+        return value in {"true", "yes", "1", "on"}
+    return False
+
+
+def inventory_has_group(text, group):
+    if not text:
+        return False
+    header = f"[{group}]"
+    found = False
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        if stripped.startswith("[") and stripped.endswith("]"):
+            found = (stripped == header)
+            continue
+        if found:
+            return True
+    return False
+
+
+def build_suricata_host_vars(rules_text):
+    cleaned = rules_text.replace("\r\n", "\n").rstrip("\n")
+    if not cleaned:
+        cleaned = "# empty"
+    indented = "\n".join(f"  {line}" for line in cleaned.split("\n"))
+    return (
+        f"{SURICATA_RULES_MARKER}\n"
+        "suricata_allow_overwrite: true\n"
+        f"suricata_custom_rules_path: {SURICATA_CUSTOM_RULES_DEST}\n"
+        "suricata_custom_rules_content: |\n"
+        f"{indented}\n"
+    )
+
+
+def maybe_write_suricata_host_vars(output_root, inventory_text, group_vars_text):
+    if not parse_yaml_bool(group_vars_text, "suricata_manage"):
+        return {}
+    rules_path = pathlib.Path(SURICATA_CUSTOM_RULES_PATH).expanduser()
+    if not rules_path.exists():
+        return {}
+    rules_text = rules_path.read_text(encoding="utf-8", errors="replace")
+    if not rules_text.strip():
+        return {}
+    content = build_suricata_host_vars(rules_text)
+    saved = {}
+    for group in ("vps", "ec2"):
+        if not inventory_has_group(inventory_text, group):
+            continue
+        rel_path = f"ansible/host_vars/{group}-1.yml"
+        abs_path = resolve_output_path(output_root, rel_path)
+        if not abs_path:
+            continue
+        if abs_path.exists():
+            try:
+                existing = abs_path.read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                existing = ""
+            if SURICATA_RULES_MARKER not in existing.splitlines()[:2]:
+                continue
+        abs_path.parent.mkdir(parents=True, exist_ok=True)
+        abs_path.write_text(content, encoding="utf-8")
+        os.chmod(abs_path, 0o600)
+        record_secret_path(abs_path)
+        saved[rel_path] = {"bytes": len(content.encode("utf-8"))}
+    return saved
 
 
 def load_secret_meta():
@@ -1000,6 +1084,12 @@ class PortalHandler(http.server.SimpleHTTPRequestHandler):
         if errors:
             response_json(self, 400, {"ok": False, "error": "Failed to save some files", "details": errors, "saved": saved})
             return
+
+        group_vars_text = files.get("ansible/group_vars/all.yml", "")
+        inventory_text = files.get("ansible/hosts.ini", "")
+        extra_saved = maybe_write_suricata_host_vars(self.state.output_root, inventory_text, group_vars_text)
+        if extra_saved:
+            saved.update(extra_saved)
 
         response_json(self, 200, {"ok": True, "saved": saved})
 

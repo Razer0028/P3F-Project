@@ -1916,6 +1916,7 @@ async function loadStatus() {
     }
     lastStatusPayload = payload;
     applyAutoAdminAllowCidrs(payload);
+    applyAutoAllowedSshCidrs(payload);
     applyAutoPortForwardDestIp(payload);
     guidedState.preflight = true;
     const files = payload.files || {};
@@ -2100,6 +2101,28 @@ function applyAutoAdminAllowCidrs(payload) {
   const defaults = [...lanCidrs];
   const unique = [];
   defaults.forEach((cidr) => {
+    if (cidr && !unique.includes(cidr)) {
+      unique.push(cidr);
+    }
+  });
+  if (unique.length) {
+    input.value = unique.join(",");
+  }
+}
+
+
+function applyAutoAllowedSshCidrs(payload) {
+  const input = document.getElementById("allowed_ssh_cidrs");
+  if (!input || input.dataset.manual === "true") {
+    return;
+  }
+  const current = (input.value || "").trim();
+  if (current) {
+    return;
+  }
+  const lanCidrs = Array.isArray(payload.lan_cidrs) ? payload.lan_cidrs : [];
+  const unique = [];
+  lanCidrs.forEach((cidr) => {
     if (cidr && !unique.includes(cidr)) {
       unique.push(cidr);
     }
@@ -2477,11 +2500,28 @@ function updatePlaceholders(lang) {
   });
 }
 
+function applyBeginnerDefaults() {
+  if (!document.body || document.body.dataset.setupMode != "beginner") {
+    return;
+  }
+  const suricata = document.getElementById("enable_suricata");
+  if (!suricata || suricata.dataset.manual == "true") {
+    return;
+  }
+  if (!suricata.checked) {
+    suricata.checked = true;
+    syncDependencies();
+    generateAll();
+    updateGuidedSteps();
+  }
+}
+
 function applySetupMode(mode) {
   if (!mode || !document.body) {
     return;
   }
   document.body.dataset.setupMode = mode;
+  applyBeginnerDefaults();
 }
 
 function setPage(page) {
@@ -3363,6 +3403,9 @@ featureInputs.forEach((id) => {
     return;
   }
   input.addEventListener("change", () => {
+    if (id === "enable_suricata") {
+      input.dataset.manual = "true";
+    }
     if (id === "enable_cloudflared") {
       setCheckbox("plan_cloudflared", input.checked);
     }
@@ -3454,6 +3497,14 @@ const adminAllowInput = document.getElementById("web_portal_admin_allow_cidrs");
 if (adminAllowInput) {
   adminAllowInput.addEventListener("input", () => {
     adminAllowInput.dataset.manual = "true";
+  });
+}
+
+
+const allowedSshInput = document.getElementById("allowed_ssh_cidrs");
+if (allowedSshInput) {
+  allowedSshInput.addEventListener("input", () => {
+    allowedSshInput.dataset.manual = "true";
   });
 }
 
