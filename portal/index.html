@@ -2209,6 +2209,10 @@ GET  /api/jobs/&lt;job_id&gt;/logs</code></pre>
                 <span class="lang-en">VPS keys still need to be uploaded manually.</span>
                 <span class="lang-ja">VPSの鍵は別途アップロードが必要です。</span>
               </p>
+              <p class="note">
+                <span class="lang-en">This key is used when Terraform creates the EC2 KeyPair. Generate it before running Terraform.</span>
+                <span class="lang-ja">この鍵はTerraformがEC2 KeyPairを作成する際に使われます。Terraform実行前に生成してください。</span>
+              </p>
               <label>
                 <span class="lang-en">EC2 key passphrase (optional)</span>
                 <span class="lang-ja">EC2鍵パスフレーズ（任意）</span>

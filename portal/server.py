@@ -534,17 +534,17 @@ class PortalState:
                 "env": {"TF_IN_AUTOMATION": "1"},
             },
             "tf-plan": {
-                "cmd": ["terraform", "plan", "-input=false", f"-var-file={tfvars_path}"],
+                "cmd": ["bash", "-lc", f"terraform init -input=false && terraform plan -input=false -var-file={tfvars_path}"],
                 "cwd": terraform_dir,
                 "env": {"TF_IN_AUTOMATION": "1"},
             },
             "tf-apply": {
-                "cmd": ["terraform", "apply", "-input=false", "-auto-approve", f"-var-file={tfvars_path}"],
+                "cmd": ["bash", "-lc", f"terraform init -input=false && terraform apply -input=false -auto-approve -var-file={tfvars_path}"],
                 "cwd": terraform_dir,
                 "env": {"TF_IN_AUTOMATION": "1"},
             },
             "tf-destroy": {
-                "cmd": ["terraform", "destroy", "-input=false", "-auto-approve", f"-var-file={tfvars_path}"],
+                "cmd": ["bash", "-lc", f"terraform init -input=false && terraform destroy -input=false -auto-approve -var-file={tfvars_path}"],
                 "cwd": terraform_dir,
                 "env": {"TF_IN_AUTOMATION": "1"},
             },
@@ -554,17 +554,17 @@ class PortalState:
                 "env": {"TF_IN_AUTOMATION": "1"},
             },
             "tf-cf-plan": {
-                "cmd": ["terraform", "plan", "-input=false", f"-var-file={tfvars_cf_path}"],
+                "cmd": ["bash", "-lc", f"terraform init -input=false && terraform plan -input=false -var-file={tfvars_cf_path}"],
                 "cwd": terraform_cf_dir,
                 "env": {"TF_IN_AUTOMATION": "1"},
             },
             "tf-cf-apply": {
-                "cmd": ["terraform", "apply", "-auto-approve", "-input=false", f"-var-file={tfvars_cf_path}"],
+                "cmd": ["bash", "-lc", f"terraform init -input=false && terraform apply -input=false -auto-approve -var-file={tfvars_cf_path}"],
                 "cwd": terraform_cf_dir,
                 "env": {"TF_IN_AUTOMATION": "1"},
             },
             "tf-cf-destroy": {
-                "cmd": ["terraform", "destroy", "-auto-approve", "-input=false", f"-var-file={tfvars_cf_path}"],
+                "cmd": ["bash", "-lc", f"terraform init -input=false && terraform destroy -input=false -auto-approve -var-file={tfvars_cf_path}"],
                 "cwd": terraform_cf_dir,
                 "env": {"TF_IN_AUTOMATION": "1"},
             },

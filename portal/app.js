@@ -159,6 +159,8 @@ const cloudflareTokenMessages = {
 const saveMessages = {
   en: {
     missingToken: "Enter the portal token.",
+    ec2KeyMissing: "EC2 key pair is not ready. Click Generate EC2 key pair or provide an existing key.",
+    ec2KeyPublicMissing: "Provide the EC2 public key or switch to Auto (Generate).",
     emptyOutput: "Generate files before saving.",
     saving: "Saving files to server...",
     success: "Saved to server.",
@@ -167,6 +169,8 @@ const saveMessages = {
   },
   ja: {
     missingToken: "ポータルトークンを入力してください。",
+    ec2KeyMissing: "EC2鍵が未準備です。『EC2鍵を自動生成』を押すか、既存鍵を用意してください。",
+    ec2KeyPublicMissing: "EC2公開鍵を入力するか、自動生成モードに切り替えてください。",
     emptyOutput: "先にファイル生成を実行してください。",
     saving: "サーバーへ保存中...",
     success: "サーバーに保存しました。",
@@ -1641,10 +1645,20 @@ async function saveAll() {
     return;
   }
 
-  const ec2Ready = await ensureEc2KeyPair();
-  if (!ec2Ready) {
-    return;
+  const plan = getPlanOptions();
+  const keyPairMode = value(fields.keyPairMode) || "existing";
+  if (plan.ec2 || plan.terraform) {
+    if (keyPairMode === "create" && !value(fields.keyPairPublicKey)) {
+      setSaveStatus(messages.ec2KeyPublicMissing, "error");
+      return;
+    }
+    const ec2Ready = await ensureEc2KeyPair();
+    if (!ec2Ready) {
+      setSaveStatus(messages.ec2KeyMissing, "error");
+      return;
+    }
   }
+
   generateAll();
 
   const inventory = outputValue("inventory");
