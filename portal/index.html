@@ -1117,6 +1117,32 @@ GET  /api/jobs/&lt;job_id&gt;/logs</code></pre>
             破壊的操作は確認ワードが必要です。
           </span>
         </p>
+        <div class="note">
+          <div class="lang-en">Recommended order:</div>
+          <div class="lang-ja">推奨順序:</div>
+          <ol>
+            <li>
+              <span class="lang-en">Generate files → Save all to server (writes to ~/.config/edge-stack).</span>
+              <span class="lang-ja">ファイル生成 → サーバーに保存（~/.config/edge-stack に出力）。</span>
+            </li>
+            <li>
+              <span class="lang-en">Terraform (EC2): init → plan → apply (enter APPLY).</span>
+              <span class="lang-ja">Terraform（EC2）: init → plan → apply（APPLYを入力）。</span>
+            </li>
+            <li>
+              <span class="lang-en">Terraform (Cloudflare): init → plan → apply (if enabled).</span>
+              <span class="lang-ja">Terraform（Cloudflare）: init → plan → apply（有効時）。</span>
+            </li>
+            <li>
+              <span class="lang-en">Ansible: base → vps → ec2 → onprem, then validate.</span>
+              <span class="lang-ja">Ansible: base → vps → ec2 → onprem、最後に validate。</span>
+            </li>
+            <li>
+              <span class="lang-en">Enable failover_core after validation.</span>
+              <span class="lang-ja">検証後に failover_core を有効化。</span>
+            </li>
+          </ol>
+        </div>
         <div class="upload-grid">
           <label>
             <span class="lang-en">Portal token</span>

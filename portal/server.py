@@ -1031,6 +1031,22 @@ class PortalHandler(http.server.SimpleHTTPRequestHandler):
                 response_json(self, 400, {"ok": False, "error": "Confirm word required (DESTROY)"})
                 return
 
+        if action in {'tf-plan', 'tf-apply', 'tf-destroy'}:
+            if not OUTPUT_TFVARS_PATH.exists():
+                response_json(
+                    self,
+                    400,
+                    {'ok': False, 'error': 'terraform.tfvars not found. 先にファイル生成→保存してください。'},
+                )
+                return
+        if action in {'tf-cf-plan', 'tf-cf-apply', 'tf-cf-destroy'}:
+            if not OUTPUT_TFVARS_CF_PATH.exists():
+                response_json(
+                    self,
+                    400,
+                    {'ok': False, 'error': 'terraform-cloudflare.tfvars not found. 先にファイル生成→保存してください。'},
+                )
+                return
         with self.state.lock:
             if self.state.any_running():
                 response_json(self, 409, {"ok": False, "error": "Another job is running"})
