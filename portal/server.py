@@ -889,6 +889,11 @@ class PortalState:
                 "cwd": self.repo_root,
                 "env": ansible_env,
             },
+            "install-tools": {
+                "cmd": ["bash", "-lc", "./scripts/install_tools.sh"],
+                "cwd": self.repo_root,
+                "env": {"DEBIAN_FRONTEND": "noninteractive"},
+            },
             "ansible-base": {
                 "cmd": ansible_base,
                 "cwd": self.repo_root,
