@@ -827,6 +827,14 @@ class PortalState:
         tfvars_path = str(OUTPUT_TFVARS_PATH)
         tfvars_cf_path = str(OUTPUT_TFVARS_CF_PATH)
         ansible_env = {"ANSIBLE_CONFIG": "./ansible.cfg", "IAC_CONFIG_DIR": str(self.output_root)}
+        aws_credentials = pathlib.Path("~/.aws/credentials").expanduser()
+        aws_config = pathlib.Path("~/.aws/config").expanduser()
+        terraform_env = {
+            "TF_IN_AUTOMATION": "1",
+            "AWS_SHARED_CREDENTIALS_FILE": str(aws_credentials),
+            "AWS_CONFIG_FILE": str(aws_config),
+            "AWS_SDK_LOAD_CONFIG": "1",
+        }
         ansible_base = [
             "ansible-playbook",
             "-i",
@@ -932,42 +940,42 @@ class PortalState:
             "tf-init": {
                 "cmd": ["terraform", "init"],
                 "cwd": terraform_dir,
-                "env": {"TF_IN_AUTOMATION": "1"},
+                "env": terraform_env,
             },
             "tf-plan": {
                 "cmd": ["bash", "-lc", f"terraform init -input=false && terraform plan -input=false -var-file={tfvars_path}"],
                 "cwd": terraform_dir,
-                "env": {"TF_IN_AUTOMATION": "1"},
+                "env": terraform_env,
             },
             "tf-apply": {
                 "cmd": ["bash", "-lc", f"terraform init -input=false && terraform apply -input=false -auto-approve -var-file={tfvars_path}"],
                 "cwd": terraform_dir,
-                "env": {"TF_IN_AUTOMATION": "1"},
+                "env": terraform_env,
             },
             "tf-destroy": {
                 "cmd": ["bash", "-lc", f"terraform init -input=false && terraform destroy -input=false -auto-approve -var-file={tfvars_path}"],
                 "cwd": terraform_dir,
-                "env": {"TF_IN_AUTOMATION": "1"},
+                "env": terraform_env,
             },
             "tf-cf-init": {
                 "cmd": ["terraform", "init"],
                 "cwd": terraform_cf_dir,
-                "env": {"TF_IN_AUTOMATION": "1"},
+                "env": terraform_env,
             },
             "tf-cf-plan": {
                 "cmd": ["bash", "-lc", f"terraform init -input=false && terraform plan -input=false -var-file={tfvars_cf_path}"],
                 "cwd": terraform_cf_dir,
-                "env": {"TF_IN_AUTOMATION": "1"},
+                "env": terraform_env,
             },
             "tf-cf-apply": {
                 "cmd": ["bash", "-lc", f"terraform init -input=false && terraform apply -input=false -auto-approve -var-file={tfvars_cf_path}"],
                 "cwd": terraform_cf_dir,
-                "env": {"TF_IN_AUTOMATION": "1"},
+                "env": terraform_env,
             },
             "tf-cf-destroy": {
                 "cmd": ["bash", "-lc", f"terraform init -input=false && terraform destroy -input=false -auto-approve -var-file={tfvars_cf_path}"],
                 "cwd": terraform_cf_dir,
-                "env": {"TF_IN_AUTOMATION": "1"},
+                "env": terraform_env,
             },
         }
 
