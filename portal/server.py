@@ -63,6 +63,8 @@ SURICATA_RULES_MARKER = "# Managed by portal: suricata rules"
 
 FAILOVER_HOST_VARS_REL = "ansible/host_vars/onprem-1.yml"
 FAILOVER_RULES_MARKER = "# Managed by portal: failover core"
+CLOUDFLARED_RULES_MARKER = "# Managed by portal: cloudflared"
+CLOUDFLARED_DEFAULT_ORIGIN = "http://10.100.0.2:8082"
 
 def response_json(handler, status, payload):
     data = json.dumps(payload).encode("utf-8")
@@ -132,6 +134,11 @@ def escape_yaml(value):
     return f"\"{text}\""
 
 
+def indent_block(text, spaces):
+    prefix = " " * spaces
+    return "\n".join(f"{prefix}{line}" for line in text.splitlines())
+
+
 def parse_yaml_value(text, key):
     if not text:
         return ""
@@ -191,6 +198,26 @@ def read_tfvars_value(path, key):
             value = value[1:-1]
         return value
     return ""
+
+
+def parse_cloudflared_snippet(path):
+    if not path.exists():
+        return "", ""
+    hostname = ""
+    origin = ""
+    try:
+        lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError:
+        return "", ""
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith("hostname:"):
+            hostname = stripped.split(":", 1)[1].strip().strip("\"'")
+        if stripped.startswith("service:"):
+            value = stripped.split(":", 1)[1].strip().strip("\"'")
+            if value and value != "http_status:404" and not origin:
+                origin = value
+    return hostname, origin
 
 
 def terraform_output_json(terraform_dir):
@@ -346,6 +373,84 @@ def maybe_write_failover_host_vars(output_root, repo_root, inventory_text, group
     return {FAILOVER_HOST_VARS_REL: {"bytes": len(content.encode("utf-8"))}}
 
 
+def build_cloudflared_host_vars(tunnel_id, hostname, origin, credentials_json):
+    if not tunnel_id or not hostname or not credentials_json:
+        return ""
+    credentials_path = f"/etc/cloudflared/{tunnel_id}.json"
+    origin_value = origin or CLOUDFLARED_DEFAULT_ORIGIN
+    escaped_tunnel = escape_yaml(tunnel_id)
+    escaped_hostname = escape_yaml(hostname)
+    escaped_origin = escape_yaml(origin_value)
+    escaped_credentials_path = escape_yaml(credentials_path)
+    indented_creds = indent_block(credentials_json.strip() or "{}", 2)
+    return "\n".join(
+        [
+            CLOUDFLARED_RULES_MARKER,
+            "cloudflared_config_content: |",
+            f"  tunnel: {escaped_tunnel}",
+            f"  credentials-file: {escaped_credentials_path}",
+            "  ingress:",
+            f"    - hostname: {escaped_hostname}",
+            f"      service: {escaped_origin}",
+            "    - service: http_status:404",
+            f"cloudflared_credentials_path: {escaped_credentials_path}",
+            "cloudflared_credentials_content: |",
+            f"{indented_creds}",
+            "",
+        ]
+    )
+
+
+def maybe_write_cloudflared_host_vars(output_root, repo_root, inventory_text, group_vars_text):
+    if not parse_yaml_bool(group_vars_text, "cloudflared_manage"):
+        return {}
+
+    tfvars_path = output_root / "terraform-cloudflare" / "terraform.tfvars"
+    cf_outputs = terraform_output_json(repo_root / "terraform-cloudflare")
+    if not cf_outputs:
+        return {}
+
+    saved = {}
+    for group in ("vps", "ec2"):
+        if not inventory_has_group(inventory_text, group):
+            continue
+        is_vps = group == "vps"
+        tunnel_id = terraform_output_value(cf_outputs, "vps_tunnel_id" if is_vps else "ec2_tunnel_id") or ""
+        credentials_json = terraform_output_value(
+            cf_outputs,
+            "vps_tunnel_credentials_json" if is_vps else "ec2_tunnel_credentials_json",
+        ) or ""
+        hostname_key = "cf_vps_hostname" if is_vps else "cf_ec2_hostname"
+        hostname = read_tfvars_value(tfvars_path, hostname_key)
+        snippet_path = output_root / "tmp" / f"cloudflared_{group}_vault_snippet.txt"
+        snippet_hostname, snippet_origin = parse_cloudflared_snippet(snippet_path)
+        if not hostname:
+            hostname = snippet_hostname
+        origin = snippet_origin or CLOUDFLARED_DEFAULT_ORIGIN
+
+        content = build_cloudflared_host_vars(tunnel_id, hostname, origin, credentials_json)
+        if not content:
+            continue
+
+        rel_path = f"ansible/host_vars/{group}-1.yml"
+        abs_path = resolve_output_path(output_root, rel_path)
+        if not abs_path:
+            continue
+        if abs_path.exists():
+            try:
+                existing = abs_path.read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                existing = ""
+            if CLOUDFLARED_RULES_MARKER not in existing.splitlines()[:2]:
+                continue
+        abs_path.parent.mkdir(parents=True, exist_ok=True)
+        abs_path.write_text(content, encoding="utf-8")
+        os.chmod(abs_path, 0o600)
+        record_secret_path(abs_path)
+        saved[rel_path] = {"bytes": len(content.encode("utf-8"))}
+    return saved
+
+
 def load_secret_meta():
     data = read_json(SECRETS_META_PATH)
     if isinstance(data, dict) and isinstance(data.get("paths"), list):
@@ -409,6 +514,18 @@ def resolve_output_path(output_root, relative_path):
     if candidate == output_root or output_root in candidate.parents:
         return candidate
     return None
+
+
+def missing_tools_for_action(action):
+    required = []
+    if action == "validate":
+        required.append("ansible")
+    if action.startswith("ansible"):
+        required.append("ansible-playbook")
+    if action.startswith("tf-"):
+        required.append("terraform")
+    missing = [tool for tool in required if shutil.which(tool) is None]
+    return missing
 
 
 SAFE_KEY_NAME_RE = re.compile(r"^[A-Za-z0-9._-]+$")
@@ -901,6 +1018,11 @@ class PortalState:
                             log.write("\nPortal updated failover host_vars:\n")
                             for rel_path in saved:
                                 log.write(f"- {rel_path}\n")
+                        cloudflared_saved = maybe_write_cloudflared_host_vars(self.output_root, self.repo_root, inventory_text, group_vars_text)
+                        if cloudflared_saved:
+                            log.write("\nPortal updated cloudflared host_vars:\n")
+                            for rel_path in cloudflared_saved:
+                                log.write(f"- {rel_path}\n")
                     except Exception as exc:
                         log.write(f"\nPortal failed to update failover host_vars: {exc}\n")
 
@@ -1302,6 +1424,10 @@ class PortalHandler(http.server.SimpleHTTPRequestHandler):
         if failover_saved:
             saved.update(failover_saved)
 
+        cloudflared_saved = maybe_write_cloudflared_host_vars(self.state.output_root, self.state.repo_root, inventory_text, group_vars_text)
+        if cloudflared_saved:
+            saved.update(cloudflared_saved)
+
         response_json(self, 200, {"ok": True, "saved": saved})
 
     def _handle_run(self):
@@ -1351,6 +1477,14 @@ class PortalHandler(http.server.SimpleHTTPRequestHandler):
                     {'ok': False, 'error': 'terraform-cloudflare.tfvars not found. 先にファイル生成→保存してください。'},
                 )
                 return
+        missing_tools = missing_tools_for_action(action)
+        if missing_tools:
+            response_json(
+                self,
+                400,
+                {"ok": False, "error": f"Missing tools: {', '.join(missing_tools)} (必要ツールが見つかりません。インストールして再実行してください)"},
+            )
+            return
         with self.state.lock:
             if self.state.any_running():
                 response_json(self, 409, {"ok": False, "error": "Another job is running"})
@@ -1417,9 +1551,11 @@ class PortalHandler(http.server.SimpleHTTPRequestHandler):
             }
 
         tools = {
+            "ansible": shutil.which("ansible") is not None,
             "ansible-playbook": shutil.which("ansible-playbook") is not None,
             "terraform": shutil.which("terraform") is not None,
             "ssh": shutil.which("ssh") is not None,
+            "ssh-keygen": shutil.which("ssh-keygen") is not None,
             "ssh-keyscan": shutil.which("ssh-keyscan") is not None,
             "python3": shutil.which("python3") is not None,
         }

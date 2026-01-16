@@ -210,9 +210,11 @@ const statusLabels = {
     sshVps: "SSH key (VPS)",
     sshEc2: "SSH key (EC2)",
     toolAnsible: "Tool: ansible-playbook",
+    toolAnsibleCli: "Tool: ansible",
     toolTerraform: "Tool: terraform",
     toolSsh: "Tool: ssh",
     toolKeyscan: "Tool: ssh-keyscan",
+    toolKeygen: "Tool: ssh-keygen",
     toolPython: "Tool: python3",
   },
   ja: {
@@ -230,9 +232,11 @@ const statusLabels = {
     sshVps: "SSH鍵（VPS）",
     sshEc2: "SSH鍵（EC2）",
     toolAnsible: "ツール: ansible-playbook",
+    toolAnsibleCli: "ツール: ansible",
     toolTerraform: "ツール: terraform",
     toolSsh: "ツール: ssh",
     toolKeyscan: "ツール: ssh-keyscan",
+    toolKeygen: "ツール: ssh-keygen",
     toolPython: "ツール: python3",
   },
 };
@@ -385,7 +389,7 @@ function parseList(raw, asNumber) {
     return [];
   }
   const parts = raw
-    .split(",")
+    .split(/[\n\r,]+/)
     .map((item) => item.trim())
     .filter(Boolean);
   if (asNumber) {
@@ -1404,7 +1408,7 @@ function renderInputWarnings() {
   if (plan.vps && !vpsIp) {
     addWarn("VPS IP is empty.", "VPSのIPが空です。");
   }
-  if (plan.ec2 && !ec2Ip) {
+  if (plan.ec2 && !plan.terraform && !ec2Ip) {
     addWarn("EC2 IP is empty.", "EC2のIPが空です。");
   }
   if (plan.onprem && onpremIp && isPlaceholderIp(onpremIp)) {
@@ -1413,7 +1417,7 @@ function renderInputWarnings() {
   if (plan.vps && vpsIp && isPlaceholderIp(vpsIp)) {
     addWarn("VPS IP is still a sample (198.51.100.x).", "VPSのIPがサンプルのままです（198.51.100.x）。");
   }
-  if (plan.ec2 && ec2Ip && isPlaceholderIp(ec2Ip)) {
+  if (plan.ec2 && !plan.terraform && ec2Ip && isPlaceholderIp(ec2Ip)) {
     addWarn("EC2 IP is still a sample (203.0.113.x).", "EC2のIPがサンプルのままです（203.0.113.x）。");
   }
 
@@ -1510,7 +1514,10 @@ function renderInputWarnings() {
     }
   }
 
-  if (features.cloudflared) {
+  const cloudflaredAuto = plan.cloudflare && value(fields.cfManageTunnels);
+  const cloudflaredReady = !cloudflaredAuto || guidedState.tfCfApply;
+
+  if (features.cloudflared && cloudflaredReady) {
     if (plan.vps) {
       if (!value(fields.cfVpsTunnelId)) {
         addWarn("Cloudflared: VPS tunnel ID is empty.", "Cloudflared: VPSトンネルIDが空です。");
@@ -1860,6 +1867,12 @@ function renderStatus(payload) {
     tools["ansible-playbook"],
     tools["ansible-playbook"] ? labels.ok : labels.missing,
   );
+  addStatusItem(
+    list,
+    `${labels.toolAnsibleCli} (ansible)`,
+    tools.ansible,
+    tools.ansible ? labels.ok : labels.missing,
+  );
   if (plan.terraform || plan.cloudflare) {
     addStatusItem(
       list,
@@ -1879,6 +1892,12 @@ function renderStatus(payload) {
     `${labels.toolKeyscan} (ssh-keyscan)`,
     tools["ssh-keyscan"],
     tools["ssh-keyscan"] ? labels.ok : labels.missing,
+  );
+  addStatusItem(
+    list,
+    `${labels.toolKeygen} (ssh-keygen)`,
+    tools["ssh-keygen"],
+    tools["ssh-keygen"] ? labels.ok : labels.missing,
   );
   addStatusItem(
     list,
@@ -2144,7 +2163,7 @@ function applyTemplate(name) {
       features: { wireguard: true, failover: false, frr: false, suricata: true, cloudflared: false, portctl: true },
     },
     full: {
-      plan: { onprem: true, vps: true, ec2: true, cloudflared: true, portctl: true, terraform: false, cloudflare: true },
+      plan: { onprem: true, vps: true, ec2: true, cloudflared: true, portctl: true, terraform: true, cloudflare: true },
       features: { wireguard: true, failover: true, frr: true, suricata: true, cloudflared: true, portctl: true },
     },
   };
@@ -2289,6 +2308,20 @@ function updateGuidedSteps() {
       message: (labels) => guidedState.saved ? labels.saved : labels.waiting,
     },
     {
+      id: "guided_step_tf_cf",
+      statusId: "guided_status_tf_cf",
+      done: () => guidedState.tfCfApply,
+      active: () => plan.cloudflare,
+      message: (labels) => guidedState.tfCfApply ? labels.done : labels.waiting,
+    },
+    {
+      id: "guided_step_tf",
+      statusId: "guided_status_tf",
+      done: () => guidedState.tfApply,
+      active: () => plan.terraform,
+      message: (labels) => guidedState.tfApply ? labels.done : labels.waiting,
+    },
+    {
       id: "guided_step_vault_pass",
       statusId: "guided_status_vault",
       done: () => getStatusValue("vault_pass.exists", false),
@@ -2308,20 +2341,6 @@ function updateGuidedSteps() {
       done: () => guidedRequirementsMet(plan).vaultOk,
       active: () => true,
       message: (labels) => guidedRequirementsMet(plan).vaultOk ? labels.ok : labels.missing,
-    },
-    {
-      id: "guided_step_tf_cf",
-      statusId: "guided_status_tf_cf",
-      done: () => guidedState.tfCfApply,
-      active: () => plan.cloudflare,
-      message: (labels) => guidedState.tfCfApply ? labels.done : labels.waiting,
-    },
-    {
-      id: "guided_step_tf",
-      statusId: "guided_status_tf",
-      done: () => guidedState.tfApply,
-      active: () => plan.terraform,
-      message: (labels) => guidedState.tfApply ? labels.done : labels.waiting,
     },
     {
       id: "guided_step_ansible_base",
@@ -2505,12 +2524,23 @@ function applyBeginnerDefaults() {
   if (!document.body || document.body.dataset.setupMode != "beginner") {
     return;
   }
+  let changed = false;
   const suricata = document.getElementById("enable_suricata");
-  if (!suricata || suricata.dataset.manual == "true") {
-    return;
-  }
-  if (!suricata.checked) {
+  if (suricata && suricata.dataset.manual != "true" && !suricata.checked) {
     suricata.checked = true;
+    changed = true;
+  }
+  const terraform = document.getElementById("plan_terraform");
+  if (terraform && terraform.dataset.manual != "true" && !terraform.checked) {
+    terraform.checked = true;
+    changed = true;
+  }
+  const cloudflare = document.getElementById("plan_cloudflare");
+  if (cloudflare && cloudflare.dataset.manual != "true" && !cloudflare.checked) {
+    cloudflare.checked = true;
+    changed = true;
+  }
+  if (changed) {
     syncDependencies();
     generateAll();
     updateGuidedSteps();
@@ -3385,6 +3415,7 @@ planInputs.forEach((id) => {
     return;
   }
   input.addEventListener("change", () => {
+    input.dataset.manual = "true";
     if (id === "plan_cloudflared") {
       setCheckbox("enable_cloudflared", input.checked);
     }

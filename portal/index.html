@@ -267,8 +267,8 @@ chmod 600 ~/.config/edge-stack/vault_pass</code></pre>
           <span class="lang-ja">手順通り実装（ガイド付き）</span>
         </h2>
         <p class="note">
-          <span class="lang-en">Follow the steps in order. The next step unlocks only after the current step is complete.</span>
-          <span class="lang-ja">順番通りに進めます。完了したステップの次だけが解除されます。</span>
+          <span class="lang-en">Follow the steps in order. Terraform runs before Vault/SSH keys; Ansible needs Vault/keys.</span>
+          <span class="lang-ja">順番通りに進めます。Terraformは先に実行でき、AnsibleはVault/鍵が必要です。</span>
         </p>
         <div class="guided-options">
           <label class="inline">
@@ -349,73 +349,9 @@ chmod 600 ~/.config/edge-stack/vault_pass</code></pre>
             </div>
             <div id="guided_status_save" class="status" aria-live="polite"></div>
           </div>
-
-          <div class="guided-step" id="guided_step_vault_pass">
-            <div class="guided-header">
-              <span class="step-label">Step 3</span>
-              <h3>
-                <span class="lang-en">Vault password file</span>
-                <span class="lang-ja">Vaultパスワード</span>
-              </h3>
-            </div>
-            <p class="note">
-              <span class="lang-en">Create <code>~/.config/edge-stack/vault_pass</code> on the portal host.</span>
-              <span class="lang-ja">ポータルホストに <code>~/.config/edge-stack/vault_pass</code> を作成します。</span>
-            </p>
-            <div class="actions">
-              <button type="button" id="guided_check_vault">
-                <span class="lang-en">Recheck</span>
-                <span class="lang-ja">再チェック</span>
-              </button>
-            </div>
-            <div id="guided_status_vault" class="status" aria-live="polite"></div>
-          </div>
-
-          <div class="guided-step" id="guided_step_keys">
-            <div class="guided-header">
-              <span class="step-label">Step 4</span>
-              <h3>
-                <span class="lang-en">SSH keys</span>
-                <span class="lang-ja">SSH鍵</span>
-              </h3>
-            </div>
-            <p class="note">
-              <span class="lang-en">Upload or place the SSH private keys required for each host.</span>
-              <span class="lang-ja">対象ホスト分の秘密鍵を配置/アップロードします。</span>
-            </p>
-            <div class="actions">
-              <button type="button" id="guided_check_keys">
-                <span class="lang-en">Recheck</span>
-                <span class="lang-ja">再チェック</span>
-              </button>
-            </div>
-            <div id="guided_status_keys" class="status" aria-live="polite"></div>
-          </div>
-
-          <div class="guided-step" id="guided_step_vault_files">
-            <div class="guided-header">
-              <span class="step-label">Step 5</span>
-              <h3>
-                <span class="lang-en">Vault secrets (host_vars)</span>
-                <span class="lang-ja">Vault秘密情報（host_vars）</span>
-              </h3>
-            </div>
-            <p class="note">
-              <span class="lang-en">Fill the host_vars files with secrets via <code>ansible-vault edit</code>.</span>
-              <span class="lang-ja"><code>ansible-vault edit</code> でhost_varsに秘密情報を入力します。</span>
-            </p>
-            <div class="actions">
-              <button type="button" id="guided_check_vault_files">
-                <span class="lang-en">Recheck</span>
-                <span class="lang-ja">再チェック</span>
-              </button>
-            </div>
-            <div id="guided_status_vault_files" class="status" aria-live="polite"></div>
-          </div>
-
           <div class="guided-step" id="guided_step_tf_cf">
             <div class="guided-header">
-              <span class="step-label">Step 6</span>
+              <span class="step-label">Step 3</span>
               <h3>
                 <span class="lang-en">Terraform apply (Cloudflare)</span>
                 <span class="lang-ja">Terraform適用（Cloudflare）</span>
@@ -436,7 +372,7 @@ chmod 600 ~/.config/edge-stack/vault_pass</code></pre>
 
           <div class="guided-step" id="guided_step_tf">
             <div class="guided-header">
-              <span class="step-label">Step 7</span>
+              <span class="step-label">Step 4</span>
               <h3>
                 <span class="lang-en">Terraform apply (EC2)</span>
                 <span class="lang-ja">Terraform適用（EC2）</span>
@@ -453,6 +389,70 @@ chmod 600 ~/.config/edge-stack/vault_pass</code></pre>
               </button>
             </div>
             <div id="guided_status_tf" class="status" aria-live="polite"></div>
+          </div>
+
+
+          <div class="guided-step" id="guided_step_vault_pass">
+            <div class="guided-header">
+              <span class="step-label">Step 5</span>
+              <h3>
+                <span class="lang-en">Vault password file</span>
+                <span class="lang-ja">Vaultパスワード</span>
+              </h3>
+            </div>
+            <p class="note">
+              <span class="lang-en">Create <code>~/.config/edge-stack/vault_pass</code> on the portal host.</span>
+              <span class="lang-ja">ポータルホストに <code>~/.config/edge-stack/vault_pass</code> を作成します。</span>
+            </p>
+            <div class="actions">
+              <button type="button" id="guided_check_vault">
+                <span class="lang-en">Recheck</span>
+                <span class="lang-ja">再チェック</span>
+              </button>
+            </div>
+            <div id="guided_status_vault" class="status" aria-live="polite"></div>
+          </div>
+
+          <div class="guided-step" id="guided_step_keys">
+            <div class="guided-header">
+              <span class="step-label">Step 6</span>
+              <h3>
+                <span class="lang-en">SSH keys</span>
+                <span class="lang-ja">SSH鍵</span>
+              </h3>
+            </div>
+            <p class="note">
+              <span class="lang-en">Upload or place the SSH private keys required for each host.</span>
+              <span class="lang-ja">対象ホスト分の秘密鍵を配置/アップロードします。</span>
+            </p>
+            <div class="actions">
+              <button type="button" id="guided_check_keys">
+                <span class="lang-en">Recheck</span>
+                <span class="lang-ja">再チェック</span>
+              </button>
+            </div>
+            <div id="guided_status_keys" class="status" aria-live="polite"></div>
+          </div>
+
+          <div class="guided-step" id="guided_step_vault_files">
+            <div class="guided-header">
+              <span class="step-label">Step 7</span>
+              <h3>
+                <span class="lang-en">Vault secrets (host_vars)</span>
+                <span class="lang-ja">Vault秘密情報（host_vars）</span>
+              </h3>
+            </div>
+            <p class="note">
+              <span class="lang-en">Fill the host_vars files with secrets via <code>ansible-vault edit</code>.</span>
+              <span class="lang-ja"><code>ansible-vault edit</code> でhost_varsに秘密情報を入力します。</span>
+            </p>
+            <div class="actions">
+              <button type="button" id="guided_check_vault_files">
+                <span class="lang-en">Recheck</span>
+                <span class="lang-ja">再チェック</span>
+              </button>
+            </div>
+            <div id="guided_status_vault_files" class="status" aria-live="polite"></div>
           </div>
 
           <div class="guided-step" id="guided_step_ansible_base">
@@ -2008,8 +2008,8 @@ GET  /api/jobs/&lt;job_id&gt;/logs</code></pre>
                           <input id="web_portal_admin_password" type="password" value="" autocomplete="new-password" />
                         </label>
                         <label>
-                          <span class="lang-en">Allow CIDRs</span>
-                          <span class="lang-ja">許可CIDR</span>
+                          <span class="lang-en">Allow CIDRs (comma/newline)</span>
+                          <span class="lang-ja">許可CIDR（カンマ/改行区切り）</span>
                           <input
                             id="web_portal_admin_allow_cidrs"
                             type="text"
@@ -2020,8 +2020,8 @@ GET  /api/jobs/&lt;job_id&gt;/logs</code></pre>
                           />
                         </label>
                         <label class="advanced-only">
-                          <span class="lang-en">Block CIDRs</span>
-                          <span class="lang-ja">拒否CIDR</span>
+                          <span class="lang-en">Block CIDRs (comma/newline)</span>
+                          <span class="lang-ja">拒否CIDR（カンマ/改行区切り）</span>
                           <input id="web_portal_admin_deny_cidrs" type="text" value="" />
                         </label>
                       </fieldset>
@@ -2299,8 +2299,8 @@ GET  /api/jobs/&lt;job_id&gt;/logs</code></pre>
                           <span class="lang-ja">source/dest check有効（中継しない）</span>
                         </label>
                         <label class="advanced-only">
-                          <span class="lang-en">Allowed SSH CIDRs (comma)</span>
-                          <span class="lang-ja">SSH許可CIDR（カンマ区切り）</span>
+                          <span class="lang-en">Allowed SSH CIDRs (comma/newline)</span>
+                          <span class="lang-ja">SSH許可CIDR（カンマ/改行区切り）</span>
                           <input
                             id="allowed_ssh_cidrs"
                             type="text"
