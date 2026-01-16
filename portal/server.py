@@ -1504,10 +1504,31 @@ class PortalHandler(http.server.SimpleHTTPRequestHandler):
                 return
             info = self.state.allowed_actions[action]
             env = dict(info.get("env", {}))
+            if action.startswith("tf-"):
+                aws_credentials = pathlib.Path("~/.aws/credentials").expanduser()
+                aws_config = pathlib.Path("~/.aws/config").expanduser()
+                if aws_credentials.exists():
+                    env["AWS_SHARED_CREDENTIALS_FILE"] = str(aws_credentials)
+                if aws_config.exists():
+                    env["AWS_CONFIG_FILE"] = str(aws_config)
+                    env["AWS_SDK_LOAD_CONFIG"] = "1"
+                else:
+                    env.pop("AWS_CONFIG_FILE", None)
+                    env["AWS_SDK_LOAD_CONFIG"] = "0"
+                profile = read_tfvars_value(OUTPUT_TFVARS_PATH, "aws_profile")
+                if profile:
+                    env["AWS_PROFILE"] = profile
+                    env["AWS_DEFAULT_PROFILE"] = profile
             if action.startswith("tf-cf"):
                 cf_token = read_cloudflare_token()
-                if cf_token:
-                    env["CLOUDFLARE_API_TOKEN"] = cf_token
+                if not cf_token:
+                    response_json(
+                        self,
+                        400,
+                        {"ok": False, "error": "Cloudflare API token not saved. 先にトークンを保存してください。"},
+                    )
+                    return
+                env["CLOUDFLARE_API_TOKEN"] = cf_token
             job = self.state.create_job(action, info["cmd"], info["cwd"], env, cleanup)
 
         response_json(self, 200, {"ok": True, "job_id": job["id"]})
