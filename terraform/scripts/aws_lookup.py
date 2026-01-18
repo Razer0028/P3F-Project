@@ -93,6 +93,26 @@ def main():
         respond({"exists": "false", "arn": ""})
         return
 
+    if kind == "iam_access_keys":
+        cmd = ["aws", "iam", "list-access-keys", "--user-name", name, "--output", "json"]
+        code, stdout, stderr = run(cmd, env)
+        if code == 0:
+            try:
+                payload = json.loads(stdout)
+            except json.JSONDecodeError:
+                respond({"count": "0", "active": "0", "error": "invalid access key json"})
+                return
+            metadata = payload.get("AccessKeyMetadata", [])
+            count = len(metadata)
+            active = sum(1 for entry in metadata if entry.get("Status") == "Active")
+            respond({"count": count, "active": active})
+            return
+        if "NoSuchEntity" in stderr:
+            respond({"count": "0", "active": "0"})
+            return
+        respond({"count": "0", "active": "0", "error": stderr or "lookup failed"})
+        return
+
     respond({"exists": "false", "error": "unknown kind"})
 
 

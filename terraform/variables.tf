@@ -130,8 +130,8 @@ variable "key_pair_public_key" {
   description = "Public key material when creating a KeyPair"
   default     = ""
   validation {
-    condition     = var.key_pair_mode != "create" || length(trimspace(var.key_pair_public_key)) > 0
-    error_message = "Set key_pair_public_key when key_pair_mode=create."
+    condition     = !(var.key_pair_mode == "create" || var.key_pair_mode == "auto") || length(trimspace(var.key_pair_public_key)) > 0
+    error_message = "Set key_pair_public_key when key_pair_mode=create or auto."
   }
 }
 

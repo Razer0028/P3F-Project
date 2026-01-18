@@ -66,6 +66,26 @@ data "external" "failover_policy_lookup" {
   }
 }
 
+data "external" "failover_access_keys_lookup" {
+  count   = var.create_failover_iam ? 1 : 0
+  program = ["python3", "${path.module}/scripts/aws_lookup.py"]
+  query = {
+    kind    = "iam_access_keys"
+    name    = var.failover_iam_user_name
+    region  = var.aws_region
+    profile = var.aws_profile
+  }
+}
+
+resource "random_id" "key_pair_suffix" {
+  count       = var.key_pair_mode == "auto" ? 1 : 0
+  byte_length = 3
+  keepers = {
+    key_name   = var.key_name
+    public_key = var.key_pair_public_key
+  }
+}
+
 locals {
   auto_vpc_cidr           = "10.20.0.0/16"
   auto_public_subnet_cidr = "10.20.10.0/24"
@@ -80,8 +100,14 @@ locals {
     ? try(data.external.key_pair_lookup[0].result.exists, "false") == "true"
     : false
   )
-  key_pair_create = var.key_pair_mode == "create" || (var.key_pair_mode == "auto" && !local.key_pair_exists)
-  key_pair_name   = local.key_pair_create ? aws_key_pair.edge[0].key_name : var.key_name
+  key_pair_auto_suffix = (
+    var.key_pair_mode == "auto" && local.key_pair_exists
+    ? "-${random_id.key_pair_suffix[0].hex}"
+    : ""
+  )
+  key_pair_auto_name = var.key_pair_mode == "auto" ? "${var.key_name}${local.key_pair_auto_suffix}" : var.key_name
+  key_pair_create    = var.key_pair_mode == "create" || var.key_pair_mode == "auto"
+  key_pair_name      = local.key_pair_create ? aws_key_pair.edge[0].key_name : var.key_name
 
   failover_user_exists = (
     var.create_failover_iam
@@ -105,7 +131,13 @@ locals {
   )
 
   failover_access_key_provided = length(trimspace(var.failover_access_key_id)) > 0 || length(trimspace(var.failover_secret_access_key)) > 0
-  failover_access_key_create   = var.create_failover_iam && !local.failover_access_key_provided
+  failover_access_keys_count = (
+    var.create_failover_iam
+    ? try(tonumber(data.external.failover_access_keys_lookup[0].result.count), 0)
+    : 0
+  )
+  failover_access_keys_exist  = var.create_failover_iam && local.failover_access_keys_count > 0
+  failover_access_key_create  = var.create_failover_iam && !local.failover_access_key_provided && !local.failover_access_keys_exist
   failover_access_key_id_value = (
     local.failover_access_key_provided
     ? var.failover_access_key_id
@@ -220,7 +252,7 @@ resource "aws_security_group_rule" "egress_all" {
 
 resource "aws_key_pair" "edge" {
   count      = local.key_pair_create ? 1 : 0
-  key_name   = var.key_name
+  key_name   = var.key_pair_mode == "auto" ? local.key_pair_auto_name : var.key_name
   public_key = var.key_pair_public_key
 
   tags = merge(var.tags, {
@@ -230,7 +262,7 @@ resource "aws_key_pair" "edge" {
   lifecycle {
     precondition {
       condition     = length(trimspace(var.key_pair_public_key)) > 0
-      error_message = "Set key_pair_public_key when creating a KeyPair."
+      error_message = "Set key_pair_public_key when key_pair_mode=create or auto."
     }
   }
 }

@@ -854,7 +854,12 @@ class PortalState:
         inventory_path = str(self.output_root / "ansible" / "hosts.ini")
         tfvars_path = str(OUTPUT_TFVARS_PATH)
         tfvars_cf_path = str(OUTPUT_TFVARS_CF_PATH)
-        ansible_env = {"ANSIBLE_CONFIG": "./ansible.cfg", "IAC_CONFIG_DIR": str(self.output_root)}
+        ansible_env = {
+            "ANSIBLE_CONFIG": "./ansible.cfg",
+            "ANSIBLE_HOST_KEY_CHECKING": "False",
+            "ANSIBLE_SSH_COMMON_ARGS": "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR",
+            "IAC_CONFIG_DIR": str(self.output_root),
+        }
         aws_credentials = pathlib.Path("~/.aws/credentials").expanduser()
         aws_config = pathlib.Path("~/.aws/config").expanduser()
         terraform_env = {
