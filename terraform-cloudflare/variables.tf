@@ -15,7 +15,7 @@ variable "cf_zone_name" {
 variable "cf_zone_mode" {
   type        = string
   description = "Zone mode (create or existing)"
-  default     = "create"
+  default     = "existing"
   validation {
     condition     = contains(["create", "existing"], var.cf_zone_mode)
     error_message = "cf_zone_mode must be create or existing."

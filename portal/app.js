@@ -907,7 +907,7 @@ function renderCfTfvars() {
   const lines = [];
   lines.push(`cf_account_id = "${value(fields.cfAccountId) || "YOUR_ACCOUNT_ID"}"`);
   lines.push(`cf_zone_name = "${value(fields.cfZoneName) || "YOUR_DOMAIN"}"`);
-  lines.push(`cf_zone_mode = "${value(fields.cfZoneMode) || "create"}"`);
+  lines.push(`cf_zone_mode = "${value(fields.cfZoneMode) || "existing"}"`);
   lines.push(`cf_zone_plan = "${value(fields.cfZonePlan) || "free"}"`);
   lines.push(`cf_zone_type = "${value(fields.cfZoneType) || "full"}"`);
 
