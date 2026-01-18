@@ -792,7 +792,8 @@ backup_games_log: "/var/log/backup_games_rsync.log"
 }
 
 function renderTfvars() {
-  const allowedSsh = parseList(value(fields.allowedSshCidrs));
+  const allowedSshRaw = parseList(value(fields.allowedSshCidrs));
+  const allowedSsh = allowedSshRaw.length ? allowedSshRaw : ["0.0.0.0/0"];
   const portPlan = buildPortPlan();
   const allowedUdp = portPlan.allowedUdp;
   const allowedTcp = portPlan.allowedTcp;
@@ -1499,9 +1500,6 @@ function renderInputWarnings() {
     const keyPairMode = value(fields.keyPairMode) || "existing";
     if (!value(fields.awsRegion)) {
       addWarn("Terraform: AWS region is empty.", "Terraform: AWSリージョンが空です。");
-    }
-    if (parseList(value(fields.allowedSshCidrs)).length === 0) {
-      addWarn("Terraform: allowed SSH CIDRs are empty.", "Terraform: SSH許可CIDRが空です。");
     }
     if (vpcMode === "custom" && !value(fields.vpcCidr)) {
       addWarn("Terraform: VPC CIDR is empty (custom mode).", "Terraform: VPC CIDRが空です（カスタム）。");
