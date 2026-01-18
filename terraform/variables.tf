@@ -214,8 +214,4 @@ variable "failover_secret_access_key" {
   description = "Existing IAM secret access key for failover user (optional)"
   default     = ""
   sensitive   = true
-  validation {
-    condition     = (length(trimspace(var.failover_access_key_id)) == 0) == (length(trimspace(var.failover_secret_access_key)) == 0)
-    error_message = "Set both failover_access_key_id and failover_secret_access_key, or leave both empty."
-  }
 }
