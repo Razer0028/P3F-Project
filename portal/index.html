@@ -2327,6 +2327,34 @@ GET  /api/jobs/&lt;job_id&gt;/logs</code></pre>
                             data-placeholder-ja="YOUR_ADMIN_CIDR"
                           />
                         </label>
+                        <p class="note advanced-only">
+                          <span class="lang-en">If the failover IAM user already has access keys, set both fields to reuse them and skip creating a new key.</span>
+                          <span class="lang-ja">フェイルオーバー用IAMユーザーに既存のアクセスキーがある場合、両方入力すると再利用し、新規作成をスキップします。</span>
+                        </p>
+                        <label class="advanced-only">
+                          <span class="lang-en">Failover access key ID (optional)</span>
+                          <span class="lang-ja">フェイルオーバーアクセスキーID（任意）</span>
+                          <input
+                            id="failover_access_key_id"
+                            type="text"
+                            value=""
+                            placeholder="AKIA..."
+                            data-placeholder-en="AKIA..."
+                            data-placeholder-ja="AKIA..."
+                          />
+                        </label>
+                        <label class="advanced-only">
+                          <span class="lang-en">Failover secret access key (optional)</span>
+                          <span class="lang-ja">フェイルオーバーシークレット（任意）</span>
+                          <input
+                            id="failover_secret_access_key"
+                            type="password"
+                            value=""
+                            placeholder="YOUR_SECRET"
+                            data-placeholder-en="YOUR_SECRET"
+                            data-placeholder-ja="YOUR_SECRET"
+                          />
+                        </label>
                         </fieldset>
 
           </div>

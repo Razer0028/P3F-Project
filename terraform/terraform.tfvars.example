@@ -32,6 +32,8 @@ key_pair_mode = "existing" # existing, create, or auto
 create_failover_iam = true
 # failover_iam_user_name   = "edge-failover"
 # failover_iam_policy_name = "edge-failover-policy"
+# failover_access_key_id     = "AKIA..."
+# failover_secret_access_key = "YOUR_SECRET"
 
 # Replace with your admin IP range.
 allowed_ssh_cidrs = ["0.0.0.0/0"]

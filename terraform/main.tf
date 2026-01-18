@@ -103,6 +103,15 @@ locals {
     ? (local.create_failover_policy ? aws_iam_policy.failover[0].arn : local.failover_policy_existing_arn)
     : ""
   )
+
+  failover_access_key_provided = length(trimspace(var.failover_access_key_id)) > 0 || length(trimspace(var.failover_secret_access_key)) > 0
+  failover_access_key_create   = var.create_failover_iam && !local.failover_access_key_provided
+  failover_access_key_id_value = local.failover_access_key_provided
+    ? var.failover_access_key_id
+    : (var.create_failover_iam ? try(aws_iam_access_key.failover[0].id, "") : "")
+  failover_secret_access_key_value = local.failover_access_key_provided
+    ? var.failover_secret_access_key
+    : (var.create_failover_iam ? try(aws_iam_access_key.failover[0].secret, "") : "")
 }
 
 resource "aws_vpc" "edge" {
@@ -295,7 +304,7 @@ resource "aws_iam_user_policy_attachment" "failover" {
 }
 
 resource "aws_iam_access_key" "failover" {
-  count = var.create_failover_iam ? 1 : 0
+  count = local.failover_access_key_create ? 1 : 0
   user  = local.failover_user_name
 
   lifecycle {

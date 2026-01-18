@@ -198,3 +198,24 @@ variable "failover_iam_policy_name" {
   description = "IAM policy name for failover operations"
   default     = "edge-failover-policy"
 }
+
+variable "failover_access_key_id" {
+  type        = string
+  description = "Existing IAM access key ID for failover user (optional)"
+  default     = ""
+  validation {
+    condition     = (length(trimspace(var.failover_access_key_id)) == 0) == (length(trimspace(var.failover_secret_access_key)) == 0)
+    error_message = "Set both failover_access_key_id and failover_secret_access_key, or leave both empty."
+  }
+}
+
+variable "failover_secret_access_key" {
+  type        = string
+  description = "Existing IAM secret access key for failover user (optional)"
+  default     = ""
+  sensitive   = true
+  validation {
+    condition     = (length(trimspace(var.failover_access_key_id)) == 0) == (length(trimspace(var.failover_secret_access_key)) == 0)
+    error_message = "Set both failover_access_key_id and failover_secret_access_key, or leave both empty."
+  }
+}

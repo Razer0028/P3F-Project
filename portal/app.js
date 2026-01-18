@@ -86,6 +86,8 @@ const fields = {
   allowedSshCidrs: "allowed_ssh_cidrs",
   allowedUdpPorts: "allowed_udp_ports",
   allowedTcpPorts: "allowed_tcp_ports",
+  failoverAccessKeyId: "failover_access_key_id",
+  failoverSecretAccessKey: "failover_secret_access_key",
   portGameMinecraft: "port_game_minecraft",
   portGameBedrock: "port_game_bedrock",
   portGameValheim: "port_game_valheim",
@@ -921,6 +923,15 @@ function renderTfvars() {
   lines.push(
     `allowed_tcp_ports = [${allowedTcp.map((item) => String(item)).join(", ")}]`,
   );
+  const failoverAccessKeyId = value(fields.failoverAccessKeyId);
+  const failoverSecretAccessKey = value(fields.failoverSecretAccessKey);
+  if (failoverAccessKeyId && failoverSecretAccessKey) {
+    lines.push(`failover_access_key_id = "${escapeHclString(failoverAccessKeyId)}"`);
+    lines.push(`failover_secret_access_key = "${escapeHclString(failoverSecretAccessKey)}"`);
+  } else {
+    lines.push(`# failover_access_key_id = "AKIA..."`);
+    lines.push(`# failover_secret_access_key = "YOUR_SECRET"`);
+  }
   return `${lines.join("\n")}\n`;
 }
 
@@ -1461,6 +1472,15 @@ function renderInputWarnings() {
   }
   if (features.suricata && !plan.vps && !plan.ec2) {
     addWarn("Suricata requires VPS or EC2.", "SuricataにはVPSまたはEC2が必要です。");
+  }
+
+  const failoverKeyId = value(fields.failoverAccessKeyId);
+  const failoverSecret = value(fields.failoverSecretAccessKey);
+  if ((failoverKeyId && !failoverSecret) || (!failoverKeyId && failoverSecret)) {
+    addWarn(
+      "Failover access key is incomplete (set both ID and secret).",
+      "フェイルオーバーのアクセスキーが不完全です（IDとSecretを両方入力してください）。",
+    );
   }
 
   if (value(fields.ddosNotifyEnable) && (!value(fields.enableSuricata) || !plan.vps)) {

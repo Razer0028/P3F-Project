@@ -47,11 +47,11 @@ output "failover_iam_user_name" {
 }
 
 output "failover_access_key_id" {
-  value     = var.create_failover_iam ? aws_iam_access_key.failover[0].id : ""
+  value     = local.failover_access_key_id_value
   sensitive = true
 }
 
 output "failover_secret_access_key" {
-  value     = var.create_failover_iam ? aws_iam_access_key.failover[0].secret : ""
+  value     = local.failover_secret_access_key_value
   sensitive = true
 }
