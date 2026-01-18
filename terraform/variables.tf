@@ -117,11 +117,11 @@ variable "key_name" {
 
 variable "key_pair_mode" {
   type        = string
-  description = "Key pair mode (existing or create)"
+  description = "Key pair mode (existing, create, or auto)"
   default     = "existing"
   validation {
-    condition     = contains(["existing", "create"], var.key_pair_mode)
-    error_message = "key_pair_mode must be existing or create."
+    condition     = contains(["existing", "create", "auto"], var.key_pair_mode)
+    error_message = "key_pair_mode must be existing, create, or auto."
   }
 }
 

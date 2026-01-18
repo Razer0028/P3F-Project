@@ -25,7 +25,7 @@ associate_eip = true
 source_dest_check = false
 
 # KeyPair mode: use existing or create from a public key.
-key_pair_mode = "existing" # existing or create
+key_pair_mode = "existing" # existing, create, or auto
 # key_pair_public_key = "ssh-ed25519 AAAA... user@host"
 
 # Failover IAM user (auto-created for EC2 start/stop).

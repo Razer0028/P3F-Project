@@ -775,7 +775,7 @@ function renderTfvars() {
   const allowedTcp = portPlan.allowedTcp;
   const vpcMode = value(fields.vpcMode) || "auto";
   const keyPairModeRaw = value(fields.keyPairMode) || "existing";
-  const keyPairMode = keyPairModeRaw === "auto" ? "create" : keyPairModeRaw;
+  const keyPairMode = keyPairModeRaw;
   const lines = [];
   const awsRegion = value(fields.awsRegion);
   if (awsRegion) {
@@ -880,9 +880,9 @@ function renderTfvars() {
   lines.push(
     `source_dest_check = ${value(fields.sourceDestCheck) ? "true" : "false"}`,
   );
-  const tfKeyPairMode = keyPairMode === "auto" ? "create" : keyPairMode;
+  const tfKeyPairMode = keyPairMode;
   lines.push(`key_pair_mode = "${tfKeyPairMode}"`);
-  if (tfKeyPairMode === "create") {
+  if (tfKeyPairMode === "create" || tfKeyPairMode === "auto") {
     if (value(fields.keyPairPublicKey)) {
       lines.push(`key_pair_public_key = "${escapeHclString(value(fields.keyPairPublicKey))}"`);
     } else {

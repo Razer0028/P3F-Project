@@ -33,6 +33,39 @@ data "aws_ami" "selected" {
   }
 }
 
+data "external" "key_pair_lookup" {
+  count   = var.key_pair_mode == "auto" ? 1 : 0
+  program = ["python3", "${path.module}/scripts/aws_lookup.py"]
+  query = {
+    kind    = "key_pair"
+    name    = var.key_name
+    region  = var.aws_region
+    profile = var.aws_profile
+  }
+}
+
+data "external" "failover_user_lookup" {
+  count   = var.create_failover_iam ? 1 : 0
+  program = ["python3", "${path.module}/scripts/aws_lookup.py"]
+  query = {
+    kind    = "iam_user"
+    name    = var.failover_iam_user_name
+    region  = var.aws_region
+    profile = var.aws_profile
+  }
+}
+
+data "external" "failover_policy_lookup" {
+  count   = var.create_failover_iam ? 1 : 0
+  program = ["python3", "${path.module}/scripts/aws_lookup.py"]
+  query = {
+    kind    = "iam_policy"
+    name    = var.failover_iam_policy_name
+    region  = var.aws_region
+    profile = var.aws_profile
+  }
+}
+
 locals {
   auto_vpc_cidr           = "10.20.0.0/16"
   auto_public_subnet_cidr = "10.20.10.0/24"
@@ -41,6 +74,27 @@ locals {
   public_subnet_cidr = var.vpc_mode == "custom" && var.public_subnet_cidr != "" ? var.public_subnet_cidr : local.auto_public_subnet_cidr
   public_subnet_az   = var.public_subnet_az != "" ? var.public_subnet_az : data.aws_availability_zones.available.names[0]
   resolved_ami_id    = var.ami_mode == "auto" ? data.aws_ami.selected[0].id : var.ami_id
+
+  key_pair_exists = var.key_pair_mode == "auto"
+    ? try(data.external.key_pair_lookup[0].result.exists, "false") == "true"
+    : false
+  key_pair_create = var.key_pair_mode == "create" || (var.key_pair_mode == "auto" && !local.key_pair_exists)
+  key_pair_name   = local.key_pair_create ? aws_key_pair.edge[0].key_name : var.key_name
+
+  failover_user_exists = var.create_failover_iam
+    ? try(data.external.failover_user_lookup[0].result.exists, "false") == "true"
+    : false
+  create_failover_user = var.create_failover_iam && !local.failover_user_exists
+  failover_user_name   = var.create_failover_iam
+    ? (local.create_failover_user ? aws_iam_user.failover[0].name : var.failover_iam_user_name)
+    : ""
+
+  failover_policy_existing_arn = var.create_failover_iam ? try(data.external.failover_policy_lookup[0].result.arn, "") : ""
+  failover_policy_exists       = var.create_failover_iam && local.failover_policy_existing_arn != ""
+  create_failover_policy       = var.create_failover_iam && !local.failover_policy_exists
+  failover_policy_arn          = var.create_failover_iam
+    ? (local.create_failover_policy ? aws_iam_policy.failover[0].arn : local.failover_policy_existing_arn)
+    : ""
 }
 
 resource "aws_vpc" "edge" {
@@ -144,19 +198,26 @@ resource "aws_security_group_rule" "egress_all" {
 }
 
 resource "aws_key_pair" "edge" {
-  count      = var.key_pair_mode == "create" ? 1 : 0
+  count      = local.key_pair_create ? 1 : 0
   key_name   = var.key_name
   public_key = var.key_pair_public_key
 
   tags = merge(var.tags, {
     Name = "${var.instance_name}-key"
   })
+
+  lifecycle {
+    precondition {
+      condition     = length(trimspace(var.key_pair_public_key)) > 0
+      error_message = "Set key_pair_public_key when creating a KeyPair."
+    }
+  }
 }
 
 resource "aws_instance" "edge" {
   ami                         = local.resolved_ami_id
   instance_type               = var.instance_type
-  key_name                    = var.key_pair_mode == "create" ? aws_key_pair.edge[0].key_name : var.key_name
+  key_name                    = local.key_pair_name
   subnet_id                   = aws_subnet.public.id
   vpc_security_group_ids      = [aws_security_group.edge.id]
   associate_public_ip_address = true
@@ -178,7 +239,7 @@ resource "aws_eip" "edge" {
 }
 
 data "aws_iam_policy_document" "failover" {
-  count = var.create_failover_iam ? 1 : 0
+  count = local.create_failover_policy ? 1 : 0
 
   statement {
     actions   = [
@@ -198,7 +259,7 @@ data "aws_iam_policy_document" "failover" {
 }
 
 resource "aws_iam_user" "failover" {
-  count = var.create_failover_iam ? 1 : 0
+  count = local.create_failover_user ? 1 : 0
   name  = var.failover_iam_user_name
 
   tags = merge(var.tags, {
@@ -207,18 +268,32 @@ resource "aws_iam_user" "failover" {
 }
 
 resource "aws_iam_policy" "failover" {
-  count  = var.create_failover_iam ? 1 : 0
+  count  = local.create_failover_policy ? 1 : 0
   name   = var.failover_iam_policy_name
   policy = data.aws_iam_policy_document.failover[0].json
 }
 
 resource "aws_iam_user_policy_attachment" "failover" {
   count      = var.create_failover_iam ? 1 : 0
-  user       = aws_iam_user.failover[0].name
-  policy_arn = aws_iam_policy.failover[0].arn
+  user       = local.failover_user_name
+  policy_arn = local.failover_policy_arn
+
+  lifecycle {
+    precondition {
+      condition     = local.failover_user_name != "" && local.failover_policy_arn != ""
+      error_message = "Failed to resolve failover IAM user or policy."
+    }
+  }
 }
 
 resource "aws_iam_access_key" "failover" {
   count = var.create_failover_iam ? 1 : 0
-  user  = aws_iam_user.failover[0].name
+  user  = local.failover_user_name
+
+  lifecycle {
+    precondition {
+      condition     = local.failover_user_name != ""
+      error_message = "Failed to resolve failover IAM user."
+    }
+  }
 }

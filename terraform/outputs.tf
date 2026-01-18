@@ -35,7 +35,7 @@ output "route_table_id" {
 }
 
 output "key_pair_name" {
-  value = var.key_pair_mode == "create" ? aws_key_pair.edge[0].key_name : var.key_name
+  value = local.key_pair_name
 }
 
 output "elastic_ip" {
@@ -43,7 +43,7 @@ output "elastic_ip" {
 }
 
 output "failover_iam_user_name" {
-  value = var.create_failover_iam ? aws_iam_user.failover[0].name : ""
+  value = var.create_failover_iam ? local.failover_user_name : ""
 }
 
 output "failover_access_key_id" {
