@@ -34,7 +34,7 @@ create_failover_iam = true
 # failover_iam_policy_name = "edge-failover-policy"
 
 # Replace with your admin IP range.
-allowed_ssh_cidrs = ["YOUR_ADMIN_CIDR"]
+allowed_ssh_cidrs = ["0.0.0.0/0"]
 
 # WireGuard and game ports as needed.
 allowed_udp_ports = [51820]

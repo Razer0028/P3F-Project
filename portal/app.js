@@ -2140,16 +2140,7 @@ function applyAutoAllowedSshCidrs(payload) {
   if (current) {
     return;
   }
-  const lanCidrs = Array.isArray(payload.lan_cidrs) ? payload.lan_cidrs : [];
-  const unique = [];
-  lanCidrs.forEach((cidr) => {
-    if (cidr && !unique.includes(cidr)) {
-      unique.push(cidr);
-    }
-  });
-  if (unique.length) {
-    input.value = unique.join(",");
-  }
+  input.value = "0.0.0.0/0";
 }
 
 function applyTemplate(name) {

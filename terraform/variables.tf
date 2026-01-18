@@ -156,6 +156,7 @@ variable "associate_eip" {
 variable "allowed_ssh_cidrs" {
   type        = list(string)
   description = "CIDR blocks allowed for SSH"
+  default     = ["0.0.0.0/0"]
   validation {
     condition     = length(var.allowed_ssh_cidrs) > 0
     error_message = "Set allowed_ssh_cidrs to your admin IP range."
