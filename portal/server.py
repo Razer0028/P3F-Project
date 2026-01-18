@@ -454,33 +454,61 @@ def maybe_write_cloudflared_host_vars(output_root, repo_root, inventory_text, gr
 def load_secret_meta():
     data = read_json(SECRETS_META_PATH)
     if isinstance(data, dict) and isinstance(data.get("paths"), list):
-        return data
+        normalized = []
+        for entry in data["paths"]:
+            if isinstance(entry, str):
+                normalized.append({"path": entry, "persistent": False})
+            elif isinstance(entry, dict) and entry.get("path"):
+                normalized.append(
+                    {
+                        "path": entry["path"],
+                        "persistent": bool(entry.get("persistent")),
+                    }
+                )
+        return {"paths": normalized}
     return {"paths": []}
 
 
-def record_secret_path(path):
+def record_secret_path(path, persistent=False):
     if not path:
         return
     meta = load_secret_meta()
-    entry = str(path)
-    if entry not in meta["paths"]:
-        meta["paths"].append(entry)
-        SECRETS_META_PATH.parent.mkdir(parents=True, exist_ok=True)
-        write_json(SECRETS_META_PATH, meta)
+    entry_path = str(path)
+    for entry in meta["paths"]:
+        if entry.get("path") == entry_path:
+            if persistent and not entry.get("persistent"):
+                entry["persistent"] = True
+                SECRETS_META_PATH.parent.mkdir(parents=True, exist_ok=True)
+                write_json(SECRETS_META_PATH, meta)
+            return
+    meta["paths"].append({"path": entry_path, "persistent": bool(persistent)})
+    SECRETS_META_PATH.parent.mkdir(parents=True, exist_ok=True)
+    write_json(SECRETS_META_PATH, meta)
 
 
-def cleanup_secrets():
+def cleanup_secrets(include_persistent=False):
     meta = load_secret_meta()
     removed = []
+    remaining = []
     for entry in meta.get("paths", []):
-        path = pathlib.Path(entry).expanduser()
+        entry_path = entry.get("path")
+        if not entry_path:
+            continue
+        persistent = bool(entry.get("persistent"))
+        if persistent and not include_persistent:
+            remaining.append(entry)
+            continue
+        path = pathlib.Path(entry_path).expanduser()
         if path.exists():
             try:
                 path.unlink()
                 removed.append(str(path))
             except OSError:
                 pass
-    if SECRETS_META_PATH.exists():
+    if remaining:
+        SECRETS_META_PATH.parent.mkdir(parents=True, exist_ok=True)
+        write_json(SECRETS_META_PATH, {"paths": remaining})
+    elif SECRETS_META_PATH.exists():
         try:
             SECRETS_META_PATH.unlink()
         except OSError:
@@ -498,7 +526,7 @@ def write_cloudflare_token(token):
     CLOUDFLARE_TOKEN_PATH.parent.mkdir(parents=True, exist_ok=True)
     CLOUDFLARE_TOKEN_PATH.write_text(token.strip() + "\n")
     os.chmod(CLOUDFLARE_TOKEN_PATH, 0o600)
-    record_secret_path(CLOUDFLARE_TOKEN_PATH)
+    record_secret_path(CLOUDFLARE_TOKEN_PATH, persistent=True)
     return CLOUDFLARE_TOKEN_PATH
 
 
@@ -592,7 +620,7 @@ def write_aws_credentials(profile, key_id, secret_key):
     with credentials_path.open("w") as handle:
         config.write(handle)
     os.chmod(credentials_path, 0o600)
-    record_secret_path(credentials_path)
+    record_secret_path(credentials_path, persistent=True)
     return credentials_path
 
 
@@ -613,7 +641,7 @@ def write_aws_config(profile, region):
     with config_path.open("w") as handle:
         config.write(handle)
     os.chmod(config_path, 0o600)
-    record_secret_path(config_path)
+    record_secret_path(config_path, persistent=True)
     return config_path
 
 
@@ -627,7 +655,7 @@ def ensure_vault_pass():
     token = secrets.token_urlsafe(24)
     vault_path.write_text(token + "\n", encoding="utf-8")
     os.chmod(vault_path, 0o600)
-    record_secret_path(vault_path)
+    record_secret_path(vault_path, persistent=True)
     return vault_path, True
 
 
@@ -1040,7 +1068,7 @@ class PortalState:
                         log.write(f"\nPortal failed to update failover host_vars: {exc}\n")
 
                 if return_code == 0 and cleanup:
-                    removed = cleanup_secrets()
+                    removed = cleanup_secrets(include_persistent=False)
                     if removed:
                         log.write("\nCleanup removed files:\n")
                         for path in removed:
@@ -1313,7 +1341,7 @@ class PortalHandler(http.server.SimpleHTTPRequestHandler):
         if not token_ok:
             response_json(self, 403, {"ok": False, "error": message})
             return
-        removed = cleanup_secrets()
+        removed = cleanup_secrets(include_persistent=True)
         response_json(self, 200, {"ok": True, "removed": removed})
 
     def _handle_aws_credentials(self):
@@ -1594,6 +1622,24 @@ class PortalHandler(http.server.SimpleHTTPRequestHandler):
             "python3": shutil.which("python3") is not None,
         }
 
+        aws_credentials_path = pathlib.Path("~/.aws/credentials").expanduser()
+        aws_config_path = pathlib.Path("~/.aws/config").expanduser()
+        cf_token_path = CLOUDFLARE_TOKEN_PATH.expanduser()
+        secrets = {
+            "aws_credentials": {
+                "path": str(aws_credentials_path),
+                "exists": aws_credentials_path.exists(),
+            },
+            "aws_config": {
+                "path": str(aws_config_path),
+                "exists": aws_config_path.exists(),
+            },
+            "cloudflare_token": {
+                "path": str(cf_token_path),
+                "exists": cf_token_path.exists(),
+            },
+        }
+
         response_json(
             self,
             200,
@@ -1607,6 +1653,7 @@ class PortalHandler(http.server.SimpleHTTPRequestHandler):
                 "lan_cidrs": detect_lan_cidrs(),
                 "wg_ips": detect_wg_ips(),
                 "tools": tools,
+                "secrets": secrets,
             },
         )
 

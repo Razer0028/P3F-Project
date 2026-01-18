@@ -583,6 +583,26 @@ button[disabled] {
   font-size: 0.85rem;
 }
 
+.action-banner {
+  margin: 0 8vw 16px;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface-2);
+}
+
+.action-banner[data-state="ok"] {
+  border-color: var(--accent-2);
+}
+
+.action-banner[data-state="error"] {
+  border-color: var(--danger);
+}
+
+.action-banner[data-state="info"] {
+  border-color: var(--accent);
+}
+
 .status[data-state="ok"] {
   color: var(--accent-2);
 }

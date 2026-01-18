@@ -206,6 +206,9 @@ const statusLabels = {
     vaultOnprem: "Vault onprem-1.yml",
     vaultVps: "Vault vps-1.yml",
     vaultEc2: "Vault ec2-1.yml",
+    cloudflareToken: "Cloudflare token",
+    awsCredentials: "AWS credentials",
+    awsConfig: "AWS config",
     sshAnsible: "SSH key (on-prem)",
     sshVps: "SSH key (VPS)",
     sshEc2: "SSH key (EC2)",
@@ -228,6 +231,9 @@ const statusLabels = {
     vaultOnprem: "Vault onprem-1.yml",
     vaultVps: "Vault vps-1.yml",
     vaultEc2: "Vault ec2-1.yml",
+    cloudflareToken: "Cloudflareトークン",
+    awsCredentials: "AWS認証情報",
+    awsConfig: "AWS設定",
     sshAnsible: "SSH鍵（オンプレ）",
     sshVps: "SSH鍵（VPS）",
     sshEc2: "SSH鍵（EC2）",
@@ -1652,12 +1658,34 @@ function setSaveStatus(message, state) {
   status.dataset.state = state;
 }
 
+function setGenerateStatus(message, state) {
+  const status = document.getElementById("generate_status");
+  if (!status) {
+    return;
+  }
+  status.textContent = message;
+  status.dataset.state = state;
+}
+
 function setStatusMessage(message, state) {
   const status = document.getElementById("status_message");
   if (!status) {
     return;
   }
   status.textContent = message;
+  status.dataset.state = state;
+}
+
+function actionTimestamp() {
+  return new Date().toTimeString().slice(0, 8);
+}
+
+function setActionNotice(message, state) {
+  const status = document.getElementById("action_notice");
+  if (!status) {
+    return;
+  }
+  status.textContent = `[${actionTimestamp()}] ${message}`;
   status.dataset.state = state;
 }
 
@@ -1725,6 +1753,7 @@ async function saveAll() {
       return;
     }
     setSaveStatus(messages.success, "ok");
+    setActionNotice(currentLang === "ja" ? "サーバーへ保存しました。" : "Saved files to server.", "ok");
     guidedState.saved = true;
     updateGuidedSteps();
     loadStatus();
@@ -1814,6 +1843,33 @@ function renderStatus(payload) {
     vaultPass.exists,
     vaultPass.exists ? labels.ok : labels.missing,
   );
+
+  const secrets = payload.secrets || {};
+  if (plan.cloudflare) {
+    const cfToken = secrets.cloudflare_token || {};
+    addStatusItem(
+      list,
+      `${labels.cloudflareToken} (${cfToken.path || "~/.config/edge-stack/cloudflare_token"})`,
+      cfToken.exists,
+      cfToken.exists ? labels.ok : labels.missing,
+    );
+  }
+  if (plan.terraform) {
+    const awsCredentials = secrets.aws_credentials || {};
+    addStatusItem(
+      list,
+      `${labels.awsCredentials} (${awsCredentials.path || "~/.aws/credentials"})`,
+      awsCredentials.exists,
+      awsCredentials.exists ? labels.ok : labels.missing,
+    );
+    const awsConfig = secrets.aws_config || {};
+    addStatusItem(
+      list,
+      `${labels.awsConfig} (${awsConfig.path || "~/.aws/config"})`,
+      awsConfig.exists,
+      awsConfig.exists ? labels.ok : labels.missing,
+    );
+  }
 
   const vaultFiles = payload.vault_files || {};
   if (plan.onprem) {
@@ -2484,6 +2540,9 @@ async function waitForJob(jobId, token, onUpdate) {
     }
 
     if (!job || job.status !== "running") {
+      if (job) {
+        announceJobStatus(job);
+      }
       return { status: job ? job.status : "failed", log: logText };
     }
     await new Promise((resolve) => setTimeout(resolve, 2000));
@@ -2499,6 +2558,10 @@ async function runActionSequence(actions, token, confirmValue, onUpdate) {
     if (!start.ok) {
       return { ok: false, error: start.error || "Failed to start job" };
     }
+    setActionNotice(
+      currentLang === "ja" ? `ジョブ開始: ${action}` : `Started: ${action}`,
+      "info",
+    );
     const result = await waitForJob(start.jobId, token, onUpdate);
     if (result.status !== "success") {
       return { ok: false, error: `Action failed: ${action}`, log: result.log };
@@ -2658,6 +2721,38 @@ function setRunLog(text) {
   }
 }
 
+const jobNoticeCache = {};
+
+function announceJobStatus(job) {
+  if (!job || !job.id) {
+    return;
+  }
+  if (jobNoticeCache[job.id] === job.status) {
+    return;
+  }
+  jobNoticeCache[job.id] = job.status;
+  if (job.status === "running") {
+    setActionNotice(
+      currentLang === "ja" ? `実行中: ${job.action}` : `Running: ${job.action}`,
+      "info",
+    );
+    return;
+  }
+  if (job.status === "success") {
+    setActionNotice(
+      currentLang === "ja" ? `完了: ${job.action}` : `Completed: ${job.action}`,
+      "ok",
+    );
+    return;
+  }
+  if (job.status === "failed") {
+    setActionNotice(
+      currentLang === "ja" ? `失敗: ${job.action}` : `Failed: ${job.action}`,
+      "error",
+    );
+  }
+}
+
 function cleanupAutoEnabled() {
   const input = document.getElementById(fields.cleanupAuto);
   return !!(input && input.checked);
@@ -2742,6 +2837,10 @@ async function runAction(action) {
 
     const jobId = payload.job_id;
     setRunStatus(`Job started: ${jobId}`, "info");
+    setActionNotice(
+      currentLang === "ja" ? `ジョブ開始: ${action}` : `Started: ${action}`,
+      "info",
+    );
     pollJob(jobId, token);
   } catch (error) {
     setRunStatus(
@@ -2767,6 +2866,7 @@ async function pollJob(jobId, token) {
         `${job.status} (${job.action})`,
         job.status === "failed" ? "error" : "info",
       );
+      announceJobStatus(job);
     }
 
     const logResponse = await fetch(`/api/jobs/${jobId}/logs`, {
@@ -3100,6 +3200,7 @@ async function handleAwsCredentialsUpload() {
     }
     const profile = payload.profile || value(fields.awsProfile) || "default";
     setAwsCredentialsStatus(messages.success(profile), "ok");
+    setActionNotice(currentLang === "ja" ? "AWS認証情報を保存しました。" : "Saved AWS credentials.", "ok");
   } catch (error) {
     setAwsCredentialsStatus(messages.unknownError, "error");
   } finally {
@@ -3155,6 +3256,7 @@ async function handleCloudflareTokenSave() {
       return;
     }
     setCloudflareTokenStatus(messages.success, "ok");
+    setActionNotice(currentLang === "ja" ? "Cloudflareトークンを保存しました。" : "Saved Cloudflare token.", "ok");
   } catch (error) {
     setCloudflareTokenStatus(messages.unknownError, "error");
   } finally {
@@ -3259,7 +3361,15 @@ document.querySelectorAll(".template-card").forEach((card) => {
   });
 });
 
-document.getElementById("generate").addEventListener("click", generateAll);
+const generateButton = document.getElementById("generate");
+if (generateButton) {
+  generateButton.addEventListener("click", () => {
+    generateAll();
+    const message = currentLang === "ja" ? "ファイル生成が完了しました。" : "Generated files in memory.";
+    setGenerateStatus(message, "ok");
+    setActionNotice(message, "ok");
+  });
+}
 
 document.querySelectorAll(".download").forEach((button) => {
   button.addEventListener("click", () => {
@@ -3598,3 +3708,4 @@ applySetupMode(storedSetupMode || "beginner");
 setPage(defaultPage);
 setFormSection(defaultSection);
 setLanguage(storedLang || browserLang);
+setActionNotice(currentLang === "ja" ? "準備完了" : "Ready.", "info");
