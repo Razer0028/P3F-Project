@@ -1,2 +1,6 @@
 ---
 timezone: "Asia/Tokyo"
+resolvconf_bootstrap_auto: true
+resolvconf_fallback_nameservers:
+  - 1.1.1.1
+  - 8.8.8.8
