@@ -577,6 +577,18 @@ function indentBlock(value, indent) {
     .join("\n");
 }
 
+function isLocalOnpremHost(onpremIp) {
+  const ip = (onpremIp || "").trim();
+  if (!ip) {
+    return false;
+  }
+  if (ip === "localhost" || ip === "127.0.0.1" || ip === "::1") {
+    return true;
+  }
+  const host = window.location && window.location.hostname ? window.location.hostname.trim() : "";
+  return host !== "" && ip === host;
+}
+
 function renderInventory() {
   const plan = getPlanOptions();
   const onpremIp = value(fields.onpremIp);
@@ -591,6 +603,7 @@ function renderInventory() {
   const onpremKey = keyPath(onpremKeyName);
   const vpsKey = keyPath(vpsKeyName);
   const ec2Key = keyPath(ec2KeyName);
+  const onpremLocal = isLocalOnpremHost(onpremIp);
 
   const lines = [];
   const pushGroup = (group, hostLine, enabled) => {
@@ -607,7 +620,9 @@ function renderInventory() {
 
   pushGroup(
     "onprem",
-    `onprem-1 ansible_host=${onpremIp || "<onprem_ip>"} ansible_user=${onpremUser || "root"} ansible_ssh_private_key_file=${onpremKey || "<onprem_key>"}`,
+    onpremLocal
+      ? `onprem-1 ansible_host=${onpremIp || "127.0.0.1"} ansible_user=${onpremUser || "root"} ansible_connection=local`
+      : `onprem-1 ansible_host=${onpremIp || "<onprem_ip>"} ansible_user=${onpremUser || "root"} ansible_ssh_private_key_file=${onpremKey || "<onprem_key>"}`,
     plan.onprem && Boolean(onpremIp),
   );
   pushGroup(
@@ -1180,6 +1195,7 @@ function renderNextSteps() {
   const plan = getPlanOptions();
   const containers = enabledContainers();
   const onpremIp = value(fields.onpremIp) || "<onprem_ip>";
+  const onpremLocal = isLocalOnpremHost(value(fields.onpremIp));
   const vpsIp = value(fields.vpsIp) || "<vps_ip>";
   const ec2Ip = value(fields.ec2Ip) || "<ec2_ip>";
   const ddosPrimary = value(fields.ddosNotifyPrimaryIp);
@@ -1199,7 +1215,7 @@ function renderNextSteps() {
   const cloudflaredEc2Snippet = outputPath("tmp/cloudflared_ec2_vault_snippet.txt");
 
   const hostKeyLines = [];
-  if (plan.onprem) hostKeyLines.push(`ssh-keyscan -H ${onpremIp} >> ~/.ssh/known_hosts`);
+  if (plan.onprem && !onpremLocal) hostKeyLines.push(`ssh-keyscan -H ${onpremIp} >> ~/.ssh/known_hosts`);
   if (plan.vps) hostKeyLines.push(`ssh-keyscan -H ${vpsIp} >> ~/.ssh/known_hosts`);
   if (plan.ec2) hostKeyLines.push(`ssh-keyscan -H ${ec2Ip} >> ~/.ssh/known_hosts`);
 
@@ -2241,8 +2257,9 @@ function getStatusValue(path, fallback = null) {
 }
 
 function guidedRequirementsMet(plan) {
+  const onpremLocal = isLocalOnpremHost(value(fields.onpremIp));
   const requiredKeys = {
-    ansible: plan.onprem,
+    ansible: plan.onprem && !onpremLocal,
     vps: plan.vps,
     ec2: plan.ec2,
   };
