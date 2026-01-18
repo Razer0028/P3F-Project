@@ -3,6 +3,7 @@ frr_manage: false
 frr_require_vars: false
 frr_install_if_missing: true
 frr_update_cache: true
+frr_cache_valid_time: 0
 frr_restart_on_change: false
 frr_allow_overwrite: false
 

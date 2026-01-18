@@ -3,6 +3,7 @@ docker_manage: false
 docker_manage_service: true
 docker_install_if_missing: true
 docker_update_cache: true
+docker_cache_valid_time: 0
 docker_restart_on_change: true
 
 docker_packages:

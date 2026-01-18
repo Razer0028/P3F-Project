@@ -34,7 +34,11 @@
         name: "{{ docker_packages_to_install | default(docker_packages) }}"
         state: present
         update_cache: "{{ docker_update_cache | default(true) }}"
-        cache_valid_time: "{{ (docker_update_cache | default(true)) | ternary(3600, omit) }}"
+        cache_valid_time: "{{ (docker_update_cache | default(true)) | ternary(docker_cache_valid_time | default(0), omit) }}"
+      register: docker_install
+      retries: 3
+      delay: 10
+      until: docker_install is succeeded
       when:
         - (docker_install_if_missing | default(true) | bool)
         - docker_binary.rc != 0
