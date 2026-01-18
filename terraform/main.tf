@@ -75,26 +75,34 @@ locals {
   public_subnet_az   = var.public_subnet_az != "" ? var.public_subnet_az : data.aws_availability_zones.available.names[0]
   resolved_ami_id    = var.ami_mode == "auto" ? data.aws_ami.selected[0].id : var.ami_id
 
-  key_pair_exists = var.key_pair_mode == "auto"
+  key_pair_exists = (
+    var.key_pair_mode == "auto"
     ? try(data.external.key_pair_lookup[0].result.exists, "false") == "true"
     : false
+  )
   key_pair_create = var.key_pair_mode == "create" || (var.key_pair_mode == "auto" && !local.key_pair_exists)
   key_pair_name   = local.key_pair_create ? aws_key_pair.edge[0].key_name : var.key_name
 
-  failover_user_exists = var.create_failover_iam
+  failover_user_exists = (
+    var.create_failover_iam
     ? try(data.external.failover_user_lookup[0].result.exists, "false") == "true"
     : false
+  )
   create_failover_user = var.create_failover_iam && !local.failover_user_exists
-  failover_user_name   = var.create_failover_iam
+  failover_user_name = (
+    var.create_failover_iam
     ? (local.create_failover_user ? aws_iam_user.failover[0].name : var.failover_iam_user_name)
     : ""
+  )
 
   failover_policy_existing_arn = var.create_failover_iam ? try(data.external.failover_policy_lookup[0].result.arn, "") : ""
   failover_policy_exists       = var.create_failover_iam && local.failover_policy_existing_arn != ""
   create_failover_policy       = var.create_failover_iam && !local.failover_policy_exists
-  failover_policy_arn          = var.create_failover_iam
+  failover_policy_arn = (
+    var.create_failover_iam
     ? (local.create_failover_policy ? aws_iam_policy.failover[0].arn : local.failover_policy_existing_arn)
     : ""
+  )
 }
 
 resource "aws_vpc" "edge" {
