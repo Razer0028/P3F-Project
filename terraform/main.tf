@@ -106,12 +106,16 @@ locals {
 
   failover_access_key_provided = length(trimspace(var.failover_access_key_id)) > 0 || length(trimspace(var.failover_secret_access_key)) > 0
   failover_access_key_create   = var.create_failover_iam && !local.failover_access_key_provided
-  failover_access_key_id_value = local.failover_access_key_provided
+  failover_access_key_id_value = (
+    local.failover_access_key_provided
     ? var.failover_access_key_id
     : (var.create_failover_iam ? try(aws_iam_access_key.failover[0].id, "") : "")
-  failover_secret_access_key_value = local.failover_access_key_provided
+  )
+  failover_secret_access_key_value = (
+    local.failover_access_key_provided
     ? var.failover_secret_access_key
     : (var.create_failover_iam ? try(aws_iam_access_key.failover[0].secret, "") : "")
+  )
 }
 
 resource "aws_vpc" "edge" {
