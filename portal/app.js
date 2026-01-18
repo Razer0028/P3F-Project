@@ -713,6 +713,8 @@ function renderGroupVars() {
     ? `containers_enabled:\n${containers.map((item) => "  - " + item).join("\n")}`
     : "containers_enabled: []";
   const adminEnable = "true";
+  const adminUser = value(fields.webPortalAdminUser) || "";
+  const adminPassword = value(fields.webPortalAdminPassword) || "";
   const discordWebhook = value(fields.discordWebhook);
   const adminAllow = parseList(value(fields.webPortalAdminAllowCidrs));
   const adminDeny = parseList(value(fields.webPortalAdminDenyCidrs));
@@ -740,6 +742,8 @@ ${containersBlock}
 
 # Web portal admin
 web_portal_admin_enable: ${adminEnable}
+web_portal_admin_user: "${escapeYamlString(adminUser)}"
+web_portal_admin_password: "${escapeYamlString(adminPassword)}"
 ${adminAllowBlock}
 ${adminDenyBlock}
 web_portal_discord_webhook: "${escapeYamlString(discordWebhook)}"
