@@ -1709,6 +1709,44 @@ function setActionNotice(message, state) {
   status.dataset.state = state;
 }
 
+async function fetchTerraformOutputs(stack) {
+  const token = tokenValue();
+  if (!token) {
+    return null;
+  }
+  const response = await fetch(`/api/terraform-output?stack=${encodeURIComponent(stack || "ec2")}`, {
+    headers: { "X-Portal-Token": token },
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok || !payload.ok) {
+    return null;
+  }
+  return payload.outputs || null;
+}
+
+async function refreshEc2IpFromTerraform(force = false) {
+  const ec2Input = document.getElementById(fields.ec2Ip);
+  if (!ec2Input) {
+    return false;
+  }
+  if (!force && ec2Input.dataset.manual === "true") {
+    return false;
+  }
+  const outputs = await fetchTerraformOutputs("ec2");
+  if (!outputs) {
+    return false;
+  }
+  const ip = outputs.elastic_ip || outputs.public_ip || "";
+  if (!ip) {
+    return false;
+  }
+  ec2Input.value = ip;
+  ec2Input.dataset.manual = "auto";
+  generateAll();
+  setActionNotice(currentLang === "ja" ? "EC2 IPを自動反映しました。" : "Auto-filled EC2 IP.", "ok");
+  return true;
+}
+
 async function saveAll() {
   const messages = saveMessages[currentLang] || saveMessages.en;
   const token = tokenValue();
@@ -2041,6 +2079,12 @@ async function loadStatus() {
     renderStatus(payload);
     setStatusMessage(messages.ready, "ok");
     updateGuidedSteps();
+    if (document.body && document.body.dataset.setupMode === "beginner") {
+      const ec2Ip = value(fields.ec2Ip);
+      if (!ec2Ip) {
+        refreshEc2IpFromTerraform(false);
+      }
+    }
   } catch (error) {
     setStatusMessage(messages.error, "error");
   }
@@ -2995,6 +3039,9 @@ async function runGuidedTerraform() {
   });
   if (result.ok) {
     guidedState.tfApply = true;
+    if (document.body && document.body.dataset.setupMode === "beginner") {
+      await refreshEc2IpFromTerraform(false);
+    }
     updateGuidedSteps();
   }
 }
@@ -3670,6 +3717,12 @@ if (adminAllowInput) {
   });
 }
 
+const ec2IpInput = document.getElementById("ec2_ip");
+if (ec2IpInput) {
+  ec2IpInput.addEventListener("input", () => {
+    ec2IpInput.dataset.manual = "true";
+  });
+}
 
 const allowedSshInput = document.getElementById("allowed_ssh_cidrs");
 if (allowedSshInput) {

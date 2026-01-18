@@ -1143,6 +1143,9 @@ class PortalHandler(http.server.SimpleHTTPRequestHandler):
         response_json(self, 404, {"ok": False, "error": "Not found"})
 
     def do_GET(self):
+        if self.path.startswith("/api/terraform-output"):
+            self._handle_terraform_output()
+            return
         if self.path.startswith("/api/status"):
             self._handle_status()
             return
@@ -1654,6 +1657,52 @@ class PortalHandler(http.server.SimpleHTTPRequestHandler):
                 "wg_ips": detect_wg_ips(),
                 "tools": tools,
                 "secrets": secrets,
+            },
+        )
+
+    def _handle_terraform_output(self):
+        token_ok, message = self._check_token()
+        if not token_ok:
+            response_json(self, 403, {"ok": False, "error": message})
+            return
+
+        parsed = urlparse(self.path)
+        params = parse_qs(parsed.query)
+        stack = (params.get("stack", ["ec2"])[0] or "ec2").strip().lower()
+        if stack not in {"ec2", "cloudflare"}:
+            response_json(self, 400, {"ok": False, "error": "Invalid stack"})
+            return
+
+        if stack == "cloudflare":
+            tf_dir = self.state.repo_root / "terraform-cloudflare"
+            outputs = terraform_output_json(tf_dir)
+            response_json(
+                self,
+                200,
+                {
+                    "ok": True,
+                    "stack": "cloudflare",
+                    "outputs": {
+                        "zone_id": terraform_output_value(outputs, "zone_id") or "",
+                        "zone_name": terraform_output_value(outputs, "zone_name") or "",
+                    },
+                },
+            )
+            return
+
+        tf_dir = self.state.repo_root / "terraform"
+        outputs = terraform_output_json(tf_dir)
+        response_json(
+            self,
+            200,
+            {
+                "ok": True,
+                "stack": "ec2",
+                "outputs": {
+                    "public_ip": terraform_output_value(outputs, "public_ip") or "",
+                    "elastic_ip": terraform_output_value(outputs, "elastic_ip") or "",
+                    "instance_id": terraform_output_value(outputs, "instance_id") or "",
+                },
             },
         )
 
