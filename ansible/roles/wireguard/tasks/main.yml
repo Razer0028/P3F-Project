@@ -100,4 +100,5 @@
       systemd:
         name: "wg-quick@{{ wireguard_primary }}"
         enabled: true
+        state: started
       when: wireguard_enable_on_boot | default(false) and wireguard_primary is defined
