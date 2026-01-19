@@ -2,6 +2,7 @@
 # ansible-vault edit ~/.config/edge-stack/ansible/host_vars/vps-1.yml
 
 # WireGuard
+base_disable_apparmor: true
 wireguard_raw_configs:
   - name: "wg0"
     content: |
@@ -28,6 +29,7 @@ frr_bfd_interface: wg0
 portctl_manage: true
 portctl_manage_service: true
 portctl_apply_rules: true
+portctl_ufw_before_rules_manage: true
 portctl_ufw_rules:
   - "allow in on wg0 to any port 3784 proto udp"
   - "allow in on wg0 to any port 3785 proto udp"

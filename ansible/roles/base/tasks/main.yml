@@ -148,3 +148,56 @@
   when:
     - sysctl_forward_manage | default(false)
     - sysctl_forward_ipv6 is defined
+
+- name: Ensure ufw is installed (optional)
+  apt:
+    name: ufw
+    state: present
+    update_cache: "{{ base_update_cache | default(true) }}"
+    cache_valid_time: "{{ (base_update_cache | default(true)) | ternary(3600, omit) }}"
+  when: base_ufw_before_rules_manage | default(false)
+
+- name: Check ufw before.rules
+  stat:
+    path: /etc/ufw/before.rules
+  register: base_ufw_before_rules_stat
+
+- name: Deploy ufw before.rules when missing
+  template:
+    src: ufw-before.rules.j2
+    dest: /etc/ufw/before.rules
+    owner: root
+    group: root
+    mode: "0644"
+    force: "{{ base_ufw_before_rules_allow_overwrite | default(false) }}"
+    backup: "{{ base_ufw_before_rules_allow_overwrite | default(false) }}"
+  register: base_ufw_before_rules
+  when:
+    - base_ufw_before_rules_manage | default(false)
+    - (not base_ufw_before_rules_stat.stat.exists) or (base_ufw_before_rules_allow_overwrite | default(false))
+
+- name: Reload ufw after before.rules change
+  command: ufw reload
+  when:
+    - base_ufw_before_rules is defined
+    - base_ufw_before_rules.changed
+  changed_when: true
+  failed_when: false
+
+- name: Check apparmor unit
+  command: systemctl list-unit-files apparmor.service --no-pager --no-legend
+  register: apparmor_unit
+  changed_when: false
+  failed_when: false
+  when: base_disable_apparmor | default(false)
+
+- name: Disable apparmor service
+  systemd:
+    name: apparmor
+    enabled: false
+    state: stopped
+    masked: true
+  when:
+    - base_disable_apparmor | default(false)
+    - apparmor_unit is defined
+    - "'apparmor.service' in apparmor_unit.stdout"

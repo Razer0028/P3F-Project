@@ -6,6 +6,8 @@ portctl_update_cache: true
 portctl_allow_overwrite: false
 portctl_restart_on_change: true
 portctl_apply_rules: true
+portctl_ufw_before_rules_manage: true
+portctl_ufw_before_rules_allow_overwrite: false
 
 portctl_packages:
   - python3

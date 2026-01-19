@@ -64,6 +64,7 @@ SURICATA_RULES_MARKER = "# Managed by portal: suricata rules"
 FAILOVER_HOST_VARS_REL = "ansible/host_vars/onprem-1.yml"
 FAILOVER_RULES_MARKER = "# Managed by portal: failover core"
 CLOUDFLARED_RULES_MARKER = "# Managed by portal: cloudflared"
+CLOUDFLARED_RULES_END_MARKER = "# End managed by portal: cloudflared"
 CLOUDFLARED_DEFAULT_ORIGIN = "http://10.100.0.2:8082"
 AUTO_IMPORT_MARKER = "# Managed by portal: auto-import"
 AUTO_IMPORT_ENV = os.environ.get("PORTAL_AUTO_IMPORT", "true").strip().lower()
@@ -688,6 +689,13 @@ def maybe_write_auto_host_vars_simple(output_root, inventory_text, group_vars_te
     for host_name in host_groups:
         host_sections[host_name] = []
 
+    host_sections["vps-1"].append("base_disable_apparmor: true")
+    host_sections["ec2-1"].append("base_disable_apparmor: true")
+    host_sections["vps-1"].append("base_ufw_before_rules_manage: true")
+    host_sections["ec2-1"].append("base_ufw_before_rules_manage: true")
+    host_sections["vps-1"].append("portctl_ufw_before_rules_manage: true")
+    host_sections["ec2-1"].append("portctl_ufw_before_rules_manage: true")
+
     if wireguard_enabled:
         dest_ip = parse_yaml_value(group_vars_text, "portctl_default_dest_ip")
         client_allowed, client_error = normalize_client_allowed_ip(dest_ip)
@@ -930,8 +938,11 @@ def build_cloudflared_host_vars(tunnel_id, hostname, origin, credentials_json):
             CLOUDFLARED_RULES_MARKER,
             "cloudflared_manage: true",
             "cloudflared_install_if_missing: true",
+            "cloudflared_require_vars: true",
             "cloudflared_manage_service: true",
             "cloudflared_restart_on_change: true",
+            "cloudflared_allow_overwrite: true",
+            "cloudflared_enable_service: true",
             "cloudflared_config_content: |",
             f"  tunnel: {escaped_tunnel}",
             f"  credentials-file: {escaped_credentials_path}",
@@ -942,9 +953,22 @@ def build_cloudflared_host_vars(tunnel_id, hostname, origin, credentials_json):
             f"cloudflared_credentials_path: {escaped_credentials_path}",
             "cloudflared_credentials_content: |",
             f"{indented_creds}",
+            CLOUDFLARED_RULES_END_MARKER,
             "",
         ]
     )
+
+
+def upsert_cloudflared_block(existing_text, new_block):
+    if CLOUDFLARED_RULES_MARKER not in existing_text:
+        return (existing_text.rstrip() + "\n\n" + new_block).strip() + "\n"
+    start = existing_text.find(CLOUDFLARED_RULES_MARKER)
+    end_marker = CLOUDFLARED_RULES_END_MARKER
+    end = existing_text.find(end_marker, start)
+    if end != -1:
+        end += len(end_marker)
+        return (existing_text[:start].rstrip() + "\n" + new_block + existing_text[end:].lstrip()).rstrip() + "\n"
+    return (existing_text[:start].rstrip() + "\n" + new_block).rstrip() + "\n"
 
 
 def maybe_write_cloudflared_host_vars(output_root, repo_root, inventory_text, group_vars_text):
@@ -987,8 +1011,7 @@ def maybe_write_cloudflared_host_vars(output_root, repo_root, inventory_text, gr
                 existing = abs_path.read_text(encoding="utf-8", errors="replace")
             except OSError:
                 existing = ""
-            if CLOUDFLARED_RULES_MARKER not in existing.splitlines()[:2]:
-                continue
+            content = upsert_cloudflared_block(existing, content)
         abs_path.parent.mkdir(parents=True, exist_ok=True)
         abs_path.write_text(content, encoding="utf-8")
         os.chmod(abs_path, 0o600)

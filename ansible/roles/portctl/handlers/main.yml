@@ -16,3 +16,9 @@
     name: "{{ portctl_web_local_service_name }}"
     state: restarted
   when: portctl_manage_service | default(false) and portctl_restart_on_change | default(false) and portctl_enable_web_local | default(true)
+
+- name: Reload ufw
+  command: ufw reload
+  register: ufw_reload
+  changed_when: ufw_reload.rc == 0
+  failed_when: false

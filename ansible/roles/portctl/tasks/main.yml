@@ -94,6 +94,25 @@
         cache_valid_time: "{{ (portctl_update_cache | default(true)) | ternary(3600, omit) }}"
       when: portctl_install_if_missing | default(true)
 
+    - name: Check UFW before.rules
+      stat:
+        path: /etc/ufw/before.rules
+      register: portctl_ufw_before_rules_stat
+
+    - name: Deploy UFW before.rules when missing
+      template:
+        src: before.rules.j2
+        dest: /etc/ufw/before.rules
+        owner: root
+        group: root
+        mode: "0644"
+        force: "{{ portctl_ufw_before_rules_allow_overwrite | default(false) }}"
+        backup: "{{ portctl_ufw_before_rules_allow_overwrite | default(false) }}"
+      when:
+        - portctl_ufw_before_rules_manage | default(true)
+        - (not portctl_ufw_before_rules_stat.stat.exists) or (portctl_ufw_before_rules_allow_overwrite | default(false))
+      notify: Reload ufw
+
     - name: Ensure portctl directories
       file:
         path: "{{ item }}"

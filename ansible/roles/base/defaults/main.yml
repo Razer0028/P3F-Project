@@ -4,3 +4,6 @@ resolvconf_bootstrap_auto: true
 resolvconf_fallback_nameservers:
   - 1.1.1.1
   - 8.8.8.8
+base_disable_apparmor: false
+base_ufw_before_rules_manage: false
+base_ufw_before_rules_allow_overwrite: false

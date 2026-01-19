@@ -1,5 +1,7 @@
 ---
 role_vps: true
+base_disable_apparmor: true
+base_ufw_before_rules_manage: true
 wireguard_manage: true
 wireguard_update_cache: false
 base_update_cache: false
