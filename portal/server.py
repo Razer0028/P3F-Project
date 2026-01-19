@@ -928,6 +928,10 @@ def build_cloudflared_host_vars(tunnel_id, hostname, origin, credentials_json):
     return "\n".join(
         [
             CLOUDFLARED_RULES_MARKER,
+            "cloudflared_manage: true",
+            "cloudflared_install_if_missing: true",
+            "cloudflared_manage_service: true",
+            "cloudflared_restart_on_change: true",
             "cloudflared_config_content: |",
             f"  tunnel: {escaped_tunnel}",
             f"  credentials-file: {escaped_credentials_path}",
