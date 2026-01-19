@@ -168,6 +168,7 @@ const saveMessages = {
     emptyOutput: "Generate files before saving.",
     saving: "Saving files to server...",
     success: "Saved to server.",
+    savedCount: (count) => `${count} file(s) saved.`,
     imported: (count) => `Auto-imported ${count} host vars.`,
     importError: (count) => `Auto-import completed with ${count} error(s).`,
     error: (detail) => `Save failed: ${detail}`,
@@ -180,6 +181,7 @@ const saveMessages = {
     emptyOutput: "先にファイル生成を実行してください。",
     saving: "サーバーへ保存中...",
     success: "サーバーに保存しました。",
+    savedCount: (count) => `${count} 件のファイルを保存しました。`,
     imported: (count) => `自動取り込み: ${count} 件のhost_varsを生成しました。`,
     importError: (count) => `自動取り込みで ${count} 件のエラーがあります。`,
     error: (detail) => `保存失敗: ${detail}`,
@@ -466,7 +468,14 @@ function parseForwardRules(raw, destIp) {
 function resolveAutoPortForwardDestIp() {
   const status = lastStatusPayload || {};
   const wgIps = status.wg_ips || {};
-  return wgIps.wg0 || "";
+  if (wgIps.wg0) {
+    return wgIps.wg0;
+  }
+  const setupMode = document.body && document.body.dataset.setupMode;
+  if (setupMode === "beginner") {
+    return "10.0.0.2";
+  }
+  return "";
 }
 
 function buildPortPlan() {
@@ -684,6 +693,8 @@ function getFeatureFlags() {
 }
 
 function renderGroupVars() {
+  const setupMode = (document.body && document.body.dataset.setupMode) || "custom";
+  const simpleMode = setupMode === "beginner";
   const backupFull = value(fields.backupFullEnabled) ? "true" : "false";
   const backupGames = value(fields.backupGamesEnabled) ? "true" : "false";
   const backupsManage = (backupFull === "true" || backupGames === "true") ? "true" : "false";
@@ -694,6 +705,7 @@ function renderGroupVars() {
   const containersManageUser = value(fields.containersManageUser) ? "true" : "false";
   const wireguardManage = value(fields.enableWireguard) ? "true" : "false";
   const failoverManage = value(fields.enableFailover) ? "true" : "false";
+  const failoverActive = simpleMode ? "false" : failoverManage;
   const frrManage = value(fields.enableFrr) ? "true" : "false";
   const suricataManage = value(fields.enableSuricata) ? "true" : "false";
   const cloudflaredManage = value(fields.enableCloudflared) ? "true" : "false";
@@ -759,14 +771,14 @@ sysctl_forward_manage: ${sysctlForwardManage}
 
 # WireGuard
 wireguard_manage: ${wireguardManage}
-wireguard_enable_on_boot: false
-wireguard_restart_on_change: false
-wireguard_allow_overwrite: false
+wireguard_enable_on_boot: ${simpleMode ? "true" : "false"}
+wireguard_restart_on_change: ${simpleMode ? "true" : "false"}
+wireguard_allow_overwrite: ${simpleMode ? "true" : "false"}
 
 # Failover core
-failover_core_manage: ${failoverManage}
-failover_core_enable: ${failoverManage}
-failover_core_state: ${failoverManage === "true" ? "started" : "stopped"}
+failover_core_manage: ${failoverActive}
+failover_core_enable: ${failoverActive}
+failover_core_state: ${failoverActive === "true" ? "started" : "stopped"}
 
 # FRR
 frr_manage: ${frrManage}
@@ -1834,6 +1846,10 @@ async function saveAll() {
     setSaveStatus(messages.success, "ok");
     let notice = messages.success;
     let noticeState = "ok";
+    const savedCount = result.saved ? Object.keys(result.saved).length : 0;
+    if (savedCount > 0) {
+      notice += ` ${messages.savedCount(savedCount)}`;
+    }
     const importedCount = result.imported ? Object.keys(result.imported).length : 0;
     const importErrorCount = result.import_errors ? Object.keys(result.import_errors).length : 0;
     if (importedCount > 0) {
@@ -2273,6 +2289,10 @@ function applyAutoPortForwardDestIp(payload) {
   const wg0 = wgIps.wg0;
   if (wg0) {
     input.value = wg0;
+    return;
+  }
+  if (document.body && document.body.dataset.setupMode === "beginner") {
+    input.value = "10.0.0.2";
   }
 }
 
@@ -3464,7 +3484,9 @@ const generateButton = document.getElementById("generate");
 if (generateButton) {
   generateButton.addEventListener("click", () => {
     generateAll();
-    const message = currentLang === "ja" ? "ファイル生成が完了しました。" : "Generated files in memory.";
+    const message = currentLang === "ja"
+      ? "ファイル生成が完了しました（未保存）。次に「サーバーへ保存」を実行してください。"
+      : "Generated files in memory (not saved). Run Save to write to server.";
     setGenerateStatus(message, "ok");
     setActionNotice(message, "ok");
   });

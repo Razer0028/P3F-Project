@@ -68,6 +68,12 @@ CLOUDFLARED_DEFAULT_ORIGIN = "http://10.100.0.2:8082"
 AUTO_IMPORT_MARKER = "# Managed by portal: auto-import"
 AUTO_IMPORT_ENV = os.environ.get("PORTAL_AUTO_IMPORT", "true").strip().lower()
 AUTO_IMPORT_ENABLED = AUTO_IMPORT_ENV not in {"0", "false", "no", "off"}
+WG_DEFAULT_CIDR = "10.0.0.0/24"
+WG_ONPREM_ADDRESS = "10.0.0.2/24"
+WG_EDGE_ADDRESS = "10.0.0.1/24"
+WG_LISTEN_PORT = 51820
+WG_ALLOWED_IPS = "0.0.0.0/0"
+WG_KEEPALIVE = 25
 
 def response_json(handler, status, payload):
     data = json.dumps(payload).encode("utf-8")
@@ -279,14 +285,85 @@ def read_local_file(path):
 def sanitize_wg_content(content):
     return normalize_text(content).rstrip("\n")
 
+def generate_wg_keypair():
+    if shutil.which("wg") is None:
+        return "", "", "wg command not found"
+    try:
+        private_key = subprocess.check_output(["wg", "genkey"], text=True).strip()
+        public_key = subprocess.check_output(["wg", "pubkey"], input=private_key + "\n", text=True).strip()
+        if not private_key or not public_key:
+            return "", "", "wg returned empty key"
+        return private_key, public_key, ""
+    except Exception as exc:
+        return "", "", str(exc)
 
-def build_wireguard_block(configs, primary):
+
+def build_wg_config(address, private_key, peer_public_key, endpoint=None, keepalive=None):
+    lines = [
+        "[Interface]",
+        f"Address = {address}",
+        f"ListenPort = {WG_LISTEN_PORT}",
+        f"PrivateKey = {private_key}",
+        "",
+        "[Peer]",
+        f"PublicKey = {peer_public_key}",
+        f"AllowedIPs = {WG_ALLOWED_IPS}",
+    ]
+    if endpoint:
+        lines.append(f"Endpoint = {endpoint}")
+    if keepalive:
+        lines.append(f"PersistentKeepalive = {keepalive}")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def build_simple_wireguard_configs(inventory_text):
+    errors = {}
+    vps_ip = parse_inventory_group_ip(inventory_text, "vps")
+    ec2_ip = parse_inventory_group_ip(inventory_text, "ec2")
+
+    onprem_wg0_priv, onprem_wg0_pub, err = generate_wg_keypair()
+    if err:
+        errors["wireguard_onprem_wg0"] = err
+    onprem_wg1_priv, onprem_wg1_pub, err = generate_wg_keypair()
+    if err:
+        errors["wireguard_onprem_wg1"] = err
+    vps_priv, vps_pub, err = generate_wg_keypair()
+    if err:
+        errors["wireguard_vps_wg0"] = err
+    ec2_priv, ec2_pub, err = generate_wg_keypair()
+    if err:
+        errors["wireguard_ec2_wg1"] = err
+
+    if errors:
+        return {}, errors
+
+    vps_endpoint = f"{vps_ip}:{WG_LISTEN_PORT}" if vps_ip else ""
+    ec2_endpoint = f"{ec2_ip}:{WG_LISTEN_PORT}" if ec2_ip else ""
+
+    onprem_wg0 = build_wg_config(WG_ONPREM_ADDRESS, onprem_wg0_priv, vps_pub, vps_endpoint, WG_KEEPALIVE)
+    onprem_wg1 = build_wg_config(WG_ONPREM_ADDRESS, onprem_wg1_priv, ec2_pub, ec2_endpoint, WG_KEEPALIVE)
+    vps_wg0 = build_wg_config(WG_EDGE_ADDRESS, vps_priv, onprem_wg0_pub)
+    ec2_wg1 = build_wg_config(WG_EDGE_ADDRESS, ec2_priv, onprem_wg1_pub)
+
+    return {
+        "onprem-1": [
+            {"name": "wg0", "content": onprem_wg0},
+            {"name": "wg1", "content": onprem_wg1},
+        ],
+        "vps-1": [{"name": "wg0", "content": vps_wg0}],
+        "ec2-1": [{"name": "wg1", "content": ec2_wg1}],
+    }, {}
+
+
+def build_wireguard_block(configs, primary, allow_overwrite=True, enable_on_boot=True, restart_on_change=True):
     if not configs:
         return ""
     lines = [
         "wireguard_manage: true",
-        "wireguard_allow_overwrite: true",
-        "wireguard_enable_on_boot: true",
+        f"wireguard_allow_overwrite: {str(bool(allow_overwrite)).lower()}",
+        f"wireguard_enable_on_boot: {str(bool(enable_on_boot)).lower()}",
+        f"wireguard_restart_on_change: {str(bool(restart_on_change)).lower()}",
     ]
     if primary:
         lines.append(f"wireguard_primary: \"{primary}\"")
@@ -475,6 +552,18 @@ def build_portctl_block(ufw_rules, forward_rules, default_dest_ip):
     return "\n".join(lines)
 
 
+def extract_vault_yaml(text):
+    if not text:
+        return ""
+    lines = []
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        lines.append(line.rstrip())
+    return "\n".join(lines).strip()
+
+
 def write_host_vars(output_root, host, content):
     if not content:
         return {}
@@ -498,123 +587,49 @@ def write_host_vars(output_root, host, content):
 
 
 def maybe_write_auto_host_vars(output_root, inventory_text, group_vars_text, secrets, setup_mode):
-    if not AUTO_IMPORT_ENABLED or setup_mode != "beginner":
+    if not AUTO_IMPORT_ENABLED:
         return {}, {}
-    wireguard_enabled = parse_yaml_bool(group_vars_text, "wireguard_manage")
-    suricata_enabled = parse_yaml_bool(group_vars_text, "suricata_manage")
-    frr_enabled = parse_yaml_bool(group_vars_text, "frr_manage")
-    portctl_enabled = parse_yaml_bool(group_vars_text, "portctl_manage")
-    if not (wireguard_enabled or suricata_enabled or frr_enabled or portctl_enabled):
-        return {}, {}
+    if setup_mode == "beginner":
+        return maybe_write_auto_host_vars_simple(output_root, inventory_text, group_vars_text)
+    return {}, {}
 
+
+def maybe_write_auto_host_vars_simple(output_root, inventory_text, group_vars_text):
+    wireguard_enabled = parse_yaml_bool(group_vars_text, "wireguard_manage")
     saved = {}
     errors = {}
     host_sections = {}
-    for host_name in ("onprem-1", "vps-1", "ec2-1"):
+    host_groups = {"onprem-1": "onprem", "vps-1": "vps", "ec2-1": "ec2"}
+    for host_name in host_groups:
         host_sections[host_name] = []
-    vps_info = parse_inventory_group_host(inventory_text, "vps")
-    ec2_info = parse_inventory_group_host(inventory_text, "ec2")
-
-    vps_host = vps_info.get("ansible_host") or vps_info.get("alias", "")
-    vps_user = vps_info.get("ansible_user") or "root"
-    vps_key = resolve_key_path(vps_info.get("ansible_ssh_private_key_file", ""))
-    vps_key_passphrase = (secrets or {}).get("vps_key_passphrase", "")
-    vps_sudo_password = (secrets or {}).get("vps_sudo_password", "")
-
-    ec2_host = ec2_info.get("ansible_host") or ec2_info.get("alias", "")
-    ec2_user = ec2_info.get("ansible_user") or "root"
-    ec2_key = resolve_key_path(ec2_info.get("ansible_ssh_private_key_file", ""))
-
-    if vps_key_passphrase and vps_key:
-        ok, error = ensure_key_loaded(vps_key, vps_key_passphrase)
-        if not ok:
-            errors["vps_key_passphrase"] = error
 
     if wireguard_enabled:
-        onprem_wg0, err = read_local_file("/etc/wireguard/wg0.conf")
-        if err:
-            errors["onprem_wg0"] = err
-        onprem_wg1, err = read_local_file("/etc/wireguard/wg1.conf")
-        if err:
-            errors["onprem_wg1"] = err
+        configs, wg_errors = build_simple_wireguard_configs(inventory_text)
+        errors.update(wg_errors)
+        if not wg_errors:
+            onprem_block = build_wireguard_block(configs.get("onprem-1"), "wg0", allow_overwrite=True, enable_on_boot=True)
+            if onprem_block:
+                host_sections["onprem-1"].append(onprem_block)
+            vps_block = build_wireguard_block(configs.get("vps-1"), "wg0", allow_overwrite=True, enable_on_boot=True)
+            if vps_block:
+                host_sections["vps-1"].append(vps_block)
+            ec2_block = build_wireguard_block(configs.get("ec2-1"), "wg1", allow_overwrite=True, enable_on_boot=True)
+            if ec2_block:
+                host_sections["ec2-1"].append(ec2_block)
 
-        vps_wg0, err = read_remote_file(vps_host, vps_user, vps_key, "/etc/wireguard/wg0.conf", vps_sudo_password)
-        if err:
-            errors["vps_wg0"] = err
-
-        ec2_wg1, err = read_remote_file(ec2_host, ec2_user, ec2_key, "/etc/wireguard/wg1.conf")
-        if err:
-            errors["ec2_wg1"] = err
-
-        onprem_configs = []
-        if onprem_wg0:
-            onprem_configs.append({"name": "wg0", "content": sanitize_wg_content(onprem_wg0)})
-        if onprem_wg1:
-            onprem_configs.append({"name": "wg1", "content": sanitize_wg_content(onprem_wg1)})
-        onprem_block = build_wireguard_block(onprem_configs, "wg0")
-        if onprem_block:
-            host_sections["onprem-1"].append(onprem_block)
-
-        vps_configs = []
-        if vps_wg0:
-            vps_configs.append({"name": "wg0", "content": sanitize_wg_content(vps_wg0)})
-        vps_block = build_wireguard_block(vps_configs, "wg0")
-        if vps_block:
-            host_sections["vps-1"].append(vps_block)
-
-        ec2_configs = []
-        if ec2_wg1:
-            ec2_configs.append({"name": "wg1", "content": sanitize_wg_content(ec2_wg1)})
-        ec2_block = build_wireguard_block(ec2_configs, "wg1")
-        if ec2_block:
-            host_sections["ec2-1"].append(ec2_block)
-
-    if frr_enabled:
-        onprem_frr, err = read_local_file("/etc/frr/frr.conf")
-        if err:
-            errors["onprem_frr.conf"] = err
-        onprem_daemons, err = read_local_file("/etc/frr/daemons")
-        if err:
-            errors["onprem_frr.daemons"] = err
-        onprem_frr_block = build_frr_block(onprem_frr, onprem_daemons)
-        if onprem_frr_block:
-            host_sections["onprem-1"].append(onprem_frr_block)
-
-        vps_frr, err = read_remote_file(vps_host, vps_user, vps_key, "/etc/frr/frr.conf", vps_sudo_password)
-        if err:
-            errors["vps_frr.conf"] = err
-        vps_daemons, err = read_remote_file(vps_host, vps_user, vps_key, "/etc/frr/daemons", vps_sudo_password)
-        if err:
-            errors["vps_frr.daemons"] = err
-        vps_frr_block = build_frr_block(vps_frr, vps_daemons)
-        if vps_frr_block:
-            host_sections["vps-1"].append(vps_frr_block)
-
-    if suricata_enabled:
-        ec2_yaml, err = read_remote_file(ec2_host, ec2_user, ec2_key, "/etc/suricata/suricata.yaml")
-        if err:
-            errors["ec2_suricata_yaml"] = err
-        ec2_rules, err = read_remote_file(ec2_host, ec2_user, ec2_key, "/etc/suricata/rules/custom.rules")
-        if err:
-            errors["ec2_suricata_rules"] = err
-        suricata_block = build_suricata_block(ec2_yaml, ec2_rules)
-        if suricata_block:
-            host_sections["vps-1"].append(suricata_block)
-            host_sections["ec2-1"].append(suricata_block)
-
-    if portctl_enabled:
-        vps_ufw, err = read_remote_file(vps_host, vps_user, vps_key, "/etc/ufw/user.rules", vps_sudo_password)
-        if err:
-            errors["vps_ufw"] = err
-        ufw_rules, forward_rules, default_dest = parse_ufw_rules(vps_ufw)
-        portctl_block = build_portctl_block(ufw_rules, forward_rules, default_dest)
-        if portctl_block:
-            host_sections["vps-1"].append(portctl_block)
+    ddos_path = output_root / "tmp" / "ddos_vps_vault_snippet.txt"
+    if ddos_path.exists():
+        ddos_yaml = extract_vault_yaml(ddos_path.read_text(encoding="utf-8", errors="replace"))
+        if ddos_yaml:
+            host_sections["vps-1"].append(ddos_yaml + "\n")
 
     for host, blocks in host_sections.items():
-        if not blocks:
+        group = host_groups.get(host, "")
+        if group and not inventory_has_group(inventory_text, group):
             continue
-        content = "\n".join(blocks).rstrip() + "\n"
+        content = "\n".join(blocks).rstrip()
+        if not content:
+            continue
         saved.update(write_host_vars(output_root, host, content))
 
     return saved, errors
@@ -730,8 +745,8 @@ def maybe_write_suricata_host_vars(output_root, inventory_text, group_vars_text)
 
 
 
-def maybe_write_failover_host_vars(output_root, repo_root, inventory_text, group_vars_text):
-    if not parse_yaml_bool(group_vars_text, "failover_core_manage"):
+def maybe_write_failover_host_vars(output_root, repo_root, inventory_text, group_vars_text, force=False):
+    if not force and not parse_yaml_bool(group_vars_text, "failover_core_manage"):
         return {}
     if not inventory_has_group(inventory_text, "onprem"):
         return {}
@@ -1357,6 +1372,22 @@ class PortalState:
             "-l",
             "onprem",
         ]
+        ansible_failover_core = [
+            "ansible-playbook",
+            "-i",
+            inventory_path,
+            "ansible/site.yml",
+            "-l",
+            "onprem",
+            "--tags",
+            "failover_core",
+            "-e",
+            "failover_core_manage=true",
+            "-e",
+            "failover_core_enable=true",
+            "-e",
+            "failover_core_state=started",
+        ]
         ansible_vps_check = ansible_vps + ["--check"]
         terraform_dir = self.repo_root / "terraform"
         terraform_cf_dir = self.repo_root / "terraform-cloudflare"
@@ -1399,6 +1430,11 @@ class PortalState:
             },
             "ansible-onprem": {
                 "cmd": ansible_onprem,
+                "cwd": self.repo_root,
+                "env": ansible_env,
+            },
+            "ansible-failover-core": {
+                "cmd": ansible_failover_core,
                 "cwd": self.repo_root,
                 "env": ansible_env,
             },
@@ -1943,6 +1979,19 @@ class PortalHandler(http.server.SimpleHTTPRequestHandler):
         if action not in self.state.allowed_actions:
             response_json(self, 400, {"ok": False, "error": "Action not allowed"})
             return
+
+        if action == "ansible-failover-core":
+            inventory_text = OUTPUT_INVENTORY_PATH.read_text(encoding="utf-8", errors="replace") if OUTPUT_INVENTORY_PATH.exists() else ""
+            group_vars_text = OUTPUT_GROUP_VARS_PATH.read_text(encoding="utf-8", errors="replace") if OUTPUT_GROUP_VARS_PATH.exists() else ""
+            maybe_write_failover_host_vars(self.state.output_root, self.state.repo_root, inventory_text, group_vars_text, force=True)
+            failover_path = resolve_output_path(self.state.output_root, FAILOVER_HOST_VARS_REL)
+            if not failover_path or not failover_path.exists():
+                response_json(
+                    self,
+                    400,
+                    {"ok": False, "error": "Failover host_vars not ready. Terraform outputs/Cloudflare token are missing."},
+                )
+                return
 
         if action in self.state.destructive_actions:
             if action == "tf-apply" and confirm != "APPLY":

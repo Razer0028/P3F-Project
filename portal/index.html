@@ -1215,6 +1215,22 @@ GET  /api/jobs/&lt;job_id&gt;/logs</code></pre>
               <button type="button" class="run-action" data-action="ansible-vps-check">vps check</button>
             </div>
           </div>
+          <div class="beginner-only">
+            <h3>
+              <span class="lang-en">Failover core</span>
+              <span class="lang-ja">フェイルオーバー導入</span>
+            </h3>
+            <div class="actions">
+              <button type="button" class="run-action" data-action="ansible-failover-core">
+                <span class="lang-en">install failover_core</span>
+                <span class="lang-ja">failover_core 導入</span>
+              </button>
+            </div>
+            <p class="note">
+              <span class="lang-en">Run after validation to avoid route changes during build.</span>
+              <span class="lang-ja">検証後に実行（構築中の経路変更を避けるため）。</span>
+            </p>
+          </div>
           <div>
             <h3>Validation</h3>
             <div class="actions">
@@ -1954,7 +1970,7 @@ GET  /api/jobs/&lt;job_id&gt;/logs</code></pre>
                         <label>
                           <span class="lang-en">Forward destination IP</span>
                           <span class="lang-ja">転送先IP</span>
-                          <input id="port_forward_dest_ip" type="text" value="" placeholder="e.g. 10.100.0.2" />
+                          <input id="port_forward_dest_ip" type="text" value="" placeholder="e.g. 10.0.0.2" />
                         </label>
                         <label class="advanced-only">
                           <span class="lang-en">Custom forward rules (one per line)</span>
