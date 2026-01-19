@@ -165,10 +165,80 @@ function docker_cmd($args){
 }
 
 /* dockerコンテナ状態 */
+function docker_api_list(){
+    static $cache = null;
+    if ($cache !== null) {
+        return $cache;
+    }
+    if (!function_exists('curl_init') || !is_readable('/var/run/docker.sock')) {
+        $cache = [];
+        return $cache;
+    }
+    $ch = curl_init();
+    curl_setopt_array($ch, [
+        CURLOPT_UNIX_SOCKET_PATH => '/var/run/docker.sock',
+        CURLOPT_URL => 'http://localhost/containers/json?all=1',
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT => 2,
+    ]);
+    $res = curl_exec($ch);
+    $code = curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+    curl_close($ch);
+    if ($code !== 200 || $res === false) {
+        $cache = [];
+        return $cache;
+    }
+    $data = json_decode($res, true);
+    if (!is_array($data)) {
+        $cache = [];
+        return $cache;
+    }
+    $cache = $data;
+    return $cache;
+}
+
+function docker_api_status($container, $hint = ''){
+    $items = docker_api_list();
+    foreach ($items as $item) {
+        if (!is_array($item)) {
+            continue;
+        }
+        $names = $item['Names'] ?? [];
+        if (!is_array($names)) {
+            $names = [];
+        }
+        foreach ($names as $name) {
+            $clean = ltrim((string)$name, '/');
+            if ($clean === $container || ($hint !== '' && stripos($clean, $hint) !== false)) {
+                $state = $item['State'] ?? '';
+                return [
+                    'running' => ($state === 'running'),
+                    'health' => null,
+                ];
+            }
+        }
+    }
+    return null;
+}
+
 function docker_ps_names(){
     $result = docker_cmd("ps --format '{{.Names}}'");
     if ($result['rc'] !== 0) {
-        return [];
+        $items = docker_api_list();
+        $names = [];
+        foreach ($items as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+            $itemNames = $item['Names'] ?? [];
+            if (!is_array($itemNames)) {
+                continue;
+            }
+            foreach ($itemNames as $name) {
+                $names[] = ltrim((string)$name, '/');
+            }
+        }
+        return array_values(array_unique($names));
     }
     $lines = array_filter(array_map('trim', explode("\n", $result['out'])));
     return array_values($lines);
@@ -181,6 +251,10 @@ function docker_status($container, $hint = ''){
     $health = docker_cmd("inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{end}}' $c");
 {% endraw %}
     if ($run['rc'] !== 0) {
+        $api = docker_api_status($container, $hint);
+        if ($api !== null) {
+            return $api;
+        }
         $names = docker_ps_names();
         foreach ($names as $name) {
             if ($name === $container) {
