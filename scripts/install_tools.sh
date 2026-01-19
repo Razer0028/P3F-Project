@@ -14,6 +14,9 @@ required_packages=(
   python3
   python3-venv
   python3-pip
+  wireguard
+  wireguard-tools
+  resolvconf
   curl
   gnupg
   lsb-release
