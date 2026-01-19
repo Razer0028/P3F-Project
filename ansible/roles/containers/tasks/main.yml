@@ -106,12 +106,30 @@
                  if (containers_compose_check.rc | default(1)) != 0 and (containers_compose_legacy.rc | default(1)) == 0
                  else containers_compose_cmd }}
 
-        - name: Fail when no compose command is available
-          fail:
-            msg: "Neither docker compose nor docker-compose is available"
-          when:
-            - (containers_compose_check.rc | default(1)) != 0
-            - (containers_compose_legacy.rc | default(1)) != 0
+        - name: Verify selected compose command
+          shell: "{{ containers_compose_cmd }} version"
+          register: containers_compose_final_check
+          changed_when: false
+          failed_when: false
+
+        - name: Fallback to legacy compose when selected command fails
+          when: (containers_compose_final_check.rc | default(1)) != 0
+          block:
+            - name: Check legacy docker-compose command (fallback)
+              command: docker-compose --version
+              register: containers_compose_legacy_final
+              changed_when: false
+              failed_when: false
+
+            - name: Use legacy docker-compose when available
+              set_fact:
+                containers_compose_cmd: "docker-compose"
+              when: (containers_compose_legacy_final.rc | default(1)) == 0
+
+            - name: Fail when no compose command is available
+              fail:
+                msg: "Neither docker compose nor docker-compose is available"
+              when: (containers_compose_legacy_final.rc | default(1)) != 0
 
     - name: Ensure /opt/serveradmin tree
       file:
