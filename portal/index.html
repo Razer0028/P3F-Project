@@ -71,8 +71,8 @@
         <span class="lang-ja">計画</span>
       </button>
       <button type="button" class="page-tab" data-page="beginner">
-        <span class="lang-en">Beginner</span>
-        <span class="lang-ja">初心者</span>
+        <span class="lang-en">Simple</span>
+        <span class="lang-ja">簡易</span>
       </button>
       <button type="button" class="page-tab" data-page="custom">
         <span class="lang-en">Custom</span>
@@ -172,16 +172,16 @@
             <span class="lang-ja"><code>make portal</code> または <code>make portal-lan</code> で起動し、トークンを控えて各トークン欄に貼り付けます。</span>
           </li>
           <li>
-            <span class="lang-en">Choose Beginner or Custom, then fill the basics (on-prem IP, VPS IP, zone/domain, admin user/password).</span>
-            <span class="lang-ja">初心者/カスタムを選び、基本項目（オンプレIP、VPS IP、ドメイン/ゾーン、管理者ID/パスワード）を入力します。</span>
+            <span class="lang-en">Choose Simple or Custom, then fill the basics (on-prem IP, VPS IP, zone/domain, admin user/password).</span>
+            <span class="lang-ja">簡易/カスタムを選び、基本項目（オンプレIP、VPS IP、ドメイン/ゾーン、管理者ID/パスワード）を入力します。</span>
           </li>
           <li>
             <span class="lang-en">Upload AWS CSV (EC2 auto), Cloudflare token, and SSH keys (VPS/EC2). You can generate the EC2 key here.</span>
             <span class="lang-ja">AWSのCSV（EC2自動構築用）、Cloudflareトークン、SSH鍵（VPS/EC2）をアップロードします。EC2鍵は生成も可能です。</span>
           </li>
           <li>
-            <span class="lang-en">Generate outputs, then use Save all to server.</span>
-            <span class="lang-ja">出力を生成して「サーバーに保存」を実行します。</span>
+            <span class="lang-en">After any input/upload change, generate outputs again, then use Save all to server.</span>
+            <span class="lang-ja">入力/アップロード変更後は再生成してから「サーバーに保存」を実行します。</span>
           </li>
           <li>
             <span class="lang-en">Create <code>~/.config/edge-stack/vault_pass</code> and fill host_vars with <code>ansible-vault edit</code>.</span>
@@ -1127,8 +1127,8 @@ GET  /api/jobs/&lt;job_id&gt;/logs</code></pre>
           <div class="lang-ja">推奨順序:</div>
           <ol>
             <li>
-              <span class="lang-en">Generate files → Save all to server (writes to ~/.config/edge-stack).</span>
-              <span class="lang-ja">ファイル生成 → サーバーに保存（~/.config/edge-stack に出力）。</span>
+              <span class="lang-en">Generate files → Save all to server (writes to ~/.config/edge-stack). Re-run both after any input/upload change.</span>
+              <span class="lang-ja">ファイル生成 → サーバーに保存（~/.config/edge-stack に出力）。入力/アップロード変更後は両方を再実行。</span>
             </li>
             <li>
               <span class="lang-en">Terraform (EC2): init → plan → apply (enter APPLY).</span>
@@ -1278,8 +1278,8 @@ GET  /api/jobs/&lt;job_id&gt;/logs</code></pre>
         </h2>
         <div class="mode-banner beginner-only">
           <strong>
-            <span class="lang-en">Beginner mode</span>
-            <span class="lang-ja">初心者モード</span>
+            <span class="lang-en">Simple mode</span>
+            <span class="lang-ja">簡易モード</span>
           </strong>
           <p>
             <span class="lang-en">Only essential inputs are shown. Switch to Custom for advanced tuning.</span>
@@ -1299,8 +1299,8 @@ GET  /api/jobs/&lt;job_id&gt;/logs</code></pre>
         <div class="guide-grid input-guide">
           <div class="guide-card beginner-only">
             <strong>
-              <span class="lang-en">Beginner: required inputs</span>
-              <span class="lang-ja">初心者: 必須入力</span>
+              <span class="lang-en">Simple: required inputs</span>
+              <span class="lang-ja">簡易: 必須入力</span>
             </strong>
             <ul>
               <li>
@@ -1323,8 +1323,8 @@ GET  /api/jobs/&lt;job_id&gt;/logs</code></pre>
           </div>
           <div class="guide-card beginner-only">
             <strong>
-              <span class="lang-en">Beginner: required uploads</span>
-              <span class="lang-ja">初心者: 必須アップロード</span>
+              <span class="lang-en">Simple: required uploads</span>
+              <span class="lang-ja">簡易: 必須アップロード</span>
             </strong>
             <ul>
               <li>
@@ -2379,8 +2379,8 @@ GET  /api/jobs/&lt;job_id&gt;/logs</code></pre>
           <span class="lang-ja">生成結果</span>
         </h2>
         <p class="note">
-          <span class="lang-en">Generate files first, then save them into the config directory (default: ~/.config/edge-stack).</span>
-          <span class="lang-ja">先にファイル生成を行い、設定ディレクトリ（既定: ~/.config/edge-stack）に保存します。</span>
+          <span class="lang-en">Always generate first. If you edit inputs or re-upload keys/tokens, generate again and then Save all to server (writes to ~/.config/edge-stack). Actions use the last saved files.</span>
+          <span class="lang-ja">必ず先にファイル生成。入力や鍵/トークン再アップロード後は再生成→保存が必要です（保存先: ~/.config/edge-stack）。各アクションは最後に保存した内容を使います。</span>
         </p>
         <div class="actions">
           <button type="button" id="save_all">
