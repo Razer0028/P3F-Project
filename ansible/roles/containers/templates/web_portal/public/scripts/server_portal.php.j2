@@ -165,12 +165,32 @@ function docker_cmd($args){
 }
 
 /* dockerコンテナ状態 */
-function docker_status($container){
+function docker_ps_names(){
+    $result = docker_cmd("ps --format '{{.Names}}'");
+    if ($result['rc'] !== 0) {
+        return [];
+    }
+    $lines = array_filter(array_map('trim', explode("\n", $result['out'])));
+    return array_values($lines);
+}
+
+function docker_status($container, $hint = ''){
     $c = escapeshellarg($container);
 {% raw %}
     $run = docker_cmd("inspect -f '{{.State.Running}}' $c");
     $health = docker_cmd("inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{end}}' $c");
 {% endraw %}
+    if ($run['rc'] !== 0) {
+        $names = docker_ps_names();
+        foreach ($names as $name) {
+            if ($name === $container) {
+                return ['running' => true, 'health' => null];
+            }
+            if ($hint !== '' && stripos($name, $hint) !== false) {
+                return ['running' => true, 'health' => null];
+            }
+        }
+    }
     return [
         'running' => ($run['rc']===0 && trim($run['out'])==='true'),
         'health'  => ($health['rc']===0 && ($h=trim($health['out']))!=='' && strtolower($h)!=='null') ? $h : null,
@@ -188,7 +208,7 @@ function read_current_players(){
 if(($_GET['action'] ?? '') === 'status'){
     $list=[];
     foreach($SERVERS as $s){
-        $st=docker_status($s['container']);
+        $st=docker_status($s['container'], $s['id']);
         $list[$s['id']] = [
             'id'=>$s['id'],
             'label'=>$s['label'],
@@ -261,7 +281,7 @@ if (!$minecraftEnabled) {
 
 $initialServers=[];
 foreach($SERVERS as $s){
-    $initialServers[$s['id']] = docker_status($s['container']);
+    $initialServers[$s['id']] = docker_status($s['container'], $s['id']);
 }
 $initialPlayers = read_current_players();
 

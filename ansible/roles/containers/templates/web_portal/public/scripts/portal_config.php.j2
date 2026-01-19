@@ -1,4 +1,5 @@
 <?php
+{% set game_domain = portal_game_domain | default('yourdomain.com') %}
 function portal_default_config() {
     return [
         'enabled' => ['minecraft', 'valheim', '7dtd'],
@@ -13,8 +14,8 @@ function portal_default_config() {
                 'compose_dir' => '{{ containers_root }}/minecraft',
                 'archive' => 'minecraft.tar.gz',
                 'img' => '/images/minecraft.png',
-                'hostport' => 'yourdomain.com',
-                'howto' => 'Minecraft(Java版) → マルチプレイ → サーバー追加 → アドレスに「yourdomain.com」を入力。',
+                'hostport' => '{{ game_domain }}',
+                'howto' => 'Minecraft(Java版) → マルチプレイ → サーバー追加 → アドレスに「{{ game_domain }}」を入力。',
                 'password' => null,
                 'extra' => null,
                 'public' => true,
@@ -35,8 +36,8 @@ function portal_default_config() {
                 'compose_dir' => '{{ containers_root }}/valheim_server',
                 'archive' => 'valheim.tar.gz',
                 'img' => '/images/valheim.png',
-                'hostport' => 'yourdomain.com:2456',
-                'howto' => 'Valheim → アドレス「yourdomain.com:2456」。Steamの「表示→サーバー追加」はポート2457で。',
+                'hostport' => '{{ game_domain }}:2456',
+                'howto' => 'Valheim → アドレス「{{ game_domain }}:2456」。Steamの「表示→サーバー追加」はポート2457で。',
                 'password' => null,
                 'extra' => '※ パスワードは他人に無断で拡散しないでください。',
                 'public' => true,
@@ -55,8 +56,8 @@ function portal_default_config() {
                 'compose_dir' => '{{ containers_root }}/7dtd_server',
                 'archive' => '7dtd.tar.gz',
                 'img' => '/images/7dtd.png',
-                'hostport' => 'yourdomain.com:26900',
-                'howto' => '7DTD → 「IPに接続」から「yourdomain.com:26900」。',
+                'hostport' => '{{ game_domain }}:26900',
+                'howto' => '7DTD → 「IPに接続」から「{{ game_domain }}:26900」。',
                 'password' => null,
                 'extra' => null,
                 'public' => true,

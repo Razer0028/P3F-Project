@@ -1008,7 +1008,13 @@ def maybe_write_cloudflared_host_vars(output_root, repo_root, inventory_text, gr
         snippet_hostname, snippet_origin = parse_cloudflared_snippet(snippet_path)
         if not hostname:
             hostname = snippet_hostname
-        origin = snippet_origin or CLOUDFLARED_DEFAULT_ORIGIN
+        origin = snippet_origin
+        if not origin:
+            dest_ip = parse_yaml_value(group_vars_text, "portctl_default_dest_ip") or parse_yaml_value(group_vars_text, "port_forward_dest_ip")
+            if dest_ip:
+                origin = f"http://{dest_ip}:8082"
+        if not origin:
+            origin = CLOUDFLARED_DEFAULT_ORIGIN
 
         content = build_cloudflared_host_vars(tunnel_id, hostname, origin, credentials_json)
         if not content:

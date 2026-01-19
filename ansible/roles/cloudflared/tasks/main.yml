@@ -90,7 +90,9 @@
       assert:
         that:
           - cloudflared_config_content | length > 0
-        fail_msg: "cloudflared_config_content must be set"
+          - cloudflared_credentials_path | length > 0
+          - cloudflared_credentials_content | length > 0
+        fail_msg: "cloudflared_config_content/credentials_path/credentials_content must be set"
       when: cloudflared_require_vars | default(false)
 
     - name: Deploy cloudflared config

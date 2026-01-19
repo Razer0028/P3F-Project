@@ -28,3 +28,5 @@ web_portal_admin_allow_cidrs: []
 web_portal_admin_deny_cidrs: []
 web_portal_admin_htdigest: ""
 containers_compose_cmd: "docker compose"
+
+portal_game_domain: "{{ failover_dns_record_name | default('yourdomain.com') }}"
