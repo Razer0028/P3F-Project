@@ -1426,7 +1426,15 @@ class PortalState:
         ansible_env = {
             "ANSIBLE_CONFIG": "./ansible.cfg",
             "ANSIBLE_HOST_KEY_CHECKING": "False",
-            "ANSIBLE_SSH_COMMON_ARGS": "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR",
+            "ANSIBLE_SSH_COMMON_ARGS": (
+                "-o StrictHostKeyChecking=no "
+                "-o UserKnownHostsFile=/dev/null "
+                "-o LogLevel=ERROR "
+                "-o ServerAliveInterval=20 "
+                "-o ServerAliveCountMax=3 "
+                "-o ConnectTimeout=10 "
+                "-o ConnectionAttempts=3"
+            ),
             "IAC_CONFIG_DIR": str(self.output_root),
         }
         aws_credentials = pathlib.Path("~/.aws/credentials").expanduser()
@@ -1529,6 +1537,19 @@ class PortalState:
                 "cmd": ansible_cloudflared,
                 "cwd": self.repo_root,
                 "env": ansible_env,
+                "retry": {
+                    "enabled": True,
+                    "retries": 2,
+                    "delay": 10,
+                    "patterns": [
+                        "Failed to connect to the host via ssh",
+                        "Connection timed out",
+                        "Connection closed by remote host",
+                        "kex_exchange_identification",
+                        "Host key verification failed",
+                        "ssh: connect to host",
+                    ],
+                },
             },
             "ansible-portctl": {
                 "cmd": ansible_portctl,
@@ -1609,7 +1630,7 @@ class PortalState:
                 return True
         return False
 
-    def create_job(self, action, command, cwd, env, cleanup=False):
+    def create_job(self, action, command, cwd, env, cleanup=False, retry=None):
         job_id = f"job_{uuid.uuid4().hex[:8]}"
         log_path = self.jobs_dir / f"{job_id}.log"
         job_path = self.jobs_dir / f"{job_id}.json"
@@ -1622,6 +1643,7 @@ class PortalState:
             "command": command,
             "cwd": str(cwd),
             "cleanup": bool(cleanup),
+            "retry": retry or {},
         }
         write_json(job_path, job)
 
@@ -1633,18 +1655,46 @@ class PortalState:
                 log.write(f"Command: {' '.join(command)}\n")
                 log.write(f"Working dir: {cwd}\n\n")
                 log.flush()
-                try:
-                    process = __import__("subprocess").Popen(
-                        command,
-                        cwd=str(cwd),
-                        stdout=log,
-                        stderr=log,
-                        env=combined_env,
-                    )
-                    return_code = process.wait()
-                except Exception as exc:  # pragma: no cover
-                    log.write(f"\nExecution error: {exc}\n")
-                    return_code = 1
+                attempts = 1
+                retry_enabled = bool(retry and retry.get("enabled"))
+                if retry_enabled:
+                    attempts += max(0, int(retry.get("retries", 0)))
+                delay = int(retry.get("delay", 5)) if retry_enabled else 0
+                patterns = retry.get("patterns", []) if retry_enabled else []
+                return_code = 1
+                attempt = 1
+                while attempt <= attempts:
+                    if attempt > 1:
+                        log.write(f"\nRetrying ({attempt}/{attempts}) after {delay}s...\n")
+                        log.flush()
+                        time.sleep(delay)
+                    attempt_start = log.tell()
+                    try:
+                        process = __import__("subprocess").Popen(
+                            command,
+                            cwd=str(cwd),
+                            stdout=log,
+                            stderr=log,
+                            env=combined_env,
+                        )
+                        return_code = process.wait()
+                    except Exception as exc:  # pragma: no cover
+                        log.write(f"\nExecution error: {exc}\n")
+                        return_code = 1
+                    log.flush()
+                    if return_code == 0:
+                        break
+                    if not patterns or attempt >= attempts:
+                        break
+                    try:
+                        with log_path.open("r", encoding="utf-8", errors="replace") as reader:
+                            reader.seek(attempt_start)
+                            attempt_text = reader.read()
+                    except Exception:
+                        attempt_text = ""
+                    if not any(pat in attempt_text for pat in patterns):
+                        break
+                    attempt += 1
                 if return_code == 0 and action in {"tf-apply", "tf-cf-apply"}:
                     try:
                         inventory_text = OUTPUT_INVENTORY_PATH.read_text(encoding="utf-8", errors="replace") if OUTPUT_INVENTORY_PATH.exists() else ""
@@ -2176,7 +2226,7 @@ class PortalHandler(http.server.SimpleHTTPRequestHandler):
                     )
                     return
                 env["CLOUDFLARE_API_TOKEN"] = cf_token
-            job = self.state.create_job(action, info["cmd"], info["cwd"], env, cleanup)
+            job = self.state.create_job(action, info["cmd"], info["cwd"], env, cleanup, info.get("retry"))
 
         response_json(self, 200, {"ok": True, "job_id": job["id"]})
 
