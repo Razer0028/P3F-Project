@@ -157,6 +157,13 @@
     cache_valid_time: "{{ (base_update_cache | default(true)) | ternary(3600, omit) }}"
   when: base_ufw_before_rules_manage | default(false)
 
+- name: Ensure ufw service state (optional)
+  systemd:
+    name: ufw
+    enabled: true
+    state: started
+  when: base_ufw_before_rules_manage | default(false)
+
 - name: Check ufw before.rules
   stat:
     path: /etc/ufw/before.rules
