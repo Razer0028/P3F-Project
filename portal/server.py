@@ -778,11 +778,23 @@ def terraform_output_json(terraform_dir):
             text=True,
         )
     except Exception:
-        return {}
+        return read_tfstate_outputs(terraform_dir)
     try:
         return json.loads(output)
     except json.JSONDecodeError:
+        return read_tfstate_outputs(terraform_dir)
+
+
+def read_tfstate_outputs(terraform_dir):
+    state_path = pathlib.Path(terraform_dir) / "terraform.tfstate"
+    if not state_path.exists():
         return {}
+    try:
+        data = json.loads(state_path.read_text(encoding="utf-8", errors="replace"))
+    except json.JSONDecodeError:
+        return {}
+    outputs = data.get("outputs")
+    return outputs if isinstance(outputs, dict) else {}
 
 
 def terraform_output_value(output_json, key):
