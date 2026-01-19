@@ -1203,7 +1203,7 @@ function renderCloudflaredVaultSnippet(target) {
 
   const tunnelId = value(isVps ? fields.cfVpsTunnelId : fields.cfEc2TunnelId) || "REPLACE_ME";
   const hostname = value(isVps ? fields.cfVpsHostname : fields.cfEc2Hostname) || "YOUR_DOMAIN";
-  const origin = value(isVps ? fields.cfVpsOrigin : fields.cfEc2Origin) || "http://10.100.0.2:8082";
+  const origin = value(isVps ? fields.cfVpsOrigin : fields.cfEc2Origin) || defaultCloudflaredOrigin();
   const credsRaw = value(isVps ? fields.cfVpsCredentials : fields.cfEc2Credentials);
   const creds = credsRaw || '{"AccountTag":"REPLACE_ME","TunnelSecret":"REPLACE_ME","TunnelID":"REPLACE_ME"}';
 
@@ -2116,6 +2116,7 @@ async function loadStatus() {
     applyAutoAdminAllowCidrs(payload);
     applyAutoAllowedSshCidrs(payload);
     applyAutoPortForwardDestIp(payload);
+    applyAutoCloudflaredOrigins(payload);
     guidedState.preflight = true;
     const files = payload.files || {};
     const plan = getPlanOptions();
@@ -2276,6 +2277,18 @@ function syncUploadTargetLabels() {
   }
 }
 
+function getAutoPortForwardDestIp(payload) {
+  const wgIps = payload && payload.wg_ips ? payload.wg_ips : {};
+  const wg0 = wgIps.wg0;
+  if (wg0) {
+    return wg0;
+  }
+  if (document.body && document.body.dataset.setupMode === "beginner") {
+    return "10.0.0.2";
+  }
+  return "";
+}
+
 function applyAutoPortForwardDestIp(payload) {
   const input = document.getElementById("port_forward_dest_ip");
   if (!input || input.dataset.manual === "true") {
@@ -2285,15 +2298,36 @@ function applyAutoPortForwardDestIp(payload) {
   if (current) {
     return;
   }
-  const wgIps = payload && payload.wg_ips ? payload.wg_ips : {};
-  const wg0 = wgIps.wg0;
-  if (wg0) {
-    input.value = wg0;
+  const autoIp = getAutoPortForwardDestIp(payload);
+  if (autoIp) {
+    input.value = autoIp;
+  }
+}
+
+function defaultCloudflaredOrigin() {
+  const input = document.getElementById("port_forward_dest_ip");
+  const current = input ? (input.value || "").trim() : "";
+  const autoIp = current || getAutoPortForwardDestIp(lastStatusPayload);
+  const ip = autoIp || "10.0.0.2";
+  return `http://${ip}:8082`;
+}
+
+function applyAutoCloudflaredOrigins(payload) {
+  const autoIp = getAutoPortForwardDestIp(payload);
+  if (!autoIp) {
     return;
   }
-  if (document.body && document.body.dataset.setupMode === "beginner") {
-    input.value = "10.0.0.2";
-  }
+  const origin = `http://${autoIp}:8082`;
+  ["cf_vps_origin", "cf_ec2_origin"].forEach((id) => {
+    const input = document.getElementById(id);
+    if (!input || input.dataset.manual === "true") {
+      return;
+    }
+    const current = (input.value || "").trim();
+    if (!current) {
+      input.value = origin;
+    }
+  });
 }
 
 function applyAutoAdminAllowCidrs(payload) {
@@ -3784,6 +3818,16 @@ if (allowedSshInput) {
     allowedSshInput.dataset.manual = "true";
   });
 }
+
+["cf_vps_origin", "cf_ec2_origin"].forEach((id) => {
+  const input = document.getElementById(id);
+  if (!input) {
+    return;
+  }
+  input.addEventListener("input", () => {
+    input.dataset.manual = "true";
+  });
+});
 
 document.querySelectorAll(".page-tab").forEach((button) => {
   button.addEventListener("click", () => {
