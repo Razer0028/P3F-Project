@@ -2,6 +2,17 @@
 - name: "Base configuration"
   hosts: all
   become: true
+  gather_facts: false
+  pre_tasks:
+    - name: Wait for VPS SSH to stabilize
+      wait_for_connection:
+        timeout: 60
+        connect_timeout: 5
+        sleep: 2
+      when: "'vps' in group_names"
+
+    - name: Gather facts
+      setup:
   roles:
     - role: base
       tags:
