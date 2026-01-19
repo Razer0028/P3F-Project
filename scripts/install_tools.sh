@@ -59,7 +59,15 @@ if ! command -v terraform >/dev/null 2>&1; then
   fi
   echo "Terraform not found. Adding HashiCorp repo..."
   install -m 0755 -d /usr/share/keyrings
-  curl -fsSL https://apt.releases.hashicorp.com/gpg | gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
+  tmp_key=$(mktemp)
+  curl_opts=(--fail --silent --show-error --location --retry 3 --retry-connrefused --connect-timeout 5 --max-time 20)
+  if ! curl "${curl_opts[@]}" https://apt.releases.hashicorp.com/gpg -o "${tmp_key}"; then
+    echo "Failed to download HashiCorp GPG key (network/DNS). Fix network and re-run." >&2
+    rm -f "${tmp_key}"
+    exit 1
+  fi
+  gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg "${tmp_key}"
+  rm -f "${tmp_key}"
   chmod 0644 /usr/share/keyrings/hashicorp-archive-keyring.gpg
   release=$(lsb_release -cs)
   echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com ${release} main" > /etc/apt/sources.list.d/hashicorp.list
