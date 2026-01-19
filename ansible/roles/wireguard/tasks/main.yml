@@ -107,3 +107,19 @@
         enabled: true
         state: started
       when: wireguard_enable_on_boot | default(false) and wireguard_primary is defined
+
+    - name: Check ufw status (optional)
+      command: ufw status
+      register: wireguard_ufw_status
+      changed_when: false
+      failed_when: false
+
+    - name: Allow WireGuard forward via ufw (optional)
+      command: ufw route allow in on {{ item.name }} out on {{ wireguard_nat_interface }}
+      register: wireguard_ufw_route
+      changed_when: false
+      failed_when: false
+      loop: "{{ wireguard_items }}"
+      when:
+        - wireguard_ufw_status.rc == 0
+        - item.enable_nat | default(false)
