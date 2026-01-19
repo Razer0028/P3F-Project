@@ -66,6 +66,39 @@
           changed_when: false
           failed_when: false
 
+        - name: Install docker-compose when missing (optional)
+          apt:
+            name: docker-compose
+            state: present
+            update_cache: "{{ containers_compose_update_cache | default(true) }}"
+            cache_valid_time: "{{ (containers_compose_update_cache | default(true)) | ternary(containers_compose_cache_valid_time | default(0), omit) }}"
+          register: containers_compose_install
+          retries: 3
+          delay: 10
+          until: containers_compose_install is succeeded
+          when:
+            - containers_install_compose | default(true)
+            - containers_compose_check.rc != 0
+            - containers_compose_legacy.rc != 0
+
+        - name: Re-check compose commands after install
+          when:
+            - containers_install_compose | default(true)
+            - containers_compose_check.rc != 0
+            - containers_compose_legacy.rc != 0
+          block:
+            - name: Check configured compose command (post-install)
+              shell: "{{ containers_compose_cmd }} version"
+              register: containers_compose_check
+              changed_when: false
+              failed_when: false
+
+            - name: Check legacy docker-compose command (post-install)
+              command: docker-compose --version
+              register: containers_compose_legacy
+              changed_when: false
+              failed_when: false
+
         - name: Select available compose command
           set_fact:
             containers_compose_cmd: >-

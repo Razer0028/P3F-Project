@@ -9,6 +9,10 @@ containers_owner_gid: 1000
 containers_enabled: []
 containers_start: false
 
+containers_install_compose: true
+containers_compose_update_cache: true
+containers_compose_cache_valid_time: 0
+
 steamcmd_dir: "{{ containers_root }}/steamcmd"
 steamcmd_owner: "{{ containers_owner }}"
 steamcmd_group: "{{ containers_group }}"
