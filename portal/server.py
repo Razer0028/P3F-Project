@@ -299,7 +299,7 @@ def generate_wg_keypair():
         return "", "", str(exc)
 
 
-def build_wg_config_item(name, address, private_key, peer, enable_nat=False):
+def build_wg_config_item(name, address, private_key, peer, enable_nat=False, dns=None):
     item = {
         "name": name,
         "address": address,
@@ -309,6 +309,8 @@ def build_wg_config_item(name, address, private_key, peer, enable_nat=False):
     }
     if enable_nat:
         item["enable_nat"] = True
+    if dns:
+        item["dns"] = dns
     return item
 
 
@@ -360,6 +362,7 @@ def build_simple_wireguard_configs(inventory_text, client_allowed_ip):
             "endpoint": vps_endpoint,
             "persistent_keepalive": WG_KEEPALIVE,
         },
+        dns="8.8.8.8",
     )
     onprem_wg1 = build_wg_config_item(
         "wg1",
@@ -371,6 +374,7 @@ def build_simple_wireguard_configs(inventory_text, client_allowed_ip):
             "endpoint": ec2_endpoint,
             "persistent_keepalive": WG_KEEPALIVE,
         },
+        dns="8.8.8.8",
     )
     vps_wg0 = build_wg_config_item(
         "wg0",
