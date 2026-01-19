@@ -73,7 +73,6 @@ WG_ONPREM_ADDRESS = "10.0.0.2/24"
 WG_EDGE_ADDRESS = "10.0.0.1/24"
 WG_LISTEN_PORT = 51820
 WG_ALLOWED_IPS = "0.0.0.0/0"
-WG_CLIENT_ALLOWED_IPS = "10.0.0.2/32"
 WG_KEEPALIVE = 25
 
 def response_json(handler, status, payload):
@@ -319,7 +318,21 @@ def build_wg_config(address, private_key, peer_public_key, endpoint=None, keepal
     return "\n".join(lines)
 
 
-def build_simple_wireguard_configs(inventory_text):
+def normalize_client_allowed_ip(raw):
+    value = (raw or "").strip()
+    if not value:
+        return "", "portctl_default_dest_ip is empty"
+    try:
+        if "/" in value:
+            iface = ipaddress.ip_interface(value)
+            return f"{iface.ip}/32", ""
+        ip = ipaddress.ip_address(value)
+        return f"{ip}/32", ""
+    except ValueError:
+        return "", f"Invalid client IP: {value}"
+
+
+def build_simple_wireguard_configs(inventory_text, client_allowed_ip):
     errors = {}
     vps_ip = parse_inventory_group_ip(inventory_text, "vps")
     ec2_ip = parse_inventory_group_ip(inventory_text, "ec2")
@@ -365,7 +378,7 @@ def build_simple_wireguard_configs(inventory_text):
         onprem_wg0_pub,
         None,
         None,
-        WG_CLIENT_ALLOWED_IPS,
+        client_allowed_ip,
     )
     ec2_wg1 = build_wg_config(
         WG_EDGE_ADDRESS,
@@ -373,7 +386,7 @@ def build_simple_wireguard_configs(inventory_text):
         onprem_wg1_pub,
         None,
         None,
-        WG_CLIENT_ALLOWED_IPS,
+        client_allowed_ip,
     )
 
     return {
@@ -634,18 +647,23 @@ def maybe_write_auto_host_vars_simple(output_root, inventory_text, group_vars_te
         host_sections[host_name] = []
 
     if wireguard_enabled:
-        configs, wg_errors = build_simple_wireguard_configs(inventory_text)
-        errors.update(wg_errors)
-        if not wg_errors:
-            onprem_block = build_wireguard_block(configs.get("onprem-1"), "wg0", allow_overwrite=True, enable_on_boot=True)
-            if onprem_block:
-                host_sections["onprem-1"].append(onprem_block)
-            vps_block = build_wireguard_block(configs.get("vps-1"), "wg0", allow_overwrite=True, enable_on_boot=True)
-            if vps_block:
-                host_sections["vps-1"].append(vps_block)
-            ec2_block = build_wireguard_block(configs.get("ec2-1"), "wg1", allow_overwrite=True, enable_on_boot=True)
-            if ec2_block:
-                host_sections["ec2-1"].append(ec2_block)
+        dest_ip = parse_yaml_value(group_vars_text, "portctl_default_dest_ip")
+        client_allowed, client_error = normalize_client_allowed_ip(dest_ip)
+        if client_error:
+            errors["wireguard_client_ip"] = client_error
+        else:
+            configs, wg_errors = build_simple_wireguard_configs(inventory_text, client_allowed)
+            errors.update(wg_errors)
+            if not wg_errors:
+                onprem_block = build_wireguard_block(configs.get("onprem-1"), "wg0", allow_overwrite=True, enable_on_boot=True)
+                if onprem_block:
+                    host_sections["onprem-1"].append(onprem_block)
+                vps_block = build_wireguard_block(configs.get("vps-1"), "wg0", allow_overwrite=True, enable_on_boot=True)
+                if vps_block:
+                    host_sections["vps-1"].append(vps_block)
+                ec2_block = build_wireguard_block(configs.get("ec2-1"), "wg1", allow_overwrite=True, enable_on_boot=True)
+                if ec2_block:
+                    host_sections["ec2-1"].append(ec2_block)
 
     ddos_path = output_root / "tmp" / "ddos_vps_vault_snippet.txt"
     if ddos_path.exists():
