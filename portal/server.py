@@ -73,6 +73,7 @@ WG_ONPREM_ADDRESS = "10.0.0.2/24"
 WG_EDGE_ADDRESS = "10.0.0.1/24"
 WG_LISTEN_PORT = 51820
 WG_ALLOWED_IPS = "0.0.0.0/0"
+WG_CLIENT_ALLOWED_IPS = "10.0.0.2/32"
 WG_KEEPALIVE = 25
 
 def response_json(handler, status, payload):
@@ -298,7 +299,8 @@ def generate_wg_keypair():
         return "", "", str(exc)
 
 
-def build_wg_config(address, private_key, peer_public_key, endpoint=None, keepalive=None):
+def build_wg_config(address, private_key, peer_public_key, endpoint=None, keepalive=None, allowed_ips=None):
+    allowed = allowed_ips or WG_ALLOWED_IPS
     lines = [
         "[Interface]",
         f"Address = {address}",
@@ -307,7 +309,7 @@ def build_wg_config(address, private_key, peer_public_key, endpoint=None, keepal
         "",
         "[Peer]",
         f"PublicKey = {peer_public_key}",
-        f"AllowedIPs = {WG_ALLOWED_IPS}",
+        f"AllowedIPs = {allowed}",
     ]
     if endpoint:
         lines.append(f"Endpoint = {endpoint}")
@@ -341,10 +343,38 @@ def build_simple_wireguard_configs(inventory_text):
     vps_endpoint = f"{vps_ip}:{WG_LISTEN_PORT}" if vps_ip else ""
     ec2_endpoint = f"{ec2_ip}:{WG_LISTEN_PORT}" if ec2_ip else ""
 
-    onprem_wg0 = build_wg_config(WG_ONPREM_ADDRESS, onprem_wg0_priv, vps_pub, vps_endpoint, WG_KEEPALIVE)
-    onprem_wg1 = build_wg_config(WG_ONPREM_ADDRESS, onprem_wg1_priv, ec2_pub, ec2_endpoint, WG_KEEPALIVE)
-    vps_wg0 = build_wg_config(WG_EDGE_ADDRESS, vps_priv, onprem_wg0_pub)
-    ec2_wg1 = build_wg_config(WG_EDGE_ADDRESS, ec2_priv, onprem_wg1_pub)
+    onprem_wg0 = build_wg_config(
+        WG_ONPREM_ADDRESS,
+        onprem_wg0_priv,
+        vps_pub,
+        vps_endpoint,
+        WG_KEEPALIVE,
+        WG_ALLOWED_IPS,
+    )
+    onprem_wg1 = build_wg_config(
+        WG_ONPREM_ADDRESS,
+        onprem_wg1_priv,
+        ec2_pub,
+        ec2_endpoint,
+        WG_KEEPALIVE,
+        WG_ALLOWED_IPS,
+    )
+    vps_wg0 = build_wg_config(
+        WG_EDGE_ADDRESS,
+        vps_priv,
+        onprem_wg0_pub,
+        None,
+        None,
+        WG_CLIENT_ALLOWED_IPS,
+    )
+    ec2_wg1 = build_wg_config(
+        WG_EDGE_ADDRESS,
+        ec2_priv,
+        onprem_wg1_pub,
+        None,
+        None,
+        WG_CLIENT_ALLOWED_IPS,
+    )
 
     return {
         "onprem-1": [
