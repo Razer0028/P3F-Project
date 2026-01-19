@@ -1050,6 +1050,35 @@ def load_secret_meta():
     return {"paths": []}
 
 
+def inventory_cloudflared_groups(inventory_text):
+    groups = []
+    for group in ("vps", "ec2"):
+        if inventory_has_group(inventory_text, group):
+            groups.append(group)
+    return groups
+
+
+def cloudflared_host_vars_missing(output_root, groups):
+    missing = {}
+    for group in groups:
+        rel_path = f"ansible/host_vars/{group}-1.yml"
+        abs_path = resolve_output_path(output_root, rel_path)
+        if not abs_path or not abs_path.exists():
+            missing[group] = "host_vars missing"
+            continue
+        try:
+            text = abs_path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            missing[group] = "host_vars unreadable"
+            continue
+        if CLOUDFLARED_RULES_MARKER not in text:
+            missing[group] = "cloudflared block missing"
+            continue
+        if "cloudflared_config_content:" not in text or "cloudflared_credentials_content:" not in text:
+            missing[group] = "cloudflared fields missing"
+    return missing
+
+
 def record_secret_path(path, persistent=False):
     if not path:
         return
@@ -2132,6 +2161,22 @@ class PortalHandler(http.server.SimpleHTTPRequestHandler):
         cloudflared_saved = maybe_write_cloudflared_host_vars(self.state.output_root, self.state.repo_root, inventory_text, group_vars_text)
         if cloudflared_saved:
             saved.update(cloudflared_saved)
+        if parse_yaml_bool(group_vars_text, "cloudflared_manage"):
+            groups = inventory_cloudflared_groups(inventory_text)
+            if groups:
+                missing = cloudflared_host_vars_missing(self.state.output_root, groups)
+                if missing:
+                    response_json(
+                        self,
+                        400,
+                        {
+                            "ok": False,
+                            "error": "Cloudflared host_vars not generated. Check Cloudflare outputs and hostnames.",
+                            "details": missing,
+                            "saved": saved,
+                        },
+                    )
+                    return
 
         auto_saved, auto_errors = maybe_write_auto_host_vars(self.state.output_root, inventory_text, group_vars_text, secrets, setup_mode)
         if auto_saved:
@@ -2182,6 +2227,26 @@ class PortalHandler(http.server.SimpleHTTPRequestHandler):
 
         if action.startswith("ansible") or action == "validate":
             ensure_vault_pass()
+
+        if action == "ansible-cloudflared":
+            inventory_text = OUTPUT_INVENTORY_PATH.read_text(encoding="utf-8", errors="replace") if OUTPUT_INVENTORY_PATH.exists() else ""
+            group_vars_text = OUTPUT_GROUP_VARS_PATH.read_text(encoding="utf-8", errors="replace") if OUTPUT_GROUP_VARS_PATH.exists() else ""
+            if parse_yaml_bool(group_vars_text, "cloudflared_manage"):
+                saved_cloudflared = maybe_write_cloudflared_host_vars(self.state.output_root, self.state.repo_root, inventory_text, group_vars_text)
+                groups = inventory_cloudflared_groups(inventory_text)
+                if groups:
+                    missing = cloudflared_host_vars_missing(self.state.output_root, groups)
+                    if missing:
+                        response_json(
+                            self,
+                            400,
+                            {
+                                "ok": False,
+                                "error": "Cloudflared host_vars missing. Run Save after Terraform Cloudflare.",
+                                "details": missing,
+                            },
+                        )
+                        return
 
         if action in {'tf-plan', 'tf-apply', 'tf-destroy'}:
             if not OUTPUT_TFVARS_PATH.exists():
