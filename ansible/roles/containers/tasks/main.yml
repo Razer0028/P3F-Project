@@ -78,14 +78,14 @@
           until: containers_compose_install is succeeded
           when:
             - containers_install_compose | default(true)
-            - containers_compose_check.rc != 0
-            - containers_compose_legacy.rc != 0
+            - (containers_compose_check.rc | default(1)) != 0
+            - (containers_compose_legacy.rc | default(1)) != 0
 
         - name: Re-check compose commands after install
           when:
             - containers_install_compose | default(true)
-            - containers_compose_check.rc != 0
-            - containers_compose_legacy.rc != 0
+            - (containers_compose_check.rc | default(1)) != 0
+            - (containers_compose_legacy.rc | default(1)) != 0
           block:
             - name: Check configured compose command (post-install)
               shell: "{{ containers_compose_cmd }} version"
@@ -103,15 +103,15 @@
           set_fact:
             containers_compose_cmd: >-
               {{ 'docker-compose'
-                 if containers_compose_check.rc != 0 and containers_compose_legacy.rc == 0
+                 if (containers_compose_check.rc | default(1)) != 0 and (containers_compose_legacy.rc | default(1)) == 0
                  else containers_compose_cmd }}
 
         - name: Fail when no compose command is available
           fail:
             msg: "Neither docker compose nor docker-compose is available"
           when:
-            - containers_compose_check.rc != 0
-            - containers_compose_legacy.rc != 0
+            - (containers_compose_check.rc | default(1)) != 0
+            - (containers_compose_legacy.rc | default(1)) != 0
 
     - name: Ensure /opt/serveradmin tree
       file:
