@@ -25,6 +25,11 @@
         wireguard_items: "{{ wireguard_raw_configs | default(wireguard_configs | default([])) }}"
         wireguard_item_names: "{{ (wireguard_raw_configs | default(wireguard_configs | default([]))) | map(attribute='name') | list }}"
 
+    - name: Detect WireGuard NAT interface
+      set_fact:
+        wireguard_nat_interface: "{{ ansible_default_ipv4.interface }}"
+      when: wireguard_nat_interface | default("") | length == 0
+
     - name: Check existing WireGuard configs
       stat:
         path: "/etc/wireguard/{{ item }}.conf"

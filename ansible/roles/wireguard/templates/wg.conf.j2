@@ -3,6 +3,10 @@ Address = {{ item.address }}
 PrivateKey = {{ item.private_key }}
 {% if item.listen_port is defined %}ListenPort = {{ item.listen_port }}{% endif %}
 {% if item.dns is defined %}DNS = {{ item.dns }}{% endif %}
+{% if item.enable_nat | default(false) %}
+PostUp = iptables -t nat -A POSTROUTING -o {{ wireguard_nat_interface | default(ansible_default_ipv4.interface) }} -j MASQUERADE
+PostDown = iptables -t nat -D POSTROUTING -o {{ wireguard_nat_interface | default(ansible_default_ipv4.interface) }} -j MASQUERADE
+{% endif %}
 
 {% for peer in item.peers %}
 [Peer]

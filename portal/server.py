@@ -298,24 +298,17 @@ def generate_wg_keypair():
         return "", "", str(exc)
 
 
-def build_wg_config(address, private_key, peer_public_key, endpoint=None, keepalive=None, allowed_ips=None):
-    allowed = allowed_ips or WG_ALLOWED_IPS
-    lines = [
-        "[Interface]",
-        f"Address = {address}",
-        f"ListenPort = {WG_LISTEN_PORT}",
-        f"PrivateKey = {private_key}",
-        "",
-        "[Peer]",
-        f"PublicKey = {peer_public_key}",
-        f"AllowedIPs = {allowed}",
-    ]
-    if endpoint:
-        lines.append(f"Endpoint = {endpoint}")
-    if keepalive:
-        lines.append(f"PersistentKeepalive = {keepalive}")
-    lines.append("")
-    return "\n".join(lines)
+def build_wg_config_item(name, address, private_key, peer, enable_nat=False):
+    item = {
+        "name": name,
+        "address": address,
+        "private_key": private_key,
+        "listen_port": WG_LISTEN_PORT,
+        "peers": [peer],
+    }
+    if enable_nat:
+        item["enable_nat"] = True
+    return item
 
 
 def normalize_client_allowed_ip(raw):
@@ -356,47 +349,96 @@ def build_simple_wireguard_configs(inventory_text, client_allowed_ip):
     vps_endpoint = f"{vps_ip}:{WG_LISTEN_PORT}" if vps_ip else ""
     ec2_endpoint = f"{ec2_ip}:{WG_LISTEN_PORT}" if ec2_ip else ""
 
-    onprem_wg0 = build_wg_config(
+    onprem_wg0 = build_wg_config_item(
+        "wg0",
         WG_ONPREM_ADDRESS,
         onprem_wg0_priv,
-        vps_pub,
-        vps_endpoint,
-        WG_KEEPALIVE,
-        WG_ALLOWED_IPS,
+        {
+            "public_key": vps_pub,
+            "allowed_ips": WG_ALLOWED_IPS,
+            "endpoint": vps_endpoint,
+            "persistent_keepalive": WG_KEEPALIVE,
+        },
     )
-    onprem_wg1 = build_wg_config(
+    onprem_wg1 = build_wg_config_item(
+        "wg1",
         WG_ONPREM_ADDRESS,
         onprem_wg1_priv,
-        ec2_pub,
-        ec2_endpoint,
-        WG_KEEPALIVE,
-        WG_ALLOWED_IPS,
+        {
+            "public_key": ec2_pub,
+            "allowed_ips": WG_ALLOWED_IPS,
+            "endpoint": ec2_endpoint,
+            "persistent_keepalive": WG_KEEPALIVE,
+        },
     )
-    vps_wg0 = build_wg_config(
+    vps_wg0 = build_wg_config_item(
+        "wg0",
         WG_EDGE_ADDRESS,
         vps_priv,
-        onprem_wg0_pub,
-        None,
-        None,
-        client_allowed_ip,
+        {
+            "public_key": onprem_wg0_pub,
+            "allowed_ips": client_allowed_ip,
+        },
+        enable_nat=True,
     )
-    ec2_wg1 = build_wg_config(
+    ec2_wg1 = build_wg_config_item(
+        "wg1",
         WG_EDGE_ADDRESS,
         ec2_priv,
-        onprem_wg1_pub,
-        None,
-        None,
-        client_allowed_ip,
+        {
+            "public_key": onprem_wg1_pub,
+            "allowed_ips": client_allowed_ip,
+        },
+        enable_nat=True,
     )
 
     return {
-        "onprem-1": [
-            {"name": "wg0", "content": onprem_wg0},
-            {"name": "wg1", "content": onprem_wg1},
-        ],
-        "vps-1": [{"name": "wg0", "content": vps_wg0}],
-        "ec2-1": [{"name": "wg1", "content": ec2_wg1}],
+        "onprem-1": [onprem_wg0, onprem_wg1],
+        "vps-1": [vps_wg0],
+        "ec2-1": [ec2_wg1],
     }, {}
+
+
+def build_wireguard_config_block(configs, primary, allow_overwrite=True, enable_on_boot=True, restart_on_change=True):
+    if not configs:
+        return ""
+    lines = [
+        "wireguard_manage: true",
+        f"wireguard_allow_overwrite: {str(bool(allow_overwrite)).lower()}",
+        f"wireguard_enable_on_boot: {str(bool(enable_on_boot)).lower()}",
+        f"wireguard_restart_on_change: {str(bool(restart_on_change)).lower()}",
+    ]
+    if primary:
+        lines.append(f"wireguard_primary: \"{primary}\"")
+    lines.append("wireguard_configs:")
+    for item in configs:
+        name = escape_yaml(item.get("name", "wg0"))
+        address = escape_yaml(item.get("address", ""))
+        private_key = escape_yaml(item.get("private_key", ""))
+        listen_port = item.get("listen_port", WG_LISTEN_PORT)
+        if not address.strip("\"") or not private_key.strip("\""):
+            continue
+        lines.append(f"  - name: {name}")
+        lines.append(f"    address: {address}")
+        lines.append(f"    private_key: {private_key}")
+        lines.append(f"    listen_port: {listen_port}")
+        if item.get("enable_nat"):
+            lines.append("    enable_nat: true")
+        lines.append("    peers:")
+        for peer in item.get("peers", []):
+            public_key = escape_yaml(peer.get("public_key", ""))
+            allowed_ips = escape_yaml(peer.get("allowed_ips", ""))
+            if not public_key.strip("\"") or not allowed_ips.strip("\""):
+                continue
+            lines.append(f"      - public_key: {public_key}")
+            lines.append(f"        allowed_ips: {allowed_ips}")
+            endpoint = peer.get("endpoint")
+            if endpoint:
+                lines.append(f"        endpoint: {escape_yaml(endpoint)}")
+            keepalive = peer.get("persistent_keepalive")
+            if keepalive:
+                lines.append(f"        persistent_keepalive: {keepalive}")
+    return "\n".join(lines) + "\n"
 
 
 def build_wireguard_block(configs, primary, allow_overwrite=True, enable_on_boot=True, restart_on_change=True):
@@ -655,13 +697,13 @@ def maybe_write_auto_host_vars_simple(output_root, inventory_text, group_vars_te
             configs, wg_errors = build_simple_wireguard_configs(inventory_text, client_allowed)
             errors.update(wg_errors)
             if not wg_errors:
-                onprem_block = build_wireguard_block(configs.get("onprem-1"), "wg0", allow_overwrite=True, enable_on_boot=True)
+                onprem_block = build_wireguard_config_block(configs.get("onprem-1"), "wg0", allow_overwrite=True, enable_on_boot=True)
                 if onprem_block:
                     host_sections["onprem-1"].append(onprem_block)
-                vps_block = build_wireguard_block(configs.get("vps-1"), "wg0", allow_overwrite=True, enable_on_boot=True)
+                vps_block = build_wireguard_config_block(configs.get("vps-1"), "wg0", allow_overwrite=True, enable_on_boot=True)
                 if vps_block:
                     host_sections["vps-1"].append(vps_block)
-                ec2_block = build_wireguard_block(configs.get("ec2-1"), "wg1", allow_overwrite=True, enable_on_boot=True)
+                ec2_block = build_wireguard_config_block(configs.get("ec2-1"), "wg1", allow_overwrite=True, enable_on_boot=True)
                 if ec2_block:
                     host_sections["ec2-1"].append(ec2_block)
 
