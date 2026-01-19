@@ -25,14 +25,35 @@ check_dns() {
   return 0
 }
 
-if ! check_nameserver; then
-  echo "Fix DNS (add a nameserver) and re-run this tool install." >&2
+ensure_fallback_dns() {
+  local head_dir="/etc/resolvconf/resolv.conf.d"
+  local head_file="${head_dir}/head"
+  if [ ! -d "${head_dir}" ]; then
+    mkdir -p "${head_dir}"
+  fi
+  if ! grep -qE '^\s*nameserver\s+' "${head_file}" 2>/dev/null; then
+    printf "nameserver 1.1.1.1\nnameserver 8.8.8.8\n" >> "${head_file}"
+  fi
+  if command -v resolvconf >/dev/null 2>&1; then
+    resolvconf -u || true
+  fi
+}
+
+ensure_dns_or_exit() {
+  local host="$1"
+  if check_nameserver && check_dns "${host}"; then
+    return 0
+  fi
+  echo "Attempting to apply fallback DNS..." >&2
+  ensure_fallback_dns
+  if check_nameserver && check_dns "${host}"; then
+    return 0
+  fi
+  echo "DNS resolution is failing for ${host}. Fix /etc/resolv.conf or network settings and re-run." >&2
   exit 1
-fi
-if ! check_dns "deb.debian.org"; then
-  echo "DNS resolution is failing. Fix /etc/resolv.conf or network settings and re-run." >&2
-  exit 1
-fi
+}
+
+ensure_dns_or_exit "deb.debian.org"
 
 required_packages=(
   ansible
@@ -53,10 +74,7 @@ apt-get update -y
 apt-get install -y "${required_packages[@]}"
 
 if ! command -v terraform >/dev/null 2>&1; then
-  if ! check_dns "apt.releases.hashicorp.com"; then
-    echo "DNS resolution failed for apt.releases.hashicorp.com. Fix DNS and re-run to install Terraform." >&2
-    exit 1
-  fi
+  ensure_dns_or_exit "apt.releases.hashicorp.com"
   echo "Terraform not found. Adding HashiCorp repo..."
   install -m 0755 -d /usr/share/keyrings
   tmp_key=$(mktemp)
