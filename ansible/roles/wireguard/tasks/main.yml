@@ -88,6 +88,14 @@
       systemd:
         daemon_reload: true
 
+    - name: Disable non-primary WireGuard services
+      systemd:
+        name: "wg-quick@{{ item }}"
+        enabled: false
+        state: stopped
+      loop: "{{ wireguard_item_names | difference([wireguard_primary]) }}"
+      when: wireguard_primary is defined and wireguard_primary in wireguard_item_names
+
     - name: Enable primary WireGuard service on boot
       systemd:
         name: "wg-quick@{{ wireguard_primary }}"
