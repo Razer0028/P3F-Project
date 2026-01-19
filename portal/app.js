@@ -3485,8 +3485,8 @@ if (generateButton) {
   generateButton.addEventListener("click", () => {
     generateAll();
     const message = currentLang === "ja"
-      ? "ファイル生成が完了しました（未保存）。次に「サーバーへ保存」を実行してください。"
-      : "Generated files in memory (not saved). Run Save to write to server.";
+      ? "プレビューを更新しました（未保存）。保存は「生成して保存」を実行してください。"
+      : "Preview updated (not saved). Use Generate + Save to write to server.";
     setGenerateStatus(message, "ok");
     setActionNotice(message, "ok");
   });

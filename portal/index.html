@@ -2416,8 +2416,8 @@ GET  /api/jobs/&lt;job_id&gt;/logs</code></pre>
 
 <div class="actions">
             <button type="button" id="generate">
-              <span class="lang-en">Generate files</span>
-              <span class="lang-ja">ファイル生成</span>
+              <span class="lang-en">Preview outputs</span>
+              <span class="lang-ja">プレビュー更新</span>
             </button>
           </div>
           <div id="generate_status" class="status" aria-live="polite"></div>
@@ -2430,13 +2430,13 @@ GET  /api/jobs/&lt;job_id&gt;/logs</code></pre>
           <span class="lang-ja">生成結果</span>
         </h2>
         <p class="note">
-          <span class="lang-en">Always generate first. If you edit inputs or re-upload keys/tokens, generate again and then Save all to server (writes to ~/.config/edge-stack). Actions use the last saved files.</span>
-          <span class="lang-ja">必ず先にファイル生成。入力や鍵/トークン再アップロード後は再生成→保存が必要です（保存先: ~/.config/edge-stack）。各アクションは最後に保存した内容を使います。</span>
+          <span class="lang-en">Save all automatically regenerates outputs. Use Preview only when you want to inspect changes before saving.</span>
+          <span class="lang-ja">「サーバーに保存」で自動的に再生成します。保存前に確認したいときだけプレビューを使ってください。</span>
         </p>
         <div class="actions">
           <button type="button" id="save_all">
-            <span class="lang-en">Save all to server</span>
-            <span class="lang-ja">サーバーに保存</span>
+            <span class="lang-en">Generate + Save to server</span>
+            <span class="lang-ja">生成して保存</span>
           </button>
         </div>
         <div id="save_status" class="status" aria-live="polite"></div>
