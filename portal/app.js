@@ -10,6 +10,8 @@ const fields = {
   onpremKeyName: "onprem_key_name",
   vpsKeyName: "vps_key_name",
   ec2KeyName: "ec2_key_name",
+  autoVpsKeyPassphrase: "auto_vps_key_passphrase",
+  autoVpsSudoPassword: "auto_vps_sudo_password",
   uploadKeyName: "upload_key_name",
   uploadPassphrase: "upload_passphrase",
   ec2KeyPassphrase: "ec2_key_passphrase",
@@ -166,6 +168,8 @@ const saveMessages = {
     emptyOutput: "Generate files before saving.",
     saving: "Saving files to server...",
     success: "Saved to server.",
+    imported: (count) => `Auto-imported ${count} host vars.`,
+    importError: (count) => `Auto-import completed with ${count} error(s).`,
     error: (detail) => `Save failed: ${detail}`,
     unknownError: "Save failed. Check the server log.",
   },
@@ -176,6 +180,8 @@ const saveMessages = {
     emptyOutput: "先にファイル生成を実行してください。",
     saving: "サーバーへ保存中...",
     success: "サーバーに保存しました。",
+    imported: (count) => `自動取り込み: ${count} 件のhost_varsを生成しました。`,
+    importError: (count) => `自動取り込みで ${count} 件のエラーがあります。`,
     error: (detail) => `保存失敗: ${detail}`,
     unknownError: "保存失敗。サーバーログを確認してください。",
   },
@@ -1780,6 +1786,7 @@ async function saveAll() {
   }
 
   const payload = {
+    mode: (document.body && document.body.dataset.setupMode) || "custom",
     files: {
       "ansible/hosts.ini": inventory,
       "ansible/group_vars/all.yml": outputValue("groupvars"),
@@ -1794,6 +1801,18 @@ async function saveAll() {
       "tmp/next_steps.txt": outputValue("nextsteps"),
     },
   };
+  const autoSecrets = {};
+  const vpsPassphrase = value(fields.autoVpsKeyPassphrase);
+  if (vpsPassphrase) {
+    autoSecrets.vps_key_passphrase = vpsPassphrase;
+  }
+  const vpsSudoPassword = value(fields.autoVpsSudoPassword);
+  if (vpsSudoPassword) {
+    autoSecrets.vps_sudo_password = vpsSudoPassword;
+  }
+  if (Object.keys(autoSecrets).length > 0) {
+    payload.secrets = autoSecrets;
+  }
 
   setSaveStatus(messages.saving, "info");
 
@@ -1813,7 +1832,18 @@ async function saveAll() {
       return;
     }
     setSaveStatus(messages.success, "ok");
-    setActionNotice(currentLang === "ja" ? "サーバーへ保存しました。" : "Saved files to server.", "ok");
+    let notice = messages.success;
+    let noticeState = "ok";
+    const importedCount = result.imported ? Object.keys(result.imported).length : 0;
+    const importErrorCount = result.import_errors ? Object.keys(result.import_errors).length : 0;
+    if (importedCount > 0) {
+      notice += ` ${messages.imported(importedCount)}`;
+    }
+    if (importErrorCount > 0) {
+      notice += ` ${messages.importError(importErrorCount)}`;
+      noticeState = "error";
+    }
+    setActionNotice(notice, noticeState);
     guidedState.saved = true;
     updateGuidedSteps();
     loadStatus();

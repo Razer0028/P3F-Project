@@ -65,6 +65,9 @@ FAILOVER_HOST_VARS_REL = "ansible/host_vars/onprem-1.yml"
 FAILOVER_RULES_MARKER = "# Managed by portal: failover core"
 CLOUDFLARED_RULES_MARKER = "# Managed by portal: cloudflared"
 CLOUDFLARED_DEFAULT_ORIGIN = "http://10.100.0.2:8082"
+AUTO_IMPORT_MARKER = "# Managed by portal: auto-import"
+AUTO_IMPORT_ENV = os.environ.get("PORTAL_AUTO_IMPORT", "true").strip().lower()
+AUTO_IMPORT_ENABLED = AUTO_IMPORT_ENV not in {"0", "false", "no", "off"}
 
 def response_json(handler, status, payload):
     data = json.dumps(payload).encode("utf-8")
@@ -139,6 +142,10 @@ def indent_block(text, spaces):
     return "\n".join(f"{prefix}{line}" for line in text.splitlines())
 
 
+def normalize_text(text):
+    return text.replace("\r\n", "\n").replace("\r", "\n")
+
+
 def parse_yaml_value(text, key):
     if not text:
         return ""
@@ -181,6 +188,435 @@ def parse_inventory_group_ip(text, group):
                 host = parts[0]
             return host
     return ""
+
+
+def parse_inventory_group_host(text, group):
+    if not text:
+        return {}
+    header = f"[{group}]"
+    in_group = False
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        if stripped.startswith("[") and stripped.endswith("]"):
+            in_group = (stripped == header)
+            continue
+        if not in_group:
+            continue
+        parts = stripped.split()
+        if not parts:
+            continue
+        info = {"alias": parts[0]}
+        for token in parts[1:]:
+            if "=" not in token:
+                continue
+            key, value = token.split("=", 1)
+            info[key.strip()] = value.strip()
+        return info
+    return {}
+
+
+def resolve_key_path(raw):
+    if not raw:
+        return None
+    try:
+        path = pathlib.Path(raw).expanduser()
+    except Exception:
+        return None
+    return path if path.exists() else None
+
+
+def ensure_key_loaded(key_path, passphrase):
+    if not key_path or not passphrase:
+        return True, ""
+    return add_key_to_agent(key_path, passphrase)
+
+
+def run_ssh_command(host, user, key_path, command, sudo_password="", timeout=12):
+    if not host or not user:
+        return "", "Missing host/user"
+    target = f"{user}@{host}"
+    cmd = ["ssh", "-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=accept-new", "-o", "ConnectTimeout=8"]
+    if key_path:
+        cmd += ["-i", str(key_path), "-o", "IdentitiesOnly=yes"]
+    cmd.append(target)
+    cmd.append(command)
+    try:
+        result = subprocess.run(
+            cmd,
+            input=(sudo_password + "\n") if sudo_password else None,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=timeout,
+        )
+    except Exception as exc:
+        return "", str(exc)
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout or "ssh failed").strip()
+        return "", detail
+    return result.stdout, ""
+
+
+def read_remote_file(host, user, key_path, path, sudo_password="", timeout=12):
+    if not path:
+        return "", "Missing path"
+    if user == "root":
+        cmd = f"cat {path}"
+        return run_ssh_command(host, user, key_path, cmd, "", timeout)
+    cmd = f"sudo -S -p \"\" cat {path}"
+    return run_ssh_command(host, user, key_path, cmd, sudo_password, timeout)
+
+
+def read_local_file(path):
+    try:
+        return pathlib.Path(path).read_text(encoding="utf-8", errors="replace"), ""
+    except Exception as exc:
+        return "", str(exc)
+
+
+def sanitize_wg_content(content):
+    return normalize_text(content).rstrip("\n")
+
+
+def build_wireguard_block(configs, primary):
+    if not configs:
+        return ""
+    lines = [
+        "wireguard_manage: true",
+        "wireguard_allow_overwrite: true",
+        "wireguard_enable_on_boot: true",
+    ]
+    if primary:
+        lines.append(f"wireguard_primary: \"{primary}\"")
+    lines.append("wireguard_raw_configs:")
+    for cfg in configs:
+        name = cfg.get("name")
+        content = cfg.get("content", "")
+        if not name or not content:
+            continue
+        lines.append(f"  - name: \"{name}\"")
+        lines.append("    content: |")
+        lines.append(indent_block(content, 6))
+    return "\n".join(lines) + "\n"
+
+
+def normalize_suricata_yaml(content):
+    text = normalize_text(content).rstrip("\n")
+    return re.sub(r"(^\s*-\s*interface:\s*)(?!default\b)\S+", r"\1eth0", text, flags=re.MULTILINE)
+
+
+def build_suricata_block(yaml_content, rules_content):
+    if not yaml_content or not rules_content:
+        return ""
+    yaml_clean = normalize_suricata_yaml(yaml_content)
+    rules_clean = normalize_text(rules_content).rstrip("\n")
+    return "\n".join(
+        [
+            "suricata_manage: true",
+            "suricata_manage_service: true",
+            "suricata_restart_on_change: true",
+            "suricata_allow_overwrite: true",
+            "suricata_yaml_manage: true",
+            "suricata_yaml_content: |",
+            indent_block(yaml_clean, 2),
+            f"suricata_custom_rules_path: {SURICATA_CUSTOM_RULES_DEST}",
+            "suricata_custom_rules_content: |",
+            indent_block(rules_clean or "# empty", 2),
+            "",
+        ]
+    )
+
+
+def build_frr_block(config_content, daemons_content):
+    if not config_content or not daemons_content:
+        return ""
+    cfg_clean = normalize_text(config_content).rstrip("\n")
+    daemons_clean = normalize_text(daemons_content).rstrip("\n")
+    return "\n".join(
+        [
+            "frr_manage: true",
+            "frr_manage_service: true",
+            "frr_allow_overwrite: true",
+            "frr_restart_on_change: true",
+            "frr_generate_config: false",
+            "frr_config_content: |",
+            indent_block(cfg_clean, 2),
+            "frr_daemons_content: |",
+            indent_block(daemons_clean, 2),
+            "",
+        ]
+    )
+
+
+def parse_ufw_rules(text):
+    ufw_rules = []
+    forward_rules = []
+    forward_dest_ips = []
+    if not text:
+        return ufw_rules, forward_rules, ""
+
+    def add_ufw(rule):
+        if rule and rule not in ufw_rules:
+            ufw_rules.append(rule)
+
+    def add_forward(rule):
+        if not rule:
+            return
+        key = f"{rule.get('protocol')}:{rule.get('ext_port')}:{rule.get('dest_ip')}:{rule.get('dest_port')}"
+        if any(
+            r.get("protocol") == rule.get("protocol")
+            and r.get("ext_port") == rule.get("ext_port")
+            and r.get("dest_ip") == rule.get("dest_ip")
+            and r.get("dest_port") == rule.get("dest_port")
+            for r in forward_rules
+        ):
+            return
+        forward_rules.append(rule)
+
+    for line in normalize_text(text).splitlines():
+        stripped = line.strip()
+        if not stripped.startswith("-A ufw-user-"):
+            continue
+
+        proto_match = re.search(r"-p\s+(tcp|udp)", stripped)
+        proto = proto_match.group(1) if proto_match else ""
+        dport_match = re.search(r"--dport\s+(\S+)", stripped)
+        dports_match = re.search(r"--dports\s+(\S+)", stripped)
+        src_match = re.search(r"-s\s+(\S+)", stripped)
+        dest_match = re.search(r"-d\s+(\S+)", stripped)
+        in_if_match = re.search(r"-i\s+(\S+)", stripped)
+        out_if_match = re.search(r"-o\s+(\S+)", stripped)
+
+        if stripped.startswith("-A ufw-user-input"):
+            if dport_match or dports_match:
+                port_spec = dport_match.group(1) if dport_match else dports_match.group(1)
+                if proto:
+                    add_ufw(f"allow {port_spec}/{proto}")
+            elif src_match:
+                add_ufw(f"allow from {src_match.group(1)}")
+            continue
+
+        if not stripped.startswith("-A ufw-user-forward"):
+            continue
+
+        if dest_match and (dport_match or dports_match) and proto:
+            dest_ip = dest_match.group(1)
+            port_spec = dport_match.group(1) if dport_match else dports_match.group(1)
+            add_forward(
+                {
+                    "ext_port": port_spec,
+                    "dest_port": port_spec,
+                    "protocol": proto,
+                    "dest_ip": dest_ip,
+                }
+            )
+            if dest_ip not in forward_dest_ips:
+                forward_dest_ips.append(dest_ip)
+            continue
+
+        if in_if_match and out_if_match:
+            in_if = in_if_match.group(1)
+            out_if = out_if_match.group(1)
+            add_ufw(f"route allow in on {in_if} out on {out_if}")
+            continue
+
+        if in_if_match and src_match:
+            in_if = in_if_match.group(1)
+            add_ufw(f"route allow in on {in_if} from {src_match.group(1)}")
+
+    default_dest_ip = forward_dest_ips[0] if forward_dest_ips else ""
+    return ufw_rules, forward_rules, default_dest_ip
+
+
+def build_portctl_block(ufw_rules, forward_rules, default_dest_ip):
+    if not ufw_rules and not forward_rules:
+        return ""
+    ufw_yaml = ""
+    if ufw_rules:
+        ufw_yaml = "\n".join(
+            f"  - \"{rule.replace('\\', '\\\\').replace('\"', '\\\\\"')}\""
+            for rule in ufw_rules
+        )
+    forward_yaml = ""
+    if forward_rules:
+        blocks = []
+        for rule in forward_rules:
+            blocks.append(
+                "\n".join(
+                    [
+                        "  - ext_port: \"{ext}\"".format(ext=rule["ext_port"]),
+                        "    dest_port: \"{dest}\"".format(dest=rule["dest_port"]),
+                        "    protocol: \"{proto}\"".format(proto=rule["protocol"]),
+                        "    dest_ip: \"{dest_ip}\"".format(dest_ip=rule["dest_ip"]),
+                    ]
+                )
+            )
+        forward_yaml = "\n".join(blocks)
+    lines = [
+        "portctl_manage: true",
+        "portctl_manage_service: true",
+        "portctl_apply_rules: true",
+        f"portctl_default_dest_ip: \"{default_dest_ip}\"" if default_dest_ip else "portctl_default_dest_ip: \"\"",
+    ]
+    if ufw_rules:
+        lines.append("portctl_ufw_rules:")
+        lines.append(ufw_yaml)
+    else:
+        lines.append("portctl_ufw_rules: []")
+    if forward_rules:
+        lines.append("portctl_forward_rules:")
+        lines.append(forward_yaml)
+    else:
+        lines.append("portctl_forward_rules: []")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def write_host_vars(output_root, host, content):
+    if not content:
+        return {}
+    rel_path = f"ansible/host_vars/{host}.yml"
+    abs_path = resolve_output_path(output_root, rel_path)
+    if not abs_path:
+        return {}
+    if abs_path.exists():
+        try:
+            existing = abs_path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            existing = ""
+        if AUTO_IMPORT_MARKER not in existing.splitlines()[:2]:
+            return {}
+    final_content = f"{AUTO_IMPORT_MARKER}\n{content.strip()}\n"
+    abs_path.parent.mkdir(parents=True, exist_ok=True)
+    abs_path.write_text(final_content, encoding="utf-8")
+    os.chmod(abs_path, 0o600)
+    record_secret_path(abs_path)
+    return {rel_path: {"bytes": len(final_content.encode('utf-8'))}}
+
+
+def maybe_write_auto_host_vars(output_root, inventory_text, group_vars_text, secrets, setup_mode):
+    if not AUTO_IMPORT_ENABLED or setup_mode != "beginner":
+        return {}, {}
+    wireguard_enabled = parse_yaml_bool(group_vars_text, "wireguard_manage")
+    suricata_enabled = parse_yaml_bool(group_vars_text, "suricata_manage")
+    frr_enabled = parse_yaml_bool(group_vars_text, "frr_manage")
+    portctl_enabled = parse_yaml_bool(group_vars_text, "portctl_manage")
+    if not (wireguard_enabled or suricata_enabled or frr_enabled or portctl_enabled):
+        return {}, {}
+
+    saved = {}
+    errors = {}
+    host_sections = {}
+    for host_name in ("onprem-1", "vps-1", "ec2-1"):
+        host_sections[host_name] = []
+    vps_info = parse_inventory_group_host(inventory_text, "vps")
+    ec2_info = parse_inventory_group_host(inventory_text, "ec2")
+
+    vps_host = vps_info.get("ansible_host") or vps_info.get("alias", "")
+    vps_user = vps_info.get("ansible_user") or "root"
+    vps_key = resolve_key_path(vps_info.get("ansible_ssh_private_key_file", ""))
+    vps_key_passphrase = (secrets or {}).get("vps_key_passphrase", "")
+    vps_sudo_password = (secrets or {}).get("vps_sudo_password", "")
+
+    ec2_host = ec2_info.get("ansible_host") or ec2_info.get("alias", "")
+    ec2_user = ec2_info.get("ansible_user") or "root"
+    ec2_key = resolve_key_path(ec2_info.get("ansible_ssh_private_key_file", ""))
+
+    if vps_key_passphrase and vps_key:
+        ok, error = ensure_key_loaded(vps_key, vps_key_passphrase)
+        if not ok:
+            errors["vps_key_passphrase"] = error
+
+    if wireguard_enabled:
+        onprem_wg0, err = read_local_file("/etc/wireguard/wg0.conf")
+        if err:
+            errors["onprem_wg0"] = err
+        onprem_wg1, err = read_local_file("/etc/wireguard/wg1.conf")
+        if err:
+            errors["onprem_wg1"] = err
+
+        vps_wg0, err = read_remote_file(vps_host, vps_user, vps_key, "/etc/wireguard/wg0.conf", vps_sudo_password)
+        if err:
+            errors["vps_wg0"] = err
+
+        ec2_wg1, err = read_remote_file(ec2_host, ec2_user, ec2_key, "/etc/wireguard/wg1.conf")
+        if err:
+            errors["ec2_wg1"] = err
+
+        onprem_configs = []
+        if onprem_wg0:
+            onprem_configs.append({"name": "wg0", "content": sanitize_wg_content(onprem_wg0)})
+        if onprem_wg1:
+            onprem_configs.append({"name": "wg1", "content": sanitize_wg_content(onprem_wg1)})
+        onprem_block = build_wireguard_block(onprem_configs, "wg0")
+        if onprem_block:
+            host_sections["onprem-1"].append(onprem_block)
+
+        vps_configs = []
+        if vps_wg0:
+            vps_configs.append({"name": "wg0", "content": sanitize_wg_content(vps_wg0)})
+        vps_block = build_wireguard_block(vps_configs, "wg0")
+        if vps_block:
+            host_sections["vps-1"].append(vps_block)
+
+        ec2_configs = []
+        if ec2_wg1:
+            ec2_configs.append({"name": "wg1", "content": sanitize_wg_content(ec2_wg1)})
+        ec2_block = build_wireguard_block(ec2_configs, "wg1")
+        if ec2_block:
+            host_sections["ec2-1"].append(ec2_block)
+
+    if frr_enabled:
+        onprem_frr, err = read_local_file("/etc/frr/frr.conf")
+        if err:
+            errors["onprem_frr.conf"] = err
+        onprem_daemons, err = read_local_file("/etc/frr/daemons")
+        if err:
+            errors["onprem_frr.daemons"] = err
+        onprem_frr_block = build_frr_block(onprem_frr, onprem_daemons)
+        if onprem_frr_block:
+            host_sections["onprem-1"].append(onprem_frr_block)
+
+        vps_frr, err = read_remote_file(vps_host, vps_user, vps_key, "/etc/frr/frr.conf", vps_sudo_password)
+        if err:
+            errors["vps_frr.conf"] = err
+        vps_daemons, err = read_remote_file(vps_host, vps_user, vps_key, "/etc/frr/daemons", vps_sudo_password)
+        if err:
+            errors["vps_frr.daemons"] = err
+        vps_frr_block = build_frr_block(vps_frr, vps_daemons)
+        if vps_frr_block:
+            host_sections["vps-1"].append(vps_frr_block)
+
+    if suricata_enabled:
+        ec2_yaml, err = read_remote_file(ec2_host, ec2_user, ec2_key, "/etc/suricata/suricata.yaml")
+        if err:
+            errors["ec2_suricata_yaml"] = err
+        ec2_rules, err = read_remote_file(ec2_host, ec2_user, ec2_key, "/etc/suricata/rules/custom.rules")
+        if err:
+            errors["ec2_suricata_rules"] = err
+        suricata_block = build_suricata_block(ec2_yaml, ec2_rules)
+        if suricata_block:
+            host_sections["vps-1"].append(suricata_block)
+            host_sections["ec2-1"].append(suricata_block)
+
+    if portctl_enabled:
+        vps_ufw, err = read_remote_file(vps_host, vps_user, vps_key, "/etc/ufw/user.rules", vps_sudo_password)
+        if err:
+            errors["vps_ufw"] = err
+        ufw_rules, forward_rules, default_dest = parse_ufw_rules(vps_ufw)
+        portctl_block = build_portctl_block(ufw_rules, forward_rules, default_dest)
+        if portctl_block:
+            host_sections["vps-1"].append(portctl_block)
+
+    for host, blocks in host_sections.items():
+        if not blocks:
+            continue
+        content = "\n".join(blocks).rstrip() + "\n"
+        saved.update(write_host_vars(output_root, host, content))
+
+    return saved, errors
 
 
 def read_tfvars_value(path, key):
@@ -1434,6 +1870,10 @@ class PortalHandler(http.server.SimpleHTTPRequestHandler):
             return
 
         files = payload.get("files")
+        setup_mode = payload.get("mode", "custom")
+        secrets = payload.get("secrets", {})
+        if not isinstance(secrets, dict):
+            secrets = {}
         if not isinstance(files, dict) or not files:
             response_json(self, 400, {"ok": False, "error": "No files provided"})
             return
@@ -1477,7 +1917,11 @@ class PortalHandler(http.server.SimpleHTTPRequestHandler):
         if cloudflared_saved:
             saved.update(cloudflared_saved)
 
-        response_json(self, 200, {"ok": True, "saved": saved})
+        auto_saved, auto_errors = maybe_write_auto_host_vars(self.state.output_root, inventory_text, group_vars_text, secrets, setup_mode)
+        if auto_saved:
+            saved.update(auto_saved)
+
+        response_json(self, 200, {"ok": True, "saved": saved, "imported": auto_saved, "import_errors": auto_errors})
 
     def _handle_run(self):
         token_ok, message = self._check_token()

@@ -1682,10 +1682,10 @@ GET  /api/jobs/&lt;job_id&gt;/logs</code></pre>
 
           <div class="form-section" data-form-section="ssh">
             <fieldset>
-                        <legend>
-                          <span class="lang-en">SSH Keys</span>
-                          <span class="lang-ja">SSH鍵</span>
-                        </legend>
+              <legend>
+                <span class="lang-en">SSH Keys</span>
+                <span class="lang-ja">SSH鍵</span>
+              </legend>
                         <p class="note">
                           <span class="lang-en">Keys are stored under ~/.ssh (portal user, often /root/.ssh). Enter only the file name.</span>
                           <span class="lang-ja">鍵は ~/.ssh（ポータル実行ユーザー、通常は /root/.ssh）に保存されます。鍵名だけ入力してください。</span>
@@ -1775,6 +1775,41 @@ GET  /api/jobs/&lt;job_id&gt;/logs</code></pre>
                 </div>
                 <div id="upload_status" class="status" aria-live="polite"></div>
               </div>
+            </fieldset>
+
+            <fieldset class="beginner-only">
+              <legend>
+                <span class="lang-en">Auto import (Simple)</span>
+                <span class="lang-ja">自動取り込み（簡易）</span>
+              </legend>
+              <p class="note">
+                <span class="lang-en">Used only during Save to read VPS configs. These values are not stored.</span>
+                <span class="lang-ja">保存時にVPS設定を読み取るためだけに使います（保存されません）。</span>
+              </p>
+              <label>
+                <span class="lang-en">VPS key passphrase (optional)</span>
+                <span class="lang-ja">VPS鍵パスフレーズ（任意）</span>
+                <input
+                  id="auto_vps_key_passphrase"
+                  type="password"
+                  value=""
+                  placeholder="optional"
+                  data-placeholder-en="optional"
+                  data-placeholder-ja="任意"
+                />
+              </label>
+              <label>
+                <span class="lang-en">VPS sudo password (optional)</span>
+                <span class="lang-ja">VPS sudo パスワード（任意）</span>
+                <input
+                  id="auto_vps_sudo_password"
+                  type="password"
+                  value=""
+                  placeholder="optional"
+                  data-placeholder-en="optional"
+                  data-placeholder-ja="任意"
+                />
+              </label>
             </fieldset>
 
           </div>
