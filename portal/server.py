@@ -435,10 +435,11 @@ def build_portctl_block(ufw_rules, forward_rules, default_dest_ip):
         return ""
     ufw_yaml = ""
     if ufw_rules:
-        ufw_yaml = "\n".join(
-            f"  - \"{rule.replace('\\', '\\\\').replace('\"', '\\\\\"')}\""
-            for rule in ufw_rules
-        )
+        escaped = []
+        for rule in ufw_rules:
+            safe = rule.replace("\\", "\\\\").replace("\"", "\\\"")
+            escaped.append(f"  - \"{safe}\"")
+        ufw_yaml = "\n".join(escaped)
     forward_yaml = ""
     if forward_rules:
         blocks = []
