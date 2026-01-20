@@ -359,6 +359,56 @@ h1 {
   font-size: 0.85rem;
 }
 
+.wizard-progress {
+  margin-top: 18px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface-2);
+}
+
+.wizard-progress h4 {
+  margin: 0 0 12px;
+  font-size: 0.95rem;
+}
+
+.wizard-progress-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.wizard-progress-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 0.9rem;
+}
+
+.wizard-progress-label {
+  color: var(--muted);
+}
+
+.wizard-progress-state {
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.wizard-progress-state[data-state="ok"] {
+  color: var(--accent-2);
+}
+
+.wizard-progress-state[data-state="error"] {
+  color: var(--danger);
+}
+
+.wizard-progress-state[data-state="info"] {
+  color: var(--accent);
+}
+
 .wizard-complete {
   margin-top: 12px;
   padding: 10px;

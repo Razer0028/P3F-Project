@@ -3281,6 +3281,49 @@ function updateWizard() {
   if (validateButton) {
     validateButton.disabled = wizardState.busy || !canValidate;
   }
+
+  updateWizardProgressSummary();
+}
+
+function updateWizardProgressSummary() {
+  if (!wizardActive()) {
+    return;
+  }
+  const items = document.querySelectorAll("[data-wizard-progress]");
+  if (!items.length) {
+    return;
+  }
+  const plan = getPlanOptions();
+  const fallback = currentLang === "ja" ? "未実行" : "Not run";
+  items.forEach((item) => {
+    const planKey = item.dataset.progressPlan;
+    let visible = true;
+    if (planKey) {
+      if (planKey === "any") {
+        visible = Boolean(plan.onprem || plan.vps || plan.ec2);
+      } else {
+        visible = Boolean(plan[planKey]);
+      }
+    }
+    item.hidden = !visible;
+    if (!visible) {
+      return;
+    }
+
+    const statusId = item.dataset.wizardProgress;
+    const statusEl = statusId ? document.getElementById(statusId) : null;
+    const stateEl = item.querySelector("[data-progress-state]");
+    if (!stateEl) {
+      return;
+    }
+    if (statusEl && statusEl.textContent.trim()) {
+      stateEl.textContent = statusEl.textContent.trim();
+      stateEl.dataset.state = statusEl.dataset.state || "info";
+    } else {
+      stateEl.textContent = fallback;
+      stateEl.dataset.state = "info";
+    }
+  });
 }
 
 

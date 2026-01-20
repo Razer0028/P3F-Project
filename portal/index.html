@@ -1365,6 +1365,70 @@ systemctl status failover_core</code></pre>
               </label>
             </div>
             <div id="wizard_run_notice" class="wizard-run-notice" aria-live="polite"></div>
+            <div class="wizard-progress">
+              <h4>
+                <span class="lang-en">Latest progress</span>
+                <span class="lang-ja">直近の実行状況</span>
+              </h4>
+              <ul class="wizard-progress-list">
+                <li class="wizard-progress-item" data-wizard-progress="guided_status_tf_cf" data-progress-plan="cloudflare">
+                  <span class="wizard-progress-label">
+                    <span class="lang-en">Terraform (Cloudflare)</span>
+                    <span class="lang-ja">Terraform（Cloudflare）</span>
+                  </span>
+                  <span class="wizard-progress-state" data-progress-state></span>
+                </li>
+                <li class="wizard-progress-item" data-wizard-progress="guided_status_tf" data-progress-plan="terraform">
+                  <span class="wizard-progress-label">
+                    <span class="lang-en">Terraform (EC2)</span>
+                    <span class="lang-ja">Terraform（EC2）</span>
+                  </span>
+                  <span class="wizard-progress-state" data-progress-state></span>
+                </li>
+                <li class="wizard-progress-item" data-wizard-progress="guided_status_ansible_base" data-progress-plan="any">
+                  <span class="wizard-progress-label">
+                    <span class="lang-en">Ansible (base)</span>
+                    <span class="lang-ja">Ansible（base）</span>
+                  </span>
+                  <span class="wizard-progress-state" data-progress-state></span>
+                </li>
+                <li class="wizard-progress-item" data-wizard-progress="guided_status_ansible_vps" data-progress-plan="vps">
+                  <span class="wizard-progress-label">
+                    <span class="lang-en">Ansible (VPS)</span>
+                    <span class="lang-ja">Ansible（VPS）</span>
+                  </span>
+                  <span class="wizard-progress-state" data-progress-state></span>
+                </li>
+                <li class="wizard-progress-item" data-wizard-progress="guided_status_ansible_cloudflared" data-progress-plan="cloudflared">
+                  <span class="wizard-progress-label">
+                    <span class="lang-en">Ansible (cloudflared)</span>
+                    <span class="lang-ja">Ansible（cloudflared）</span>
+                  </span>
+                  <span class="wizard-progress-state" data-progress-state></span>
+                </li>
+                <li class="wizard-progress-item" data-wizard-progress="guided_status_ansible_portctl" data-progress-plan="portctl">
+                  <span class="wizard-progress-label">
+                    <span class="lang-en">Ansible (port forwarding)</span>
+                    <span class="lang-ja">Ansible（転送設定）</span>
+                  </span>
+                  <span class="wizard-progress-state" data-progress-state></span>
+                </li>
+                <li class="wizard-progress-item" data-wizard-progress="guided_status_ansible_ec2" data-progress-plan="ec2">
+                  <span class="wizard-progress-label">
+                    <span class="lang-en">Ansible (EC2)</span>
+                    <span class="lang-ja">Ansible（EC2）</span>
+                  </span>
+                  <span class="wizard-progress-state" data-progress-state></span>
+                </li>
+                <li class="wizard-progress-item" data-wizard-progress="guided_status_ansible_onprem" data-progress-plan="onprem">
+                  <span class="wizard-progress-label">
+                    <span class="lang-en">Ansible (on-prem)</span>
+                    <span class="lang-ja">Ansible（オンプレ）</span>
+                  </span>
+                  <span class="wizard-progress-state" data-progress-state></span>
+                </li>
+              </ul>
+            </div>
             <details class="wizard-log">
               <summary>
                 <span class="lang-en">Details</span>
