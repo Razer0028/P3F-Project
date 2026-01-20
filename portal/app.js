@@ -395,6 +395,7 @@ const wizardActionLabels = {
   "tf-init": { en: "Prepare cloud server", ja: "クラウド準備" },
   "tf-apply": { en: "Create cloud server", ja: "クラウドサーバーを作成" },
   "ansible-base": { en: "Base setup", ja: "基本設定" },
+  "install-tools": { en: "Prepare tools", ja: "ツールを準備" },
   "ansible-vps": { en: "Configure VPS", ja: "VPS設定" },
   "ansible-cloudflared": { en: "Configure web entry", ja: "公開設定" },
   "ansible-portctl": { en: "Configure forwarding", ja: "転送設定" },
@@ -3347,6 +3348,15 @@ function updateWizard() {
     saveBtn.disabled = wizardState.busy || !canSave;
   }
 
+  const installBtn = document.getElementById("wizard_install_tools");
+  if (installBtn) {
+    installBtn.disabled = wizardState.busy;
+  }
+  const installToken = document.getElementById("wizard_install_token");
+  if (installToken) {
+    installToken.disabled = wizardState.busy;
+  }
+
   const plan = getPlanOptions();
   const cfButton = document.getElementById("wizard_run_cf");
   if (cfButton) {
@@ -3426,12 +3436,16 @@ function updateWizardProgressSummary() {
 function tokenValue() {
   const runToken = document.getElementById("run_token");
   const wizardToken = document.getElementById("wizard_run_token");
+  const installToken = document.getElementById("wizard_install_token");
   const uploadToken = document.getElementById("upload_token");
   if (runToken && runToken.value.trim()) {
     return runToken.value.trim();
   }
   if (wizardToken && wizardToken.value.trim()) {
     return wizardToken.value.trim();
+  }
+  if (installToken && installToken.value.trim()) {
+    return installToken.value.trim();
   }
   if (uploadToken && uploadToken.value.trim()) {
     return uploadToken.value.trim();
@@ -3887,7 +3901,16 @@ async function runWizardTerraform() {
     if (document.body && document.body.dataset.setupMode === "beginner") {
       await refreshEc2IpFromTerraform(false);
     }
+    guidedState.saved = false;
+    setWizardElement(
+      "wizard_save_status",
+      currentLang === "ja"
+        ? "EC2作成後はもう一度「サーバーに保存」を実行してください。"
+        : "After EC2 creation, run Save again.",
+      "info",
+    );
     updateGuidedSteps();
+    updateWizard();
   }
 }
 
@@ -3950,6 +3973,13 @@ async function runWizardValidate() {
     guidedState.validate = true;
     updateGuidedSteps();
   }
+}
+
+async function runWizardInstallTools() {
+  return runWizardActions(["install-tools"], {
+    noticeId: "wizard_install_status",
+    statusId: "wizard_install_status",
+  });
 }
 
 function updateTitle(lang) {
@@ -4506,6 +4536,13 @@ if (wizardSave) {
   });
 }
 
+const wizardInstallTools = document.getElementById("wizard_install_tools");
+if (wizardInstallTools) {
+  wizardInstallTools.addEventListener("click", () => {
+    runWizardInstallTools();
+  });
+}
+
 const wizardRunCf = document.getElementById("wizard_run_cf");
 if (wizardRunCf) {
   wizardRunCf.addEventListener("click", () => {
@@ -4638,24 +4675,54 @@ runButtons.forEach((button) => {
 
 const wizardRunToken = document.getElementById("wizard_run_token");
 const runToken = document.getElementById("run_token");
+const wizardInstallToken = document.getElementById("wizard_install_token");
+const uploadTokenInput = document.getElementById("upload_token");
+
+const syncPortalTokens = (nextValue) => {
+  if (!nextValue) {
+    return;
+  }
+  if (wizardRunToken && wizardRunToken.value !== nextValue) {
+    wizardRunToken.value = nextValue;
+  }
+  if (runToken && runToken.value !== nextValue) {
+    runToken.value = nextValue;
+  }
+  if (uploadTokenInput && uploadTokenInput.value !== nextValue) {
+    uploadTokenInput.value = nextValue;
+  }
+  if (wizardInstallToken && wizardInstallToken.value !== nextValue) {
+    wizardInstallToken.value = nextValue;
+  }
+};
+
 if (wizardRunToken && runToken) {
   wizardRunToken.addEventListener("input", () => {
     if (runToken.value !== wizardRunToken.value) {
       runToken.value = wizardRunToken.value;
     }
+    syncPortalTokens(wizardRunToken.value);
     wizardStatusAutoChecked = false;
   });
   runToken.addEventListener("input", () => {
     if (wizardRunToken.value !== runToken.value) {
       wizardRunToken.value = runToken.value;
     }
+    syncPortalTokens(runToken.value);
     wizardStatusAutoChecked = false;
   });
 }
 
-const uploadTokenInput = document.getElementById("upload_token");
 if (uploadTokenInput) {
   uploadTokenInput.addEventListener("input", () => {
+    syncPortalTokens(uploadTokenInput.value);
+    wizardStatusAutoChecked = false;
+  });
+}
+
+if (wizardInstallToken) {
+  wizardInstallToken.addEventListener("input", () => {
+    syncPortalTokens(wizardInstallToken.value);
     wizardStatusAutoChecked = false;
   });
 }

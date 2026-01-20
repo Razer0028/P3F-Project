@@ -1265,6 +1265,26 @@ systemctl status failover_core</code></pre>
               <span class="lang-en">Enter the on-prem IP, VPS IP, and admin login.</span>
               <span class="lang-ja">オンプレIP、VPS IP、管理者のログイン情報を入力してください。</span>
             </p>
+            <p class="wizard-note">
+              <span class="lang-en">Install tools first if Terraform/Ansible are not ready on this portal host.</span>
+              <span class="lang-ja">このポータルにTerraform/Ansibleが無ければ、最初にツールを準備してください。</span>
+            </p>
+            <div class="wizard-action-grid">
+              <label>
+                <span class="lang-en">Portal token</span>
+                <span class="lang-ja">ポータルトークン</span>
+                <span class="field-hint">
+                  <span class="lang-en">Token from portal start / Example: 19f0...</span>
+                  <span class="lang-ja">起動時トークン / 例: 19f0...</span>
+                </span>
+                <input id="wizard_install_token" type="text" placeholder="token" data-placeholder-en="token" data-placeholder-ja="トークン" />
+              </label>
+              <button type="button" id="wizard_install_tools" class="wizard-secondary">
+                <span class="lang-en">Prepare tools</span>
+                <span class="lang-ja">ツールを準備</span>
+              </button>
+            </div>
+            <div id="wizard_install_status" class="status" aria-live="polite"></div>
             <div class="wizard-actions">
               <button type="button" class="wizard-next" data-next-step="2">
                 <span class="lang-en">Next</span>
