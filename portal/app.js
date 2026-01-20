@@ -775,7 +775,7 @@ sysctl_forward_manage: ${sysctlForwardManage}
 wireguard_manage: ${wireguardManage}
 wireguard_enable_on_boot: ${simpleMode ? "true" : "false"}
 wireguard_restart_on_change: ${simpleMode ? "true" : "false"}
-wireguard_allow_overwrite: ${simpleMode ? "true" : "false"}
+wireguard_allow_overwrite: false
 
 # Failover core
 failover_core_manage: ${failoverActive}
@@ -1864,6 +1864,10 @@ async function saveAll() {
       setSaveStatus(messages.ec2KeyMissing, "error");
       return;
     }
+  }
+
+  if (plan.ec2 && !value(fields.ec2Ip)) {
+    await refreshEc2IpFromTerraform(true);
   }
 
   generateAll();

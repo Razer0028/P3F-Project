@@ -795,13 +795,13 @@ def maybe_write_auto_host_vars_simple(output_root, inventory_text, group_vars_te
             configs, wg_errors = build_simple_wireguard_configs(output_root, inventory_text, client_allowed)
             errors.update(wg_errors)
             if not wg_errors:
-                onprem_block = build_wireguard_config_block(configs.get("onprem-1"), "wg0", allow_overwrite=True, enable_on_boot=True)
+                onprem_block = build_wireguard_config_block(configs.get("onprem-1"), "wg0", allow_overwrite=False, enable_on_boot=True)
                 if onprem_block:
                     wireguard_blocks["onprem-1"] = onprem_block
-                vps_block = build_wireguard_config_block(configs.get("vps-1"), "wg0", allow_overwrite=True, enable_on_boot=True)
+                vps_block = build_wireguard_config_block(configs.get("vps-1"), "wg0", allow_overwrite=False, enable_on_boot=True)
                 if vps_block:
                     wireguard_blocks["vps-1"] = vps_block
-                ec2_block = build_wireguard_config_block(configs.get("ec2-1"), "wg1", allow_overwrite=True, enable_on_boot=True)
+                ec2_block = build_wireguard_config_block(configs.get("ec2-1"), "wg1", allow_overwrite=False, enable_on_boot=True)
                 if ec2_block:
                     wireguard_blocks["ec2-1"] = ec2_block
                 wg_onprem = configs.get("onprem-1", [])
