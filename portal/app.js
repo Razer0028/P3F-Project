@@ -171,6 +171,7 @@ const saveMessages = {
     savedCount: (count) => `${count} file(s) saved.`,
     imported: (count) => `Auto-imported ${count} host vars.`,
     importError: (count) => `Auto-import completed with ${count} error(s).`,
+    warningHeader: "Warnings:",
     error: (detail) => `Save failed: ${detail}`,
     unknownError: "Save failed. Check the server log.",
   },
@@ -184,6 +185,7 @@ const saveMessages = {
     savedCount: (count) => `${count} 件のファイルを保存しました。`,
     imported: (count) => `自動取り込み: ${count} 件のhost_varsを生成しました。`,
     importError: (count) => `自動取り込みで ${count} 件のエラーがあります。`,
+    warningHeader: "注意:",
     error: (detail) => `保存失敗: ${detail}`,
     unknownError: "保存失敗。サーバーログを確認してください。",
   },
@@ -1858,6 +1860,33 @@ async function saveAll() {
     if (importErrorCount > 0) {
       notice += ` ${messages.importError(importErrorCount)}`;
       noticeState = "error";
+    }
+    const warningMessages = [];
+    const warnings = result.warnings || {};
+    if (Array.isArray(warnings)) {
+      for (const warning of warnings) {
+        if (typeof warning === "string" && warning.trim()) {
+          warningMessages.push(warning.trim());
+        }
+      }
+    } else if (warnings && typeof warnings === "object") {
+      for (const warning of Object.values(warnings)) {
+        if (typeof warning === "string" && warning.trim()) {
+          warningMessages.push(warning.trim());
+        } else if (warning && typeof warning === "object" && typeof warning.message === "string") {
+          const message = warning.message.trim();
+          if (message) {
+            warningMessages.push(message);
+          }
+        }
+      }
+    }
+    if (warningMessages.length > 0) {
+      const header = messages.warningHeader || "Warnings:";
+      notice += ` ${header} ${warningMessages.join(" / ")}`;
+      if (noticeState !== "error") {
+        noticeState = "info";
+      }
     }
     setActionNotice(notice, noticeState);
     guidedState.saved = true;

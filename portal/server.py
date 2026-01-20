@@ -2135,6 +2135,7 @@ class PortalHandler(http.server.SimpleHTTPRequestHandler):
 
         saved = {}
         errors = {}
+        warnings = {}
         for rel_path, content in files.items():
             if rel_path not in ALLOWED_SAVE_TARGETS:
                 errors[rel_path] = "Path not allowed"
@@ -2176,23 +2177,23 @@ class PortalHandler(http.server.SimpleHTTPRequestHandler):
             if groups:
                 missing = cloudflared_host_vars_missing(self.state.output_root, groups)
                 if missing:
-                    response_json(
-                        self,
-                        400,
-                        {
-                            "ok": False,
-                            "error": "Cloudflared host_vars not generated. Check Cloudflare outputs and hostnames.",
-                            "details": missing,
-                            "saved": saved,
-                        },
-                    )
-                    return
+                    warnings["cloudflared"] = {
+                        "message": (
+                            "Cloudflared host_vars not generated yet. "
+                            "Run Cloudflare Apply (tf-cf-apply) then Save to generate."
+                        ),
+                        "details": missing,
+                    }
 
         auto_saved, auto_errors = maybe_write_auto_host_vars(self.state.output_root, inventory_text, group_vars_text, secrets, setup_mode)
         if auto_saved:
             saved.update(auto_saved)
 
-        response_json(self, 200, {"ok": True, "saved": saved, "imported": auto_saved, "import_errors": auto_errors})
+        response_json(
+            self,
+            200,
+            {"ok": True, "saved": saved, "imported": auto_saved, "import_errors": auto_errors, "warnings": warnings},
+        )
 
     def _handle_run(self):
         token_ok, message = self._check_token()
@@ -2252,7 +2253,10 @@ class PortalHandler(http.server.SimpleHTTPRequestHandler):
                             400,
                             {
                                 "ok": False,
-                                "error": "Cloudflared host_vars missing. Run Save after Terraform Cloudflare.",
+                                "error": (
+                                    "Cloudflared host_vars missing. "
+                                    "Run Cloudflare Apply (tf-cf-apply) then Save. (Cloudflare適用→保存が必要です)"
+                                ),
                                 "details": missing,
                             },
                         )
