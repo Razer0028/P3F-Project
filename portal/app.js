@@ -350,6 +350,7 @@ const wizardState = {
     sshTargets: new Set(),
   },
 };
+let wizardStatusAutoChecked = false;
 
 const wizardMessages = {
   en: {
@@ -3055,8 +3056,10 @@ function wizardInputsComplete() {
 
 function wizardUploadsComplete() {
   const plan = getPlanOptions();
+  syncWizardUploadsFromStatus(plan);
   const requireCloudflare = plan.cloudflare;
   const requireAws = plan.terraform;
+  const keyPairMode = value(fields.keyPairMode) || "existing";
   const requiredKeys = new Set();
   if (plan.onprem && !isLocalOnpremHost(value(fields.onpremIp))) {
     requiredKeys.add("onprem");
@@ -3064,7 +3067,7 @@ function wizardUploadsComplete() {
   if (plan.vps) {
     requiredKeys.add("vps");
   }
-  if (plan.ec2) {
+  if (plan.ec2 && keyPairMode !== "auto") {
     requiredKeys.add("ec2");
   }
 
@@ -3117,6 +3120,53 @@ function wizardRunComplete() {
 
 function wizardValidateComplete() {
   return Boolean(guidedState.validate);
+}
+
+function syncWizardUploadsFromStatus(plan) {
+  if (!wizardActive() || !lastStatusPayload) {
+    return;
+  }
+  const uploads = wizardState.uploads;
+  if (getStatusValue("secrets.cloudflare_token.exists", false)) {
+    uploads.cloudflare = true;
+  }
+  if (getStatusValue("secrets.aws_credentials.exists", false)) {
+    uploads.aws = true;
+  }
+
+  const sshTargets = uploads.sshTargets;
+  if (plan.onprem && !isLocalOnpremHost(value(fields.onpremIp))) {
+    if (getStatusValue("ssh_keys.ansible.exists", false)) {
+      sshTargets.add("onprem");
+    }
+  }
+  if (plan.vps && getStatusValue("ssh_keys.vps.exists", false)) {
+    sshTargets.add("vps");
+  }
+  if (plan.ec2 && getStatusValue("ssh_keys.ec2.exists", false)) {
+    sshTargets.add("ec2");
+  }
+}
+
+function maybeAutoLoadStatus() {
+  if (!wizardActive()) {
+    return;
+  }
+  if (wizardStatusAutoChecked) {
+    return;
+  }
+  if (wizardState.step < 2) {
+    return;
+  }
+  if (!tokenValue()) {
+    return;
+  }
+  wizardStatusAutoChecked = true;
+  loadStatus().then(() => {
+    updateWizard();
+  }).catch(() => {
+    // Ignore status auto-check errors.
+  });
 }
 
 function setWizardElement(id, message, state) {
@@ -3175,6 +3225,7 @@ function updateWizard() {
     return;
   }
 
+  maybeAutoLoadStatus();
   const stepStates = [
     wizardInputsComplete(),
     wizardUploadsComplete(),
@@ -4546,11 +4597,20 @@ if (wizardRunToken && runToken) {
     if (runToken.value !== wizardRunToken.value) {
       runToken.value = wizardRunToken.value;
     }
+    wizardStatusAutoChecked = false;
   });
   runToken.addEventListener("input", () => {
     if (wizardRunToken.value !== runToken.value) {
       wizardRunToken.value = runToken.value;
     }
+    wizardStatusAutoChecked = false;
+  });
+}
+
+const uploadTokenInput = document.getElementById("upload_token");
+if (uploadTokenInput) {
+  uploadTokenInput.addEventListener("input", () => {
+    wizardStatusAutoChecked = false;
   });
 }
 
