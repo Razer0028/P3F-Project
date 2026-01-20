@@ -400,53 +400,18 @@ def build_simple_wireguard_configs(output_root, inventory_text, client_allowed_i
     vps_ip = parse_inventory_group_ip(inventory_text, "vps")
     ec2_ip = parse_inventory_group_ip(inventory_text, "ec2")
 
-    onprem_state = extract_wireguard_state(read_wireguard_host_vars(output_root, "onprem-1"))
-    vps_state = extract_wireguard_state(read_wireguard_host_vars(output_root, "vps-1"))
-    ec2_state = extract_wireguard_state(read_wireguard_host_vars(output_root, "ec2-1"))
-
-    def resolve_pair(local_state, remote_state, local_name, remote_name, label):
-        local_priv = local_state["private"].get(local_name, "")
-        remote_priv = remote_state["private"].get(remote_name, "")
-        local_peer_pub = local_state["peer_public"].get(local_name, "")
-        remote_peer_pub = remote_state["peer_public"].get(remote_name, "")
-
-        if local_priv:
-            local_pub, err = derive_wg_public_key(local_priv)
-            if err:
-                local_pub = remote_peer_pub
-                if not local_pub:
-                    errors[f"wireguard_{label}_local_pub"] = err
-        else:
-            local_priv, local_pub, err = generate_wg_keypair()
-            if err:
-                errors[f"wireguard_{label}_local"] = err
-
-        if remote_priv:
-            remote_pub, err = derive_wg_public_key(remote_priv)
-            if err:
-                remote_pub = local_peer_pub
-                if not remote_pub:
-                    errors[f"wireguard_{label}_remote_pub"] = err
-        else:
-            remote_priv, remote_pub, err = generate_wg_keypair()
-            if err:
-                errors[f"wireguard_{label}_remote"] = err
-        return local_priv, local_pub, remote_priv, remote_pub
-
-    onprem_wg0_priv, onprem_wg0_pub, vps_priv, vps_pub = resolve_pair(
-        onprem_state,
-        vps_state,
-        "wg0",
-        "wg0",
-        "onprem_wg0",
-    )
-    onprem_wg1_priv, onprem_wg1_pub, ec2_priv, ec2_pub = resolve_pair(
-        onprem_state,
-        ec2_state,
-        "wg1",
-        "wg1",
-        "onprem_wg1",
-    )
+    onprem_wg0_priv, onprem_wg0_pub, err = generate_wg_keypair()
+    if err:
+        errors["wireguard_onprem_wg0"] = err
+    onprem_wg1_priv, onprem_wg1_pub, err = generate_wg_keypair()
+    if err:
+        errors["wireguard_onprem_wg1"] = err
+    vps_priv, vps_pub, err = generate_wg_keypair()
+    if err:
+        errors["wireguard_vps_wg0"] = err
+    ec2_priv, ec2_pub, err = generate_wg_keypair()
+    if err:
+        errors["wireguard_ec2_wg1"] = err
 
     if errors:
         return {}, errors

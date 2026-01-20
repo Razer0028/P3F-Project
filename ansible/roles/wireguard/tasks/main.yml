@@ -91,6 +91,17 @@
       when: item.stat.exists and not (wireguard_allow_overwrite | default(false))
       loop: "{{ wg_conf_stats.results }}"
 
+    - name: Backup existing WireGuard configs before overwrite
+      copy:
+        src: "/etc/wireguard/{{ item.item }}.conf"
+        dest: "/etc/wireguard/{{ item.item }}.conf.{{ ansible_date_time.iso8601_basic_short }}"
+        remote_src: true
+        owner: root
+        group: root
+        mode: "0600"
+      when: item.stat.exists and (wireguard_allow_overwrite | default(false))
+      loop: "{{ wg_conf_stats.results }}"
+
     - name: Deploy WireGuard configs (raw)
       copy:
         dest: "/etc/wireguard/{{ item.name }}.conf"
@@ -99,7 +110,7 @@
         group: root
         mode: "0600"
         force: "{{ wireguard_allow_overwrite | default(false) }}"
-        backup: "{{ wireguard_allow_overwrite | default(false) }}"
+        backup: false
       loop: "{{ wireguard_raw_configs | default([]) }}"
       when: wireguard_raw_configs is defined
       no_log: true
@@ -112,7 +123,7 @@
         group: root
         mode: "0600"
         force: "{{ wireguard_allow_overwrite | default(false) }}"
-        backup: "{{ wireguard_allow_overwrite | default(false) }}"
+        backup: false
       loop: "{{ wireguard_configs | default([]) }}"
       when: wireguard_raw_configs is not defined
       no_log: true
