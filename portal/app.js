@@ -1685,6 +1685,7 @@ function generateAll() {
   setOutput("cloudflared_vps_vault", renderCloudflaredVaultSnippet("vps"));
   setOutput("cloudflared_ec2_vault", renderCloudflaredVaultSnippet("ec2"));
   setOutput("nextsteps", renderNextSteps());
+  setOutput("simple_next_steps", renderNextSteps());
   renderInputWarnings();
 }
 

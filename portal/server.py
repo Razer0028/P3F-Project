@@ -301,6 +301,19 @@ def generate_wg_keypair():
     except Exception as exc:
         return "", "", str(exc)
 
+def derive_wg_public_key(private_key):
+    if not private_key:
+        return "", "private key is empty"
+    if shutil.which("wg") is None:
+        return "", "wg command not found"
+    try:
+        public_key = subprocess.check_output(["wg", "pubkey"], input=private_key + "\n", text=True).strip()
+        if not public_key:
+            return "", "wg returned empty pubkey"
+        return public_key, ""
+    except Exception as exc:
+        return "", str(exc)
+
 
 def build_wg_config_item(name, address, private_key, peer, enable_nat=False, dns=None):
     item = {
@@ -331,23 +344,109 @@ def normalize_client_allowed_ip(raw):
         return "", f"Invalid client IP: {value}"
 
 
-def build_simple_wireguard_configs(inventory_text, client_allowed_ip):
+def read_wireguard_host_vars(output_root, host):
+    rel_path = f"ansible/host_vars/{host}.yml"
+    abs_path = resolve_output_path(output_root, rel_path)
+    if not abs_path or not abs_path.exists():
+        return ""
+    try:
+        return abs_path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return ""
+
+
+def extract_wireguard_state(text):
+    state = {"private": {}, "peer_public": {}}
+    if not text or "ANSIBLE_VAULT" in text:
+        return state
+    block = text
+    if WIREGUARD_RULES_MARKER in text:
+        start = text.find(WIREGUARD_RULES_MARKER)
+        end = text.find(WIREGUARD_RULES_END_MARKER, start)
+        if end != -1:
+            end += len(WIREGUARD_RULES_END_MARKER)
+        block = text[start:end]
+    if "wireguard_configs:" not in block:
+        return state
+    current = ""
+    in_configs = False
+    for line in block.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("wireguard_configs:"):
+            in_configs = True
+            continue
+        if stripped.startswith("wireguard_raw_configs:"):
+            in_configs = False
+            continue
+        if not in_configs:
+            continue
+        if stripped.startswith("- name:") or stripped.startswith("name:"):
+            current = stripped.split(":", 1)[1].strip().strip("\"")
+            continue
+        if stripped.startswith("private_key:") and current:
+            key = stripped.split(":", 1)[1].strip().strip("\"")
+            if key:
+                state["private"][current] = key
+            continue
+        if stripped.startswith("public_key:") and current and current not in state["peer_public"]:
+            key = stripped.split(":", 1)[1].strip().strip("\"")
+            if key:
+                state["peer_public"][current] = key
+    return state
+
+
+def build_simple_wireguard_configs(output_root, inventory_text, client_allowed_ip):
     errors = {}
     vps_ip = parse_inventory_group_ip(inventory_text, "vps")
     ec2_ip = parse_inventory_group_ip(inventory_text, "ec2")
 
-    onprem_wg0_priv, onprem_wg0_pub, err = generate_wg_keypair()
-    if err:
-        errors["wireguard_onprem_wg0"] = err
-    onprem_wg1_priv, onprem_wg1_pub, err = generate_wg_keypair()
-    if err:
-        errors["wireguard_onprem_wg1"] = err
-    vps_priv, vps_pub, err = generate_wg_keypair()
-    if err:
-        errors["wireguard_vps_wg0"] = err
-    ec2_priv, ec2_pub, err = generate_wg_keypair()
-    if err:
-        errors["wireguard_ec2_wg1"] = err
+    onprem_state = extract_wireguard_state(read_wireguard_host_vars(output_root, "onprem-1"))
+    vps_state = extract_wireguard_state(read_wireguard_host_vars(output_root, "vps-1"))
+    ec2_state = extract_wireguard_state(read_wireguard_host_vars(output_root, "ec2-1"))
+
+    def resolve_pair(local_state, remote_state, local_name, remote_name, label):
+        local_priv = local_state["private"].get(local_name, "")
+        remote_priv = remote_state["private"].get(remote_name, "")
+        local_peer_pub = local_state["peer_public"].get(local_name, "")
+        remote_peer_pub = remote_state["peer_public"].get(remote_name, "")
+
+        if local_priv:
+            local_pub, err = derive_wg_public_key(local_priv)
+            if err:
+                local_pub = remote_peer_pub
+                if not local_pub:
+                    errors[f"wireguard_{label}_local_pub"] = err
+        else:
+            local_priv, local_pub, err = generate_wg_keypair()
+            if err:
+                errors[f"wireguard_{label}_local"] = err
+
+        if remote_priv:
+            remote_pub, err = derive_wg_public_key(remote_priv)
+            if err:
+                remote_pub = local_peer_pub
+                if not remote_pub:
+                    errors[f"wireguard_{label}_remote_pub"] = err
+        else:
+            remote_priv, remote_pub, err = generate_wg_keypair()
+            if err:
+                errors[f"wireguard_{label}_remote"] = err
+        return local_priv, local_pub, remote_priv, remote_pub
+
+    onprem_wg0_priv, onprem_wg0_pub, vps_priv, vps_pub = resolve_pair(
+        onprem_state,
+        vps_state,
+        "wg0",
+        "wg0",
+        "onprem_wg0",
+    )
+    onprem_wg1_priv, onprem_wg1_pub, ec2_priv, ec2_pub = resolve_pair(
+        onprem_state,
+        ec2_state,
+        "wg1",
+        "wg1",
+        "onprem_wg1",
+    )
 
     if errors:
         return {}, errors
@@ -750,7 +849,7 @@ def maybe_write_auto_host_vars_simple(output_root, inventory_text, group_vars_te
         if client_error:
             errors["wireguard_client_ip"] = client_error
         else:
-            configs, wg_errors = build_simple_wireguard_configs(inventory_text, client_allowed)
+            configs, wg_errors = build_simple_wireguard_configs(output_root, inventory_text, client_allowed)
             errors.update(wg_errors)
             if not wg_errors:
                 onprem_block = build_wireguard_config_block(configs.get("onprem-1"), "wg0", allow_overwrite=True, enable_on_boot=True)
