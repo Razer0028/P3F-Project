@@ -78,6 +78,8 @@ WG_EDGE_ADDRESS = "10.0.0.1/24"
 WG_LISTEN_PORT = 51820
 WG_ALLOWED_IPS = "0.0.0.0/0"
 WG_KEEPALIVE = 25
+WG_MTU = 1420
+WG_NAT_INTERFACE_PLACEHOLDER = "<AUTO_IFACE>"
 
 def response_json(handler, status, payload):
     data = json.dumps(payload).encode("utf-8")
@@ -301,18 +303,21 @@ def generate_wg_keypair():
     except Exception as exc:
         return "", "", str(exc)
 
-def build_wg_config_item(name, address, private_key, peer, enable_nat=False, dns=None):
+def build_wg_config_item(name, address, private_key, peer, enable_nat=False, dns=None, listen_port=WG_LISTEN_PORT):
     item = {
         "name": name,
         "address": address,
         "private_key": private_key,
-        "listen_port": WG_LISTEN_PORT,
         "peers": [peer],
     }
+    if listen_port is not None:
+        item["listen_port"] = listen_port
     if enable_nat:
         item["enable_nat"] = True
     if dns:
         item["dns"] = dns
+    if WG_MTU:
+        item["mtu"] = WG_MTU
     return item
 
 
@@ -364,6 +369,7 @@ def build_simple_wireguard_configs(output_root, inventory_text, client_allowed_i
             "persistent_keepalive": WG_KEEPALIVE,
         },
         dns="8.8.8.8",
+        listen_port=None,
     )
     onprem_wg1 = build_wg_config_item(
         "wg1",
@@ -376,6 +382,7 @@ def build_simple_wireguard_configs(output_root, inventory_text, client_allowed_i
             "persistent_keepalive": WG_KEEPALIVE,
         },
         dns="8.8.8.8",
+        listen_port=None,
     )
     vps_wg0 = build_wg_config_item(
         "wg0",
@@ -448,6 +455,42 @@ def build_wireguard_config_block(configs, primary, allow_overwrite=True, enable_
     lines.append(WIREGUARD_RULES_END_MARKER)
     lines.append("")
     return "\n".join(lines)
+
+
+def render_wireguard_config(item, nat_interface):
+    lines = [
+        "[Interface]",
+        f"Address = {item.get('address', '')}",
+        f"PrivateKey = {item.get('private_key', '')}",
+    ]
+    listen_port = item.get("listen_port")
+    if listen_port is not None:
+        lines.append(f"ListenPort = {listen_port}")
+    mtu = item.get("mtu")
+    if mtu:
+        lines.append(f"MTU = {mtu}")
+    dns = item.get("dns")
+    if dns:
+        lines.append(f"DNS = {dns}")
+    if item.get("enable_nat"):
+        iface = nat_interface or WG_NAT_INTERFACE_PLACEHOLDER
+        lines.append(f"PostUp = iptables -t nat -A POSTROUTING -o {iface} -j MASQUERADE")
+        lines.append(f"PostDown = iptables -t nat -D POSTROUTING -o {iface} -j MASQUERADE")
+    lines.append("")
+    for peer in item.get("peers", []):
+        lines.append("[Peer]")
+        lines.append(f"PublicKey = {peer.get('public_key', '')}")
+        allowed_ips = peer.get("allowed_ips")
+        if allowed_ips:
+            lines.append(f"AllowedIPs = {allowed_ips}")
+        endpoint = peer.get("endpoint")
+        if endpoint:
+            lines.append(f"Endpoint = {endpoint}")
+        keepalive = peer.get("persistent_keepalive")
+        if keepalive:
+            lines.append(f"PersistentKeepalive = {keepalive}")
+        lines.append("")
+    return "\n".join(lines).rstrip() + "\n"
 
 
 def upsert_wireguard_block(existing_text, new_block):
@@ -719,16 +762,17 @@ def write_wireguard_host_vars(output_root, host, content):
 
 def maybe_write_auto_host_vars(output_root, inventory_text, group_vars_text, secrets, setup_mode):
     if not AUTO_IMPORT_ENABLED:
-        return {}, {}
+        return {}, {}, {}
     if setup_mode == "beginner":
         return maybe_write_auto_host_vars_simple(output_root, inventory_text, group_vars_text)
-    return {}, {}
+    return {}, {}, {}
 
 
 def maybe_write_auto_host_vars_simple(output_root, inventory_text, group_vars_text):
     wireguard_enabled = parse_yaml_bool(group_vars_text, "wireguard_manage")
     saved = {}
     errors = {}
+    wg_outputs = {}
     host_sections = {}
     wireguard_blocks = {}
     host_groups = {"onprem-1": "onprem", "vps-1": "vps", "ec2-1": "ec2"}
@@ -760,6 +804,17 @@ def maybe_write_auto_host_vars_simple(output_root, inventory_text, group_vars_te
                 ec2_block = build_wireguard_config_block(configs.get("ec2-1"), "wg1", allow_overwrite=True, enable_on_boot=True)
                 if ec2_block:
                     wireguard_blocks["ec2-1"] = ec2_block
+                wg_onprem = configs.get("onprem-1", [])
+                wg_vps = configs.get("vps-1", [])
+                wg_ec2 = configs.get("ec2-1", [])
+                if len(wg_onprem) > 0:
+                    wg_outputs["onprem_wg0"] = render_wireguard_config(wg_onprem[0], "")
+                if len(wg_onprem) > 1:
+                    wg_outputs["onprem_wg1"] = render_wireguard_config(wg_onprem[1], "")
+                if len(wg_vps) > 0:
+                    wg_outputs["vps_wg0"] = render_wireguard_config(wg_vps[0], WG_NAT_INTERFACE_PLACEHOLDER)
+                if len(wg_ec2) > 0:
+                    wg_outputs["ec2_wg1"] = render_wireguard_config(wg_ec2[0], WG_NAT_INTERFACE_PLACEHOLDER)
 
     ddos_path = output_root / "tmp" / "ddos_vps_vault_snippet.txt"
     if ddos_path.exists():
@@ -782,7 +837,7 @@ def maybe_write_auto_host_vars_simple(output_root, inventory_text, group_vars_te
             continue
         saved.update(write_wireguard_host_vars(output_root, host, block))
 
-    return saved, errors
+    return saved, errors, wg_outputs
 
 
 def read_tfvars_value(path, key):
@@ -2280,14 +2335,27 @@ class PortalHandler(http.server.SimpleHTTPRequestHandler):
                         "details": missing,
                     }
 
-        auto_saved, auto_errors = maybe_write_auto_host_vars(self.state.output_root, inventory_text, group_vars_text, secrets, setup_mode)
+        auto_saved, auto_errors, wg_outputs = maybe_write_auto_host_vars(
+            self.state.output_root,
+            inventory_text,
+            group_vars_text,
+            secrets,
+            setup_mode,
+        )
         if auto_saved:
             saved.update(auto_saved)
 
         response_json(
             self,
             200,
-            {"ok": True, "saved": saved, "imported": auto_saved, "import_errors": auto_errors, "warnings": warnings},
+            {
+                "ok": True,
+                "saved": saved,
+                "imported": auto_saved,
+                "import_errors": auto_errors,
+                "warnings": warnings,
+                "wireguard_configs": wg_outputs,
+            },
         )
 
     def _handle_run(self):

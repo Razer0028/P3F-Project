@@ -4,6 +4,9 @@ PrivateKey = {{ item.private_key }}
 {% if item.listen_port is defined %}
 ListenPort = {{ item.listen_port }}
 {% endif %}
+{% if item.mtu is defined %}
+MTU = {{ item.mtu }}
+{% endif %}
 {% if item.dns is defined %}
 DNS = {{ item.dns }}
 {% endif %}

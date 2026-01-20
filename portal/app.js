@@ -1749,6 +1749,13 @@ function generateAll() {
   setOutput("cloudflared_ec2_vault", renderCloudflaredVaultSnippet("ec2"));
   setOutput("nextsteps", renderNextSteps());
   setOutput("simple_next_steps", renderNextSteps());
+  const wgPlaceholder = currentLang === "ja"
+    ? "保存後に自動生成されます。"
+    : "Generated after Save.";
+  setOutput("wg_onprem_wg0", wgPlaceholder);
+  setOutput("wg_onprem_wg1", wgPlaceholder);
+  setOutput("wg_vps_wg0", wgPlaceholder);
+  setOutput("wg_ec2_wg1", wgPlaceholder);
   renderInputWarnings();
 }
 
@@ -1955,6 +1962,19 @@ async function saveAll() {
       if (noticeState !== "error") {
         noticeState = "info";
       }
+    }
+    const wgConfigs = result.wireguard_configs || {};
+    if (wgConfigs.onprem_wg0) {
+      setOutput("wg_onprem_wg0", wgConfigs.onprem_wg0);
+    }
+    if (wgConfigs.onprem_wg1) {
+      setOutput("wg_onprem_wg1", wgConfigs.onprem_wg1);
+    }
+    if (wgConfigs.vps_wg0) {
+      setOutput("wg_vps_wg0", wgConfigs.vps_wg0);
+    }
+    if (wgConfigs.ec2_wg1) {
+      setOutput("wg_ec2_wg1", wgConfigs.ec2_wg1);
     }
     setActionNotice(notice, noticeState);
     guidedState.saved = true;
