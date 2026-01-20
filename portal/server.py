@@ -301,20 +301,6 @@ def generate_wg_keypair():
     except Exception as exc:
         return "", "", str(exc)
 
-def derive_wg_public_key(private_key):
-    if not private_key:
-        return "", "private key is empty"
-    if shutil.which("wg") is None:
-        return "", "wg command not found"
-    try:
-        public_key = subprocess.check_output(["wg", "pubkey"], input=private_key + "\n", text=True).strip()
-        if not public_key:
-            return "", "wg returned empty pubkey"
-        return public_key, ""
-    except Exception as exc:
-        return "", str(exc)
-
-
 def build_wg_config_item(name, address, private_key, peer, enable_nat=False, dns=None):
     item = {
         "name": name,
@@ -342,58 +328,6 @@ def normalize_client_allowed_ip(raw):
         return f"{ip}/32", ""
     except ValueError:
         return "", f"Invalid client IP: {value}"
-
-
-def read_wireguard_host_vars(output_root, host):
-    rel_path = f"ansible/host_vars/{host}.yml"
-    abs_path = resolve_output_path(output_root, rel_path)
-    if not abs_path or not abs_path.exists():
-        return ""
-    try:
-        return abs_path.read_text(encoding="utf-8", errors="replace")
-    except OSError:
-        return ""
-
-
-def extract_wireguard_state(text):
-    state = {"private": {}, "peer_public": {}}
-    if not text or "ANSIBLE_VAULT" in text:
-        return state
-    block = text
-    if WIREGUARD_RULES_MARKER in text:
-        start = text.find(WIREGUARD_RULES_MARKER)
-        end = text.find(WIREGUARD_RULES_END_MARKER, start)
-        if end != -1:
-            end += len(WIREGUARD_RULES_END_MARKER)
-        block = text[start:end]
-    if "wireguard_configs:" not in block:
-        return state
-    current = ""
-    in_configs = False
-    for line in block.splitlines():
-        stripped = line.strip()
-        if stripped.startswith("wireguard_configs:"):
-            in_configs = True
-            continue
-        if stripped.startswith("wireguard_raw_configs:"):
-            in_configs = False
-            continue
-        if not in_configs:
-            continue
-        if stripped.startswith("- name:") or stripped.startswith("name:"):
-            current = stripped.split(":", 1)[1].strip().strip("\"")
-            continue
-        if stripped.startswith("private_key:") and current:
-            key = stripped.split(":", 1)[1].strip().strip("\"")
-            if key:
-                state["private"][current] = key
-            continue
-        if stripped.startswith("public_key:") and current and current not in state["peer_public"]:
-            key = stripped.split(":", 1)[1].strip().strip("\"")
-            if key:
-                state["peer_public"][current] = key
-    return state
-
 
 def build_simple_wireguard_configs(output_root, inventory_text, client_allowed_ip):
     errors = {}

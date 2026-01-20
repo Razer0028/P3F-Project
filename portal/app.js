@@ -1339,6 +1339,69 @@ function renderNextSteps() {
     `chmod 600 ${vaultPassPath}`,
   ].join("\n");
 
+  const setupMode = document.body && document.body.dataset.setupMode;
+  if (setupMode === "beginner" && currentLang === "ja") {
+    const steps = [];
+    let step = 0;
+    const addStep = (label, body = "") => {
+      step += 1;
+      steps.push(`${step}) ${label}${body ? "\n" + body : ""}`);
+    };
+
+    addStep("（ポータル）入力 → ファイル生成 → サーバーに保存");
+    addStep("Vaultパスワード作成（初回のみ）", vaultCommands);
+
+    const vaultEdits = [];
+    if (plan.onprem) vaultEdits.push(`ansible-vault edit ${hostVarsPath("onprem-1.yml")}`);
+    if (plan.vps) vaultEdits.push(`ansible-vault edit ${hostVarsPath("vps-1.yml")}`);
+    if (plan.ec2) vaultEdits.push(`ansible-vault edit ${hostVarsPath("ec2-1.yml")}`);
+
+    const vaultSnippets = [];
+    if (plan.onprem) {
+      vaultSnippets.push(`${adminVaultSnippet} を ${hostVarsPath("onprem-1.yml")} に貼り付け`);
+    }
+    if (value(fields.enableCloudflared) && plan.vps) {
+      vaultSnippets.push(`${cloudflaredVpsSnippet} を ${hostVarsPath("vps-1.yml")} に貼り付け`);
+    }
+    if (value(fields.enableCloudflared) && plan.ec2) {
+      vaultSnippets.push(`${cloudflaredEc2Snippet} を ${hostVarsPath("ec2-1.yml")} に貼り付け`);
+    }
+    if (value(fields.ddosNotifyEnable) && plan.vps && ddosPrimary) {
+      vaultSnippets.push(`${ddosVaultSnippet} を ${hostVarsPath("vps-1.yml")} に貼り付け`);
+    }
+    if (vaultEdits.length || vaultSnippets.length) {
+      addStep("Vaultを編集してスニペット貼り付け", [...vaultEdits, ...vaultSnippets].join("\n"));
+    }
+
+    if (plan.cloudflare) {
+      addStep(
+        "Terraform（Cloudflare）",
+        "ポータルで tf-cf init → plan → apply を実行\n" +
+          `CLOUDFLARE_API_TOKEN を環境変数で指定（${tfvarsCfFile} も確認）`,
+      );
+    }
+    if (plan.terraform) {
+      addStep(
+        "Terraform（EC2）",
+        "ポータルで tf init → plan → apply を実行\n" +
+          `${tfvarsFile} を確認`,
+      );
+    }
+    if (value(fields.enableFailover) && plan.onprem) {
+      addStep(
+        "Failover AWS を Vault に反映（Terraform 後）",
+        `terraform output -raw failover_access_key_id\nterraform output -raw failover_secret_access_key\n${failoverVaultSnippet} を ${hostVarsPath("onprem-1.yml")} に貼り付け`,
+      );
+    }
+
+    addStep(
+      "Ansible 実行（順番固定）",
+      "ポータルで base → vps → ec2 → onprem の順に実行",
+    );
+    addStep("検証", "make validate");
+    return ["簡易ポータル: 次の手順", ...steps].join("\n\n") + "\n";
+  }
+
   const steps = [];
   let step = 0;
   const addStep = (label, body = "") => {
