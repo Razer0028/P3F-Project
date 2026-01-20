@@ -1399,7 +1399,7 @@ function renderNextSteps() {
       "ポータルで base → vps → ec2 → onprem の順に実行",
     );
     addStep("検証", "make validate");
-    return ["簡易ポータル: 次の手順", ...steps].join("\n\n") + "\n";
+    return ["推奨設定", ...steps].join("\n\n") + "\n";
   }
 
   const steps = [];
