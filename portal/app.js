@@ -340,6 +340,68 @@ const guidedState = {
   validate: false,
 };
 
+const wizardState = {
+  step: 1,
+  busy: false,
+  generated: false,
+  uploads: {
+    cloudflare: false,
+    aws: false,
+    sshTargets: new Set(),
+  },
+};
+
+const wizardMessages = {
+  en: {
+    steps: [
+      { todo: "Enter the on-prem IP, VPS IP, and admin login.", done: "Inputs ready. Continue to the next step." },
+      { todo: "Upload Cloudflare token, AWS CSV, and SSH keys.", done: "Uploads ready. Continue to the next step." },
+      { todo: "Create the configuration files.", done: "Configuration files created. Continue to the next step." },
+      { todo: "Save the generated files to the server.", done: "Files saved. Continue to the next step." },
+      { todo: "Run the automatic setup steps.", done: "Automatic setup finished. Continue to validation." },
+      { todo: "Run the final validation.", done: "Validation completed." },
+    ],
+    run: {
+      tokenRequired: "Portal token is required.",
+      confirmRequired: "Type APPLY to continue.",
+      starting: "Starting... please wait.",
+      success: "Completed. Proceed to the next step.",
+      failed: "Failed. Check your inputs and connection.",
+    },
+  },
+  ja: {
+    steps: [
+      { todo: "オンプレIP・VPS IP・管理ログインを入力してください。", done: "入力が完了しました。次へ進んでください。" },
+      { todo: "Cloudflareトークン・AWS CSV・SSH鍵をアップロードしてください。", done: "アップロードが完了しました。次へ進んでください。" },
+      { todo: "設定ファイルを作成してください。", done: "設定ファイルを作成しました。次へ進んでください。" },
+      { todo: "生成したファイルをサーバーに保存してください。", done: "保存が完了しました。次へ進んでください。" },
+      { todo: "クラウドとサーバーの自動セットアップを実行してください。", done: "自動セットアップが完了しました。検証へ進んでください。" },
+      { todo: "最後の動作確認を実行してください。", done: "動作確認が完了しました。" },
+    ],
+    run: {
+      tokenRequired: "ポータルトークンを入力してください。",
+      confirmRequired: "APPLY を入力してください。",
+      starting: "実行中です。しばらくお待ちください。",
+      success: "完了しました。次へ進んでください。",
+      failed: "失敗しました。入力内容と接続状況を確認してください。",
+    },
+  },
+};
+
+const wizardActionLabels = {
+  "tf-cf-init": { en: "Prepare web entry", ja: "公開の準備" },
+  "tf-cf-apply": { en: "Create web entry", ja: "公開の入口を作成" },
+  "tf-init": { en: "Prepare cloud server", ja: "クラウド準備" },
+  "tf-apply": { en: "Create cloud server", ja: "クラウドサーバーを作成" },
+  "ansible-base": { en: "Base setup", ja: "基本設定" },
+  "ansible-vps": { en: "Configure VPS", ja: "VPS設定" },
+  "ansible-cloudflared": { en: "Configure web entry", ja: "公開設定" },
+  "ansible-portctl": { en: "Configure forwarding", ja: "転送設定" },
+  "ansible-ec2": { en: "Configure EC2", ja: "EC2設定" },
+  "ansible-onprem": { en: "Configure on-prem", ja: "オンプレ設定" },
+  validate: { en: "Validation", ja: "動作確認" },
+};
+
 function value(id) {
   const el = document.getElementById(id);
   if (!el) {
@@ -1772,6 +1834,12 @@ function setSaveStatus(message, state) {
   }
   status.textContent = message;
   status.dataset.state = state;
+  const wizardStatus = document.getElementById("wizard_save_status");
+  if (wizardStatus) {
+    wizardStatus.textContent = message;
+    wizardStatus.dataset.state = state;
+  }
+  updateWizard();
 }
 
 function setGenerateStatus(message, state) {
@@ -1781,6 +1849,15 @@ function setGenerateStatus(message, state) {
   }
   status.textContent = message;
   status.dataset.state = state;
+  const wizardStatus = document.getElementById("wizard_generate_status");
+  if (wizardStatus) {
+    wizardStatus.textContent = message;
+    wizardStatus.dataset.state = state;
+  }
+  if (wizardActive() && state === "ok") {
+    wizardState.generated = true;
+  }
+  updateWizard();
 }
 
 function setStatusMessage(message, state) {
@@ -1906,6 +1983,9 @@ async function saveAll() {
     payload.secrets = autoSecrets;
   }
 
+  if (wizardActive()) {
+    setWizardBusy(messages.saving, true);
+  }
   setSaveStatus(messages.saving, "info");
 
   try {
@@ -1985,6 +2065,10 @@ async function saveAll() {
     loadStatus();
   } catch (error) {
     setSaveStatus(messages.unknownError, "error");
+  } finally {
+    if (wizardActive()) {
+      setWizardBusy("", false);
+    }
   }
 }
 
@@ -2765,6 +2849,7 @@ function updateGuidedSteps() {
       canProceed = false;
     }
   }
+  updateWizard();
 }
 
 async function startJob(action, token, confirmValue, cleanup) {
@@ -2900,6 +2985,9 @@ function setPage(page) {
   if (!page) {
     return;
   }
+  if (document.body) {
+    document.body.dataset.page = page;
+  }
   const panels = document.querySelectorAll("section.panel[data-page]");
   const tabs = document.querySelectorAll(".page-tab");
   panels.forEach((panel) => {
@@ -2922,6 +3010,7 @@ function setPage(page) {
   if (window.localStorage) {
     localStorage.setItem("portalPage", page);
   }
+  updateWizard();
 }
 
 function setFormSection(section) {
@@ -2943,12 +3032,267 @@ function setFormSection(section) {
   }
 }
 
+function wizardActive() {
+  return document.body && document.body.dataset.setupMode === "beginner";
+}
+
+function wizardActionLabel(action) {
+  const labels = wizardActionLabels[action];
+  if (!labels) {
+    return action;
+  }
+  return labels[currentLang] || labels.en || action;
+}
+
+function wizardInputsComplete() {
+  return Boolean(
+    value(fields.onpremIp)
+      && value(fields.vpsIp)
+      && value(fields.webPortalAdminUser)
+      && value(fields.webPortalAdminPassword),
+  );
+}
+
+function wizardUploadsComplete() {
+  const plan = getPlanOptions();
+  const requireCloudflare = plan.cloudflare;
+  const requireAws = plan.terraform;
+  const requiredKeys = new Set();
+  if (plan.onprem && !isLocalOnpremHost(value(fields.onpremIp))) {
+    requiredKeys.add("onprem");
+  }
+  if (plan.vps) {
+    requiredKeys.add("vps");
+  }
+  if (plan.ec2) {
+    requiredKeys.add("ec2");
+  }
+
+  const sshTargets = wizardState.uploads.sshTargets;
+  const sshOk = requiredKeys.size === 0
+    || Array.from(requiredKeys).every((target) => sshTargets.has(target));
+
+  const cloudflareOk = !requireCloudflare || wizardState.uploads.cloudflare;
+  const awsOk = !requireAws || wizardState.uploads.aws;
+
+  return Boolean(cloudflareOk && awsOk && sshOk);
+}
+
+function wizardGeneratedComplete() {
+  return Boolean(wizardState.generated);
+}
+
+function wizardSavedComplete() {
+  return Boolean(guidedState.saved);
+}
+
+function wizardRunComplete() {
+  const plan = getPlanOptions();
+  if (plan.cloudflare && !guidedState.tfCfApply) {
+    return false;
+  }
+  if (plan.terraform && !guidedState.tfApply) {
+    return false;
+  }
+  if (!guidedState.ansibleBase) {
+    return false;
+  }
+  if (plan.vps && !guidedState.ansibleVps) {
+    return false;
+  }
+  if (plan.cloudflared && !guidedState.ansibleCloudflared) {
+    return false;
+  }
+  if (plan.portctl && !guidedState.ansiblePortctl) {
+    return false;
+  }
+  if (plan.ec2 && !guidedState.ansibleEc2) {
+    return false;
+  }
+  if (plan.onprem && !guidedState.ansibleOnprem) {
+    return false;
+  }
+  return true;
+}
+
+function wizardValidateComplete() {
+  return Boolean(guidedState.validate);
+}
+
+function setWizardElement(id, message, state) {
+  const el = typeof id === "string" ? document.getElementById(id) : id;
+  if (!el) {
+    return;
+  }
+  el.textContent = message || "";
+  if (state) {
+    el.dataset.state = state;
+  }
+}
+
+function setWizardBusy(message, locked) {
+  const busy = document.getElementById("wizard_busy");
+  if (busy) {
+    busy.textContent = message || "";
+  }
+  wizardState.busy = Boolean(locked);
+  if (document.body) {
+    if (wizardState.busy) {
+      document.body.dataset.wizardLocked = "true";
+    } else {
+      delete document.body.dataset.wizardLocked;
+    }
+  }
+  updateWizard();
+}
+
+function setWizardRunNotice(message, state) {
+  setWizardElement("wizard_run_notice", message, state);
+}
+
+function setWizardRunLog(text) {
+  const logBox = document.getElementById("wizard_run_log");
+  if (logBox) {
+    logBox.value = text || "";
+  }
+  setRunLog(text || "");
+}
+
+function wizardConfirmValue() {
+  const wizardConfirm = document.getElementById("wizard_confirm");
+  if (wizardConfirm && wizardConfirm.value.trim()) {
+    return wizardConfirm.value.trim();
+  }
+  const confirmInput = document.getElementById("run_confirm");
+  if (confirmInput && confirmInput.value.trim()) {
+    return confirmInput.value.trim();
+  }
+  return "";
+}
+
+function updateWizard() {
+  if (!wizardActive()) {
+    return;
+  }
+
+  const stepStates = [
+    wizardInputsComplete(),
+    wizardUploadsComplete(),
+    wizardGeneratedComplete(),
+    wizardSavedComplete(),
+    wizardRunComplete(),
+    wizardValidateComplete(),
+  ];
+
+  let maxStep = 1;
+  for (let i = 0; i < stepStates.length; i += 1) {
+    if (stepStates[i]) {
+      maxStep = i + 2;
+    } else {
+      break;
+    }
+  }
+  if (maxStep > stepStates.length) {
+    maxStep = stepStates.length;
+  }
+  if (wizardState.step < 1) {
+    wizardState.step = 1;
+  }
+  if (wizardState.step > maxStep) {
+    wizardState.step = maxStep;
+  }
+
+  if (document.body) {
+    document.body.dataset.wizardStep = String(wizardState.step);
+  }
+
+  document.querySelectorAll(".wizard-step").forEach((el) => {
+    const step = Number(el.dataset.step || "0");
+    const done = stepStates[step - 1] || false;
+    el.classList.toggle("done", done);
+    el.classList.toggle("active", step === wizardState.step);
+  });
+
+  const messages = wizardMessages[currentLang] || wizardMessages.en;
+  const nowEl = document.getElementById("wizard_now_text");
+  const stepMessage = messages.steps[wizardState.step - 1];
+  if (nowEl && stepMessage) {
+    nowEl.textContent = stepStates[wizardState.step - 1] ? stepMessage.done : stepMessage.todo;
+  }
+
+  const complete = stepStates[5];
+  const completeEl = document.getElementById("wizard_complete");
+  if (completeEl) {
+    completeEl.hidden = !complete;
+  }
+  const failoverEl = document.getElementById("wizard_failover");
+  if (failoverEl) {
+    failoverEl.hidden = !complete;
+  }
+
+  document.querySelectorAll(".wizard-next").forEach((button) => {
+    const nextStep = Number(button.dataset.nextStep || "0");
+    const requiredIndex = nextStep - 2;
+    const canAdvance = stepStates[requiredIndex] || false;
+    button.disabled = wizardState.busy || !canAdvance;
+  });
+
+  const canGenerate = stepStates[1];
+  const canSave = stepStates[2];
+  const canRun = stepStates[3];
+  const canValidate = stepStates[4];
+
+  const generateBtn = document.getElementById("wizard_generate");
+  if (generateBtn) {
+    generateBtn.disabled = wizardState.busy || !canGenerate;
+  }
+  const saveBtn = document.getElementById("wizard_save");
+  if (saveBtn) {
+    saveBtn.disabled = wizardState.busy || !canSave;
+  }
+
+  const plan = getPlanOptions();
+  const cfButton = document.getElementById("wizard_run_cf");
+  if (cfButton) {
+    cfButton.hidden = !plan.cloudflare;
+    cfButton.disabled = wizardState.busy || !canRun;
+  }
+  const ec2Button = document.getElementById("wizard_run_ec2");
+  if (ec2Button) {
+    ec2Button.hidden = !plan.terraform;
+    ec2Button.disabled = wizardState.busy || !canRun;
+  }
+  const ansibleButton = document.getElementById("wizard_run_ansible");
+  if (ansibleButton) {
+    ansibleButton.hidden = !(plan.onprem || plan.vps || plan.ec2);
+    ansibleButton.disabled = wizardState.busy || !canRun;
+  }
+
+  const wizardToken = document.getElementById("wizard_run_token");
+  if (wizardToken) {
+    wizardToken.disabled = wizardState.busy || !canRun;
+  }
+  const wizardConfirm = document.getElementById("wizard_confirm");
+  if (wizardConfirm) {
+    wizardConfirm.disabled = wizardState.busy || !canRun;
+  }
+
+  const validateButton = document.getElementById("wizard_validate");
+  if (validateButton) {
+    validateButton.disabled = wizardState.busy || !canValidate;
+  }
+}
+
 
 function tokenValue() {
   const runToken = document.getElementById("run_token");
+  const wizardToken = document.getElementById("wizard_run_token");
   const uploadToken = document.getElementById("upload_token");
   if (runToken && runToken.value.trim()) {
     return runToken.value.trim();
+  }
+  if (wizardToken && wizardToken.value.trim()) {
+    return wizardToken.value.trim();
   }
   if (uploadToken && uploadToken.value.trim()) {
     return uploadToken.value.trim();
@@ -2988,6 +3332,10 @@ function setRunLog(text) {
   const logBox = document.getElementById("run_log");
   if (logBox) {
     logBox.value = text;
+  }
+  const wizardLog = document.getElementById("wizard_run_log");
+  if (wizardLog && wizardActive()) {
+    wizardLog.value = text || "";
   }
 }
 
@@ -3295,6 +3643,176 @@ async function runGuidedAction(action, stateKey, statusId) {
   }
 }
 
+async function runWizardActions(actions, options = {}) {
+  const messages = wizardMessages[currentLang] || wizardMessages.en;
+  const noticeId = options.noticeId === undefined ? "wizard_run_notice" : options.noticeId;
+  const statusId = options.statusId || null;
+  const noticeEl = noticeId ? document.getElementById(noticeId) : null;
+  const statusEl = statusId ? document.getElementById(statusId) : null;
+
+  const token = tokenValue();
+  if (!token) {
+    if (noticeEl) {
+      setWizardElement(noticeEl, messages.run.tokenRequired, "error");
+    }
+    if (statusEl) {
+      setWizardElement(statusEl, messages.run.tokenRequired, "error");
+    }
+    return { ok: false };
+  }
+
+  const confirmValue = wizardConfirmValue();
+  const needsConfirm = actions.some((action) => confirmWordFor(action));
+  if (needsConfirm && confirmValue !== "APPLY") {
+    if (noticeEl) {
+      setWizardElement(noticeEl, messages.run.confirmRequired, "error");
+    }
+    if (statusEl) {
+      setWizardElement(statusEl, messages.run.confirmRequired, "error");
+    }
+    return { ok: false };
+  }
+
+  if (noticeEl) {
+    setWizardElement(noticeEl, messages.run.starting, "info");
+  }
+  if (statusEl) {
+    setWizardElement(statusEl, messages.run.starting, "info");
+  }
+  const logDetails = document.querySelector(".wizard-log");
+  if (logDetails) {
+    logDetails.open = false;
+  }
+  setWizardRunLog("");
+  setWizardBusy(messages.run.starting, true);
+
+  const result = await runActionSequence(actions, token, confirmValue, (job, logText) => {
+    if (logText !== undefined) {
+      setWizardRunLog(logText || "");
+    }
+    if (job) {
+      const label = wizardActionLabel(job.action);
+      const runningText = currentLang === "ja" ? `実行中: ${label}` : `Running: ${label}`;
+      if (job.status === "running") {
+        if (noticeEl) {
+          setWizardElement(noticeEl, runningText, "info");
+        }
+        if (statusEl) {
+          setWizardElement(statusEl, runningText, "info");
+        }
+        setWizardBusy(runningText, true);
+      } else if (job.status === "failed") {
+        if (noticeEl) {
+          setWizardElement(noticeEl, messages.run.failed, "error");
+        }
+        if (statusEl) {
+          setWizardElement(statusEl, messages.run.failed, "error");
+        }
+      }
+    }
+  });
+
+  setWizardBusy("", false);
+
+  if (!result.ok) {
+    if (noticeEl) {
+      setWizardElement(noticeEl, messages.run.failed, "error");
+    }
+    if (statusEl) {
+      setWizardElement(statusEl, messages.run.failed, "error");
+    }
+    return { ok: false };
+  }
+
+  if (noticeEl) {
+    setWizardElement(noticeEl, messages.run.success, "ok");
+  }
+  if (statusEl) {
+    setWizardElement(statusEl, messages.run.success, "ok");
+  }
+  return { ok: true };
+}
+
+async function runWizardTerraformCf() {
+  const result = await runWizardActions(["tf-cf-init", "tf-cf-apply"]);
+  if (result.ok) {
+    guidedState.tfCfApply = true;
+    updateGuidedSteps();
+  }
+}
+
+async function runWizardTerraform() {
+  const result = await runWizardActions(["tf-init", "tf-apply"]);
+  if (result.ok) {
+    guidedState.tfApply = true;
+    if (document.body && document.body.dataset.setupMode === "beginner") {
+      await refreshEc2IpFromTerraform(false);
+    }
+    updateGuidedSteps();
+  }
+}
+
+async function runWizardAnsible() {
+  const plan = getPlanOptions();
+  const actions = [];
+  if (plan.onprem || plan.vps || plan.ec2) {
+    actions.push("ansible-base");
+  }
+  if (plan.vps) {
+    actions.push("ansible-vps");
+  }
+  if (plan.cloudflared) {
+    actions.push("ansible-cloudflared");
+  }
+  if (plan.portctl) {
+    actions.push("ansible-portctl");
+  }
+  if (plan.ec2) {
+    actions.push("ansible-ec2");
+  }
+  if (plan.onprem) {
+    actions.push("ansible-onprem");
+  }
+
+  if (!actions.length) {
+    return;
+  }
+
+  const result = await runWizardActions(actions);
+  if (result.ok) {
+    if (actions.includes("ansible-base")) {
+      guidedState.ansibleBase = true;
+    }
+    if (actions.includes("ansible-vps")) {
+      guidedState.ansibleVps = true;
+    }
+    if (actions.includes("ansible-cloudflared")) {
+      guidedState.ansibleCloudflared = true;
+    }
+    if (actions.includes("ansible-portctl")) {
+      guidedState.ansiblePortctl = true;
+    }
+    if (actions.includes("ansible-ec2")) {
+      guidedState.ansibleEc2 = true;
+    }
+    if (actions.includes("ansible-onprem")) {
+      guidedState.ansibleOnprem = true;
+    }
+    updateGuidedSteps();
+  }
+}
+
+async function runWizardValidate() {
+  const result = await runWizardActions(["validate"], {
+    noticeId: null,
+    statusId: "wizard_validate_status",
+  });
+  if (result.ok) {
+    guidedState.validate = true;
+    updateGuidedSteps();
+  }
+}
+
 function updateTitle(lang) {
   document.title =
     lang === "ja" ? "edge-stack セットアップポータル" : "edge-stack Setup Portal";
@@ -3324,6 +3842,7 @@ function setUploadStatus(message, state) {
   }
   status.textContent = message;
   status.dataset.state = state;
+  updateWizard();
 }
 
 function setEc2KeyStatus(message, state) {
@@ -3342,6 +3861,10 @@ function setCloudflareTokenStatus(message, state) {
   }
   status.textContent = message;
   status.dataset.state = state;
+  if (wizardActive()) {
+    wizardState.uploads.cloudflare = state === "ok";
+    updateWizard();
+  }
 }
 
 function setAwsCredentialsStatus(message, state) {
@@ -3351,6 +3874,10 @@ function setAwsCredentialsStatus(message, state) {
   }
   status.textContent = message;
   status.dataset.state = state;
+  if (wizardActive()) {
+    wizardState.uploads.aws = state === "ok";
+    updateWizard();
+  }
 }
 
 async function handleUpload() {
@@ -3418,6 +3945,10 @@ async function handleUpload() {
       return;
     }
     setUploadStatus(baseMessage, "ok");
+    if (wizardActive()) {
+      wizardState.uploads.sshTargets.add(targetSelect.value);
+      updateWizard();
+    }
   } catch (error) {
     setUploadStatus(messages.unknownError, "error");
   } finally {
@@ -3616,9 +4147,14 @@ function scheduleGenerateAll() {
   if (generateTimer) {
     clearTimeout(generateTimer);
   }
+  if (wizardActive()) {
+    wizardState.generated = false;
+    guidedState.saved = false;
+  }
   generateTimer = setTimeout(() => {
     generateAll();
     updateGuidedSteps();
+    updateWizard();
   }, 200);
 }
 
@@ -3801,6 +4337,70 @@ if (guidedReset) {
   });
 }
 
+document.querySelectorAll(".wizard-next").forEach((button) => {
+  button.addEventListener("click", () => {
+    const nextStep = Number(button.dataset.nextStep || "0");
+    if (nextStep) {
+      wizardState.step = nextStep;
+      updateWizard();
+    }
+  });
+});
+
+const wizardGenerate = document.getElementById("wizard_generate");
+if (wizardGenerate) {
+  wizardGenerate.addEventListener("click", () => {
+    generateAll();
+    const message = currentLang === "ja"
+      ? "設定ファイルを作成しました。"
+      : "Configuration files created.";
+    setGenerateStatus(message, "ok");
+    setActionNotice(message, "ok");
+  });
+}
+
+const wizardSave = document.getElementById("wizard_save");
+if (wizardSave) {
+  wizardSave.addEventListener("click", () => {
+    saveAll();
+  });
+}
+
+const wizardRunCf = document.getElementById("wizard_run_cf");
+if (wizardRunCf) {
+  wizardRunCf.addEventListener("click", () => {
+    runWizardTerraformCf();
+  });
+}
+
+const wizardRunEc2 = document.getElementById("wizard_run_ec2");
+if (wizardRunEc2) {
+  wizardRunEc2.addEventListener("click", () => {
+    runWizardTerraform();
+  });
+}
+
+const wizardRunAnsible = document.getElementById("wizard_run_ansible");
+if (wizardRunAnsible) {
+  wizardRunAnsible.addEventListener("click", () => {
+    runWizardAnsible();
+  });
+}
+
+const wizardValidate = document.getElementById("wizard_validate");
+if (wizardValidate) {
+  wizardValidate.addEventListener("click", () => {
+    runWizardValidate();
+  });
+}
+
+const wizardFailover = document.getElementById("wizard_failover");
+if (wizardFailover) {
+  wizardFailover.addEventListener("click", () => {
+    runAction("ansible-failover-core");
+  });
+}
+
 const planInputs = ["plan_onprem", "plan_vps", "plan_ec2", "plan_cloudflared", "plan_portctl", "plan_terraform", "plan_cloudflare"];
 planInputs.forEach((id) => {
   const input = document.getElementById(id);
@@ -3895,6 +4495,36 @@ runButtons.forEach((button) => {
     runAction(button.dataset.action);
   });
 });
+
+const wizardRunToken = document.getElementById("wizard_run_token");
+const runToken = document.getElementById("run_token");
+if (wizardRunToken && runToken) {
+  wizardRunToken.addEventListener("input", () => {
+    if (runToken.value !== wizardRunToken.value) {
+      runToken.value = wizardRunToken.value;
+    }
+  });
+  runToken.addEventListener("input", () => {
+    if (wizardRunToken.value !== runToken.value) {
+      wizardRunToken.value = runToken.value;
+    }
+  });
+}
+
+const wizardConfirmInput = document.getElementById("wizard_confirm");
+const runConfirmInput = document.getElementById("run_confirm");
+if (wizardConfirmInput && runConfirmInput) {
+  wizardConfirmInput.addEventListener("input", () => {
+    if (runConfirmInput.value !== wizardConfirmInput.value) {
+      runConfirmInput.value = wizardConfirmInput.value;
+    }
+  });
+  runConfirmInput.addEventListener("input", () => {
+    if (wizardConfirmInput.value !== runConfirmInput.value) {
+      wizardConfirmInput.value = runConfirmInput.value;
+    }
+  });
+}
 
 const langSelect = document.getElementById("lang-select");
 if (langSelect) {

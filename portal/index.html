@@ -85,7 +85,7 @@
     </nav>
     <div id="action_notice" class="status action-banner" aria-live="polite"></div>
 
-    <main class="layout">
+    <main class="layout wizard-lock">
       <section class="panel steps" data-page="intro">
         <h2>
           <span class="lang-en">Setup Roadmap</span>
@@ -980,7 +980,7 @@ systemctl status failover_core</code></pre>
       </section>
 
 
-      <section class="panel plan" data-page="beginner custom">
+      <section class="panel plan wizard-hide-panel" data-page="beginner custom">
         <h2>
           <span class="lang-en">Portal Execution Model</span>
           <span class="lang-ja">ポータル実行モデル</span>
@@ -1038,7 +1038,7 @@ systemctl status failover_core</code></pre>
       </section>
 
 
-      <section class="panel run" data-page="beginner custom">
+      <section class="panel run wizard-hide-panel" data-page="beginner custom">
         <h2>
           <span class="lang-en">Run Tasks (Safe Mode)</span>
           <span class="lang-ja">タスク実行（安全モード）</span>
@@ -1198,7 +1198,218 @@ systemctl status failover_core</code></pre>
       </section>
 
 
-      <section class="panel status" data-page="beginner custom">
+      <section class="panel wizard beginner-only" data-page="beginner">
+        <div class="wizard-top">
+          <div class="wizard-progress" role="list">
+            <div class="wizard-step" data-step="1">
+              <span class="wizard-step-num">1</span>
+              <span class="wizard-step-label">
+                <span class="lang-en">Required inputs</span>
+                <span class="lang-ja">必須入力</span>
+              </span>
+              <span class="wizard-step-check">✓</span>
+            </div>
+            <div class="wizard-step" data-step="2">
+              <span class="wizard-step-num">2</span>
+              <span class="wizard-step-label">
+                <span class="lang-en">Required uploads</span>
+                <span class="lang-ja">必須アップロード</span>
+              </span>
+              <span class="wizard-step-check">✓</span>
+            </div>
+            <div class="wizard-step" data-step="3">
+              <span class="wizard-step-num">3</span>
+              <span class="wizard-step-label">
+                <span class="lang-en">Generate</span>
+                <span class="lang-ja">設定ファイル生成</span>
+              </span>
+              <span class="wizard-step-check">✓</span>
+            </div>
+            <div class="wizard-step" data-step="4">
+              <span class="wizard-step-num">4</span>
+              <span class="wizard-step-label">
+                <span class="lang-en">Save</span>
+                <span class="lang-ja">サーバー保存</span>
+              </span>
+              <span class="wizard-step-check">✓</span>
+            </div>
+            <div class="wizard-step" data-step="5">
+              <span class="wizard-step-num">5</span>
+              <span class="wizard-step-label">
+                <span class="lang-en">Auto run</span>
+                <span class="lang-ja">自動実行</span>
+              </span>
+              <span class="wizard-step-check">✓</span>
+            </div>
+            <div class="wizard-step" data-step="6">
+              <span class="wizard-step-num">6</span>
+              <span class="wizard-step-label">
+                <span class="lang-en">Validate</span>
+                <span class="lang-ja">検証完了</span>
+              </span>
+              <span class="wizard-step-check">✓</span>
+            </div>
+          </div>
+          <div class="wizard-current">
+            <div class="wizard-now-label">
+              <span class="lang-en">Now</span>
+              <span class="lang-ja">今やること</span>
+            </div>
+            <div id="wizard_now_text" class="wizard-now-text"></div>
+            <div id="wizard_busy" class="wizard-busy" aria-live="polite"></div>
+          </div>
+        </div>
+        <div class="wizard-panels">
+          <div class="wizard-panel" data-step="1">
+            <p class="wizard-hint">
+              <span class="lang-en">Enter the on-prem IP, VPS IP, and admin login.</span>
+              <span class="lang-ja">オンプレIP、VPS IP、管理者のログイン情報を入力してください。</span>
+            </p>
+            <div class="wizard-actions">
+              <button type="button" class="wizard-next" data-next-step="2">
+                <span class="lang-en">Next</span>
+                <span class="lang-ja">次へ進む</span>
+              </button>
+            </div>
+          </div>
+          <div class="wizard-panel" data-step="2">
+            <p class="wizard-hint">
+              <span class="lang-en">Upload Cloudflare token, AWS CSV, and SSH keys.</span>
+              <span class="lang-ja">Cloudflareトークン、AWS CSV、SSH鍵をアップロードしてください。</span>
+            </p>
+            <div class="wizard-actions">
+              <button type="button" class="wizard-next" data-next-step="3">
+                <span class="lang-en">Next</span>
+                <span class="lang-ja">次へ進む</span>
+              </button>
+            </div>
+          </div>
+          <div class="wizard-panel" data-step="3">
+            <p class="wizard-hint">
+              <span class="lang-en">Create the configuration files.</span>
+              <span class="lang-ja">設定ファイルを作成します。</span>
+            </p>
+            <div class="wizard-actions">
+              <button type="button" id="wizard_generate" class="wizard-primary">
+                <span class="lang-en">Create configuration files</span>
+                <span class="lang-ja">設定ファイルを作成</span>
+              </button>
+              <div id="wizard_generate_status" class="status" aria-live="polite"></div>
+              <button type="button" class="wizard-next" data-next-step="4">
+                <span class="lang-en">Next</span>
+                <span class="lang-ja">次へ進む</span>
+              </button>
+            </div>
+          </div>
+          <div class="wizard-panel" data-step="4">
+            <p class="wizard-hint">
+              <span class="lang-en">Save the generated files to the server.</span>
+              <span class="lang-ja">生成したファイルをサーバーに保存します。</span>
+            </p>
+            <div class="wizard-actions">
+              <button type="button" id="wizard_save" class="wizard-primary">
+                <span class="lang-en">Save to server</span>
+                <span class="lang-ja">サーバーに保存</span>
+              </button>
+              <div id="wizard_save_status" class="status" aria-live="polite"></div>
+              <button type="button" class="wizard-next" data-next-step="5">
+                <span class="lang-en">Next</span>
+                <span class="lang-ja">次へ進む</span>
+              </button>
+            </div>
+          </div>
+          <div class="wizard-panel" data-step="5">
+            <p class="wizard-hint">
+              <span class="lang-en">Run the automatic setup steps (cloud + servers).</span>
+              <span class="lang-ja">クラウドとサーバーの自動セットアップを実行します。</span>
+            </p>
+            <p class="wizard-note">
+              <span class="lang-en">This will build servers. No destructive actions will run.</span>
+              <span class="lang-ja">この操作でサーバーが構築されます。破壊操作は行われません。</span>
+            </p>
+            <div class="wizard-action-grid">
+              <button type="button" id="wizard_run_cf">
+                <span class="wizard-action-step">1</span>
+                <span class="lang-en">Create web entry</span>
+                <span class="lang-ja">公開の入口を作成</span>
+              </button>
+              <button type="button" id="wizard_run_ec2">
+                <span class="wizard-action-step">2</span>
+                <span class="lang-en">Create cloud server</span>
+                <span class="lang-ja">クラウドサーバーを作成</span>
+              </button>
+              <button type="button" id="wizard_run_ansible">
+                <span class="wizard-action-step">3</span>
+                <span class="lang-en">Configure servers</span>
+                <span class="lang-ja">サーバーを設定</span>
+              </button>
+            </div>
+            <div class="wizard-action-grid">
+              <label>
+                <span class="lang-en">Portal token</span>
+                <span class="lang-ja">ポータルトークン</span>
+                <span class="field-hint">
+                  <span class="lang-en">Token from portal start / Example: 19f0...</span>
+                  <span class="lang-ja">起動時トークン / 例: 19f0...</span>
+                </span>
+                <input id="wizard_run_token" type="text" placeholder="token" data-placeholder-en="token" data-placeholder-ja="トークン" />
+              </label>
+              <label>
+                <span class="lang-en">Confirm keyword (type APPLY)</span>
+                <span class="lang-ja">確認用キーワード（APPLY）</span>
+                <span class="field-hint">
+                  <span class="lang-en">For final confirmation / Example: APPLY</span>
+                  <span class="lang-ja">最終確認のため / 例: APPLY</span>
+                </span>
+                <input id="wizard_confirm" type="text" placeholder="APPLY" data-placeholder-en="APPLY" data-placeholder-ja="APPLY" />
+              </label>
+            </div>
+            <div id="wizard_run_notice" class="wizard-run-notice" aria-live="polite"></div>
+            <details class="wizard-log">
+              <summary>
+                <span class="lang-en">Details</span>
+                <span class="lang-ja">詳細ログ</span>
+              </summary>
+              <textarea id="wizard_run_log" rows="8" readonly></textarea>
+            </details>
+            <div class="wizard-actions">
+              <button type="button" class="wizard-next" data-next-step="6">
+                <span class="lang-en">Next</span>
+                <span class="lang-ja">次へ進む</span>
+              </button>
+            </div>
+          </div>
+          <div class="wizard-panel" data-step="6">
+            <p class="wizard-hint">
+              <span class="lang-en">Run the final validation.</span>
+              <span class="lang-ja">最後の動作確認を行います。</span>
+            </p>
+            <div class="wizard-actions">
+              <button type="button" id="wizard_validate" class="wizard-primary">
+                <span class="lang-en">Run validation</span>
+                <span class="lang-ja">動作確認を実行</span>
+              </button>
+              <div id="wizard_validate_status" class="status" aria-live="polite"></div>
+              <button type="button" id="wizard_failover" class="wizard-secondary" hidden>
+                <span class="lang-en">Enable failover system</span>
+                <span class="lang-ja">フェイルオーバー導入</span>
+              </button>
+            </div>
+            <div class="wizard-complete" id="wizard_complete" hidden>
+              <p>
+                <span class="lang-en">Setup completed. You can now connect to your game servers.</span>
+                <span class="lang-ja">構築完了です。ゲームサーバーへ接続できます。</span>
+              </p>
+              <p>
+                <span class="lang-en">For advanced tuning, switch to Custom mode.</span>
+                <span class="lang-ja">詳細調整はカスタムモードで行えます。</span>
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel status wizard-hide-panel" data-page="beginner custom">
         <h2>
           <span class="lang-en">Preflight Check</span>
           <span class="lang-ja">事前チェック</span>
@@ -1242,7 +1453,7 @@ systemctl status failover_core</code></pre>
             <span class="lang-ja">ネットワークやTerraformの詳細設定も含め、全項目を調整できます。</span>
           </p>
         </div>
-        <div class="guide-grid input-guide">
+        <div class="guide-grid input-guide wizard-hide">
           <div class="guide-card beginner-only">
             <strong>
               <span class="lang-en">Simple: required inputs</span>
@@ -1366,12 +1577,12 @@ systemctl status failover_core</code></pre>
                           <span class="lang-en">Project</span>
                           <span class="lang-ja">プロジェクト</span>
                         </legend>
-                        <label>
+                        <label class="wizard-hide">
                           <span class="lang-en">Project name</span>
                           <span class="lang-ja">プロジェクト名</span>
                           <input id="project_name" type="text" value="edge-stack" />
                         </label>
-                        <label>
+                        <label class="wizard-hide">
                           <span class="lang-en">Timezone</span>
                           <span class="lang-ja">タイムゾーン</span>
                           <input id="timezone" type="text" value="Asia/Tokyo" placeholder="Asia/Tokyo" />
@@ -1386,6 +1597,10 @@ systemctl status failover_core</code></pre>
                         <label>
                           <span class="lang-en">On-prem IP</span>
                           <span class="lang-ja">オンプレIP</span>
+                          <span class="field-hint">
+                            <span class="lang-en">For SSH access / Example: 192.168.1.10</span>
+                            <span class="lang-ja">SSH接続のため / 例: 192.168.1.10</span>
+                          </span>
                           <input
                             id="onprem_ip"
                             type="text"
@@ -1398,6 +1613,10 @@ systemctl status failover_core</code></pre>
                         <label>
                           <span class="lang-en">VPS public IP</span>
                           <span class="lang-ja">VPSパブリックIP</span>
+                          <span class="field-hint">
+                            <span class="lang-en">VPS connection target / Example: 162.43.31.5</span>
+                            <span class="lang-ja">VPS接続先 / 例: 162.43.31.5</span>
+                          </span>
                           <input
                             id="vps_ip"
                             type="text"
@@ -1407,7 +1626,7 @@ systemctl status failover_core</code></pre>
                             data-placeholder-ja="198.51.100.10"
                           />
                         </label>
-                        <label>
+                        <label class="wizard-hide">
                           <span class="lang-en">EC2 public IP</span>
                           <span class="lang-ja">EC2パブリックIP</span>
                           <input
@@ -1444,18 +1663,26 @@ systemctl status failover_core</code></pre>
                           <span class="lang-en">Cloudflare</span>
                           <span class="lang-ja">Cloudflare</span>
                         </legend>
-                        <p class="note">
+                        <p class="note wizard-hide">
                           <span class="lang-en">Saved tokens are used for Terraform (CLOUDFLARE_API_TOKEN). You can also set it manually.</span>
                           <span class="lang-ja">保存したトークンはTerraformで使用します（CLOUDFLARE_API_TOKEN）。手動設定も可能です。</span>
                         </p>
                         <label>
                           <span class="lang-en">Cloudflare API token</span>
                           <span class="lang-ja">Cloudflare APIトークン</span>
+                          <span class="field-hint">
+                            <span class="lang-en">For DNS/Tunnel creation / Example: token string</span>
+                            <span class="lang-ja">DNS/トンネル作成のため / 例: トークン文字列</span>
+                          </span>
                           <input id="cf_api_token" type="password" value="" placeholder="API token" />
                         </label>
                         <label>
                           <span class="lang-en">Cloudflare token file</span>
                           <span class="lang-ja">Cloudflare トークンファイル</span>
+                          <span class="field-hint">
+                            <span class="lang-en">Upload token file / Example: token.txt</span>
+                            <span class="lang-ja">トークンファイルを選択 / 例: token.txt</span>
+                          </span>
                           <input id="cf_api_token_file" type="file" accept=".txt,.token,text/plain" />
                         </label>
                         <div class="actions">
@@ -1465,21 +1692,21 @@ systemctl status failover_core</code></pre>
                           </button>
                         </div>
                         <div id="cf_api_token_status" class="status" aria-live="polite"></div>
-                        <p class="note">
+                        <p class="note wizard-hide">
                           <span class="lang-en">Example: zone=YOUR_DOMAIN, web=www.YOUR_DOMAIN (VPS), sub.YOUR_DOMAIN (EC2), game=game.YOUR_DOMAIN (A record, DNS only).</span>
                           <span class="lang-ja">例: zone=YOUR_DOMAIN, Web=www.YOUR_DOMAIN(VPS), sub.YOUR_DOMAIN(EC2), game=game.YOUR_DOMAIN(Aレコード/DNS only)。</span>
                         </p>
-                        <label>
+                        <label class="wizard-hide">
                           <span class="lang-en">Account ID</span>
                           <span class="lang-ja">アカウントID</span>
                           <input id="cf_account_id" type="text" value="" />
                         </label>
-                        <label>
+                        <label class="wizard-hide">
                           <span class="lang-en">Zone name (YOUR_DOMAIN)</span>
                           <span class="lang-ja">ゾーン名（YOUR_DOMAIN）</span>
                           <input id="cf_zone_name" type="text" value="" />
                         </label>
-                        <label>
+                        <label class="wizard-hide">
                           <span class="lang-en">Zone mode</span>
                           <span class="lang-ja">ゾーンモード</span>
                           <select id="cf_zone_mode">
@@ -1500,17 +1727,17 @@ systemctl status failover_core</code></pre>
                             <option value="partial">partial</option>
                           </select>
                         </label>
-                        <label class="inline">
+                        <label class="inline wizard-hide">
                           <input id="cf_manage_failover_record" type="checkbox" />
                           <span class="lang-en">Create failover A record</span>
                           <span class="lang-ja">フェイルオーバー用Aレコードを作成</span>
                         </label>
-                        <label>
+                        <label class="wizard-hide">
                           <span class="lang-en">Failover record name</span>
                           <span class="lang-ja">フェイルオーバー用レコード名</span>
                           <input id="cf_failover_record_name" type="text" value="" placeholder="game.YOUR_DOMAIN" />
                         </label>
-                        <label>
+                        <label class="wizard-hide">
                           <span class="lang-en">Failover record initial IP</span>
                           <span class="lang-ja">フェイルオーバー初期IP</span>
                           <input
@@ -1532,12 +1759,12 @@ systemctl status failover_core</code></pre>
                           <span class="lang-ja">フェイルオーバーTTL（1=auto）</span>
                           <input id="cf_failover_record_ttl" type="text" value="1" />
                         </label>
-                        <label class="inline">
+                        <label class="inline wizard-hide">
                           <input id="cf_manage_tunnels" type="checkbox" />
                           <span class="lang-en">Create tunnels + DNS (VPS/EC2)</span>
                           <span class="lang-ja">トンネルとDNSを作成（VPS/EC2）</span>
                         </label>
-                        <label>
+                        <label class="wizard-hide">
                           <span class="lang-en">VPS tunnel name</span>
                           <span class="lang-ja">VPSトンネル名</span>
                           <input
@@ -1549,12 +1776,12 @@ systemctl status failover_core</code></pre>
                             data-placeholder-ja="YOUR_VPS_TUNNEL"
                           />
                         </label>
-                        <label>
+                        <label class="wizard-hide">
                           <span class="lang-en">VPS tunnel hostname</span>
                           <span class="lang-ja">VPSトンネルホスト名</span>
                           <input id="cf_vps_hostname" type="text" value="" placeholder="www.YOUR_DOMAIN" />
                         </label>
-                        <label>
+                        <label class="wizard-hide">
                           <span class="lang-en">EC2 tunnel name</span>
                           <span class="lang-ja">EC2トンネル名</span>
                           <input
@@ -1566,7 +1793,7 @@ systemctl status failover_core</code></pre>
                             data-placeholder-ja="YOUR_EC2_TUNNEL"
                           />
                         </label>
-                        <label>
+                        <label class="wizard-hide">
                           <span class="lang-en">EC2 tunnel hostname</span>
                           <span class="lang-ja">EC2トンネルホスト名</span>
                           <input id="cf_ec2_hostname" type="text" value="" placeholder="sub.YOUR_DOMAIN" />
@@ -1636,17 +1863,17 @@ systemctl status failover_core</code></pre>
                           <span class="lang-en">Keys are stored under ~/.ssh (portal user, often /root/.ssh). Enter only the file name.</span>
                           <span class="lang-ja">鍵は ~/.ssh（ポータル実行ユーザー、通常は /root/.ssh）に保存されます。鍵名だけ入力してください。</span>
                         </p>
-                        <label>
+                        <label class="wizard-hide">
                           <span class="lang-en">On-prem key name</span>
                           <span class="lang-ja">オンプレ鍵名</span>
                           <input id="onprem_key_name" type="text" value="onprem_ed25519" placeholder="onprem_ed25519" />
                         </label>
-                        <label>
+                        <label class="wizard-hide">
                           <span class="lang-en">VPS key name</span>
                           <span class="lang-ja">VPS鍵名</span>
                           <input id="vps_key_name" type="text" value="vps_ed25519" placeholder="vps_ed25519" />
                         </label>
-                        <label>
+                        <label class="wizard-hide">
                           <span class="lang-en">EC2 key name</span>
                           <span class="lang-ja">EC2鍵名</span>
                           <input id="ec2_key_name" type="text" value="ec2_key.pem" placeholder="ec2_key.pem" />
@@ -1658,7 +1885,7 @@ systemctl status failover_core</code></pre>
                 <span class="lang-en">SSH Key Upload</span>
                 <span class="lang-ja">SSH鍵アップロード</span>
               </legend>
-              <p class="note">
+              <p class="note wizard-hide">
                 <span class="lang-en">
                   Use the upload token shown when the portal starts. Uploads overwrite ~/.ssh/&lt;key name&gt;.
                 </span>
@@ -1666,7 +1893,7 @@ systemctl status failover_core</code></pre>
                   ポータル起動時に表示されるトークンを入力してください。アップロードすると ~/.ssh/&lt;鍵名&gt; を上書きします。
                 </span>
               </p>
-              <p class="note">
+              <p class="note wizard-hide">
                 <span class="lang-en">If the key has a passphrase, it will be added to ssh-agent.</span>
                 <span class="lang-ja">パスフレーズ付きの場合は ssh-agent に登録します。</span>
               </p>
@@ -1674,13 +1901,17 @@ systemctl status failover_core</code></pre>
                 <label>
                   <span class="lang-en">Target key</span>
                   <span class="lang-ja">対象鍵</span>
+                  <span class="field-hint">
+                    <span class="lang-en">Choose where to save / Example: VPS</span>
+                    <span class="lang-ja">保存先を選択 / 例: VPS</span>
+                  </span>
                   <select id="upload_target">
                     <option value="onprem">On-prem (onprem_ed25519)</option>
                     <option value="vps">VPS (vps_ed25519)</option>
                     <option value="ec2">EC2 (ec2_key.pem)</option>
                   </select>
                 </label>
-                <label>
+                <label class="wizard-hide">
                   <span class="lang-en">Key name (from SSH keys section)</span>
                   <span class="lang-ja">鍵名（SSH鍵の設定から）</span>
                   <input id="upload_key_name" type="text" value="" placeholder="auto" />
@@ -1688,6 +1919,10 @@ systemctl status failover_core</code></pre>
                 <label>
                   <span class="lang-en">Private key file</span>
                   <span class="lang-ja">秘密鍵ファイル</span>
+                  <span class="field-hint">
+                    <span class="lang-en">Select your SSH key / Example: id_ed25519</span>
+                    <span class="lang-ja">SSH鍵を選択 / 例: id_ed25519</span>
+                  </span>
                   <input id="upload_file" type="file" />
                 </label>
                 <label>
@@ -1705,6 +1940,10 @@ systemctl status failover_core</code></pre>
                 <label>
                   <span class="lang-en">Upload token</span>
                   <span class="lang-ja">アップロードトークン</span>
+                  <span class="field-hint">
+                    <span class="lang-en">Token from portal start / Example: 19f0...</span>
+                    <span class="lang-ja">起動時トークン / 例: 19f0...</span>
+                  </span>
                   <input
                     id="upload_token"
                     type="text"
@@ -1715,15 +1954,15 @@ systemctl status failover_core</code></pre>
                 </label>
                 <div class="actions">
                   <button type="button" id="upload_button">
-                    <span class="lang-en">Upload key</span>
-                    <span class="lang-ja">鍵をアップロード</span>
+                    <span class="lang-en">Register key</span>
+                    <span class="lang-ja">鍵を登録</span>
                   </button>
                 </div>
                 <div id="upload_status" class="status" aria-live="polite"></div>
               </div>
             </fieldset>
 
-            <fieldset class="beginner-only">
+            <fieldset class="beginner-only wizard-hide">
               <legend>
                 <span class="lang-en">Auto import (Simple)</span>
                 <span class="lang-ja">自動取り込み（簡易）</span>
@@ -1982,11 +2221,11 @@ systemctl status failover_core</code></pre>
                           <span class="lang-en">Admin panel (game servers)</span>
                           <span class="lang-ja">管理者画面（ゲームサーバー）</span>
                         </legend>
-                        <p class="note">
+                        <p class="note wizard-hide">
                           <span class="lang-en">Admin auth is required. Allow list must include your WG/LAN CIDRs; empty = no access.</span>
                           <span class="lang-ja">管理者認証は必須です。WG/LAN のCIDRを許可リストに入れてください。空のままだとアクセス不可です。</span>
                         </p>
-                        <p class="note">
+                        <p class="note wizard-hide">
                           <span class="lang-en">LAN CIDRs are auto-detected on the portal host when you run the status check.</span>
                           <span class="lang-ja">LANのCIDRはステータス確認時にポータル側で自動検出されます。</span>
                         </p>
@@ -1998,14 +2237,22 @@ systemctl status failover_core</code></pre>
                         <label>
                           <span class="lang-en">Admin login</span>
                           <span class="lang-ja">ログイン名</span>
+                          <span class="field-hint">
+                            <span class="lang-en">For admin portal login / Example: admin</span>
+                            <span class="lang-ja">管理画面ログイン用 / 例: admin</span>
+                          </span>
                           <input id="web_portal_admin_user" type="text" value="admin" />
                         </label>
                         <label>
                           <span class="lang-en">Admin password</span>
                           <span class="lang-ja">パスワード</span>
+                          <span class="field-hint">
+                            <span class="lang-en">Protects the admin portal / Example: Cnetuser</span>
+                            <span class="lang-ja">管理画面の保護 / 例: Cnetuser</span>
+                          </span>
                           <input id="web_portal_admin_password" type="password" value="" autocomplete="new-password" />
                         </label>
-                        <label>
+                        <label class="wizard-hide">
                           <span class="lang-en">Allow CIDRs (comma/newline)</span>
                           <span class="lang-ja">許可CIDR（カンマ/改行区切り）</span>
                           <input
@@ -2057,7 +2304,7 @@ systemctl status failover_core</code></pre>
                           <span class="lang-en">Terraform (EC2)</span>
                           <span class="lang-ja">Terraform（EC2）</span>
                         </legend>
-                        <label>
+                        <label class="wizard-hide">
                           <span class="lang-en">AWS region</span>
                           <span class="lang-ja">AWSリージョン</span>
                           <input
@@ -2069,7 +2316,7 @@ systemctl status failover_core</code></pre>
                             data-placeholder-ja="ap-northeast-1"
                           />
                         </label>
-                        <label>
+                        <label class="wizard-hide">
                           <span class="lang-en">AWS profile</span>
                           <span class="lang-ja">AWSプロファイル</span>
                           <input
@@ -2085,16 +2332,20 @@ systemctl status failover_core</code></pre>
                           <label>
                             <span class="lang-en">AWS access key CSV</span>
                             <span class="lang-ja">AWSアクセスキーCSV</span>
+                            <span class="field-hint">
+                              <span class="lang-en">For EC2 build / Example: accessKeys.csv</span>
+                              <span class="lang-ja">EC2構築のため / 例: accessKeys.csv</span>
+                            </span>
                             <input id="aws_credentials_file" type="file" accept=".csv,text/csv" />
                           </label>
-                          <p class="note">
+                          <p class="note wizard-hide">
                             <span class="lang-en">Imports CSV and writes ~/.aws/credentials + config for the selected profile.</span>
                             <span class="lang-ja">CSVを取り込み、選択したプロファイルで ~/.aws/credentials と config に保存します。</span>
                           </p>
                           <div class="actions">
                             <button type="button" id="aws_credentials_button">
-                              <span class="lang-en">Import AWS CSV</span>
-                              <span class="lang-ja">AWS CSVを取り込む</span>
+                              <span class="lang-en">Import cloud credentials</span>
+                              <span class="lang-ja">クラウド認証情報を登録</span>
                             </button>
                           </div>
                           <div id="aws_credentials_status" class="status" aria-live="polite"></div>
