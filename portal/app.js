@@ -771,7 +771,9 @@ function renderGroupVars() {
   const containersManageUser = value(fields.containersManageUser) ? "true" : "false";
   const wireguardManage = value(fields.enableWireguard) ? "true" : "false";
   const failoverManage = value(fields.enableFailover) ? "true" : "false";
-  const failoverActive = simpleMode ? "false" : failoverManage;
+  const failoverState = simpleMode
+    ? "stopped"
+    : (failoverManage === "true" ? "started" : "stopped");
   const frrManage = value(fields.enableFrr) ? "true" : "false";
   const suricataManage = value(fields.enableSuricata) ? "true" : "false";
   const cloudflaredManage = value(fields.enableCloudflared) ? "true" : "false";
@@ -842,9 +844,9 @@ wireguard_restart_on_change: ${simpleMode ? "true" : "false"}
 wireguard_allow_overwrite: true
 
 # Failover core
-failover_core_manage: ${failoverActive}
-failover_core_enable: ${failoverActive}
-failover_core_state: ${failoverActive === "true" ? "started" : "stopped"}
+failover_core_manage: ${failoverManage}
+failover_core_enable: ${failoverManage}
+failover_core_state: ${failoverState}
 
 # FRR
 frr_manage: ${frrManage}
@@ -2327,7 +2329,8 @@ async function loadStatus() {
     applyAutoAdminAllowCidrs(payload);
     applyAutoAllowedSshCidrs(payload);
     applyAutoPortForwardDestIp(payload);
-    applyAutoCloudflaredOrigins(payload);
+  applyAutoCloudflaredOrigins(payload);
+  applyAutoDdosPrimaryIp();
     guidedState.preflight = true;
     const files = payload.files || {};
     const plan = getPlanOptions();
@@ -2559,6 +2562,20 @@ function applyAutoCloudflareDefaults() {
   }
   if (vpsIp) {
     fillIfEmpty(fields.cfFailoverRecordValue, vpsIp);
+  }
+}
+
+function applyAutoDdosPrimaryIp() {
+  const input = document.getElementById(fields.ddosNotifyPrimaryIp);
+  if (!input || input.dataset.manual === "true") {
+    return;
+  }
+  if ((input.value || "").trim()) {
+    return;
+  }
+  const onpremIp = value(fields.onpremIp).trim();
+  if (onpremIp) {
+    input.value = onpremIp;
   }
 }
 
@@ -2997,9 +3014,34 @@ function applyBeginnerDefaults() {
     return;
   }
   let changed = false;
+  const wireguard = document.getElementById("enable_wireguard");
+  if (wireguard && wireguard.dataset.manual != "true" && !wireguard.checked) {
+    wireguard.checked = true;
+    changed = true;
+  }
+  const failover = document.getElementById("enable_failover");
+  if (failover && failover.dataset.manual != "true" && !failover.checked) {
+    failover.checked = true;
+    changed = true;
+  }
+  const frr = document.getElementById("enable_frr");
+  if (frr && frr.dataset.manual != "true" && !frr.checked) {
+    frr.checked = true;
+    changed = true;
+  }
   const suricata = document.getElementById("enable_suricata");
   if (suricata && suricata.dataset.manual != "true" && !suricata.checked) {
     suricata.checked = true;
+    changed = true;
+  }
+  const portctl = document.getElementById("enable_portctl");
+  if (portctl && portctl.dataset.manual != "true" && !portctl.checked) {
+    portctl.checked = true;
+    changed = true;
+  }
+  const ddosNotify = document.getElementById("ddos_notify_enable");
+  if (ddosNotify && ddosNotify.dataset.manual != "true" && !ddosNotify.checked) {
+    ddosNotify.checked = true;
     changed = true;
   }
   const terraform = document.getElementById("plan_terraform");
@@ -3022,6 +3064,12 @@ function applyBeginnerDefaults() {
     cfTunnels.checked = true;
     changed = true;
   }
+  const cloudflared = document.getElementById("enable_cloudflared");
+  if (cloudflared && cloudflared.dataset.manual != "true" && !cloudflared.checked) {
+    cloudflared.checked = true;
+    changed = true;
+  }
+  applyAutoDdosPrimaryIp();
   if (changed) {
     syncDependencies();
     generateAll();
@@ -4785,6 +4833,7 @@ if (uploadTargetInput) {
 
 const portForwardDestInput = document.getElementById("port_forward_dest_ip");
 const wizardPortForwardDestInput = document.getElementById("wizard_port_forward_dest_ip");
+const wizardDiscordWebhookInput = document.getElementById("wizard_discord_webhook");
 if (portForwardDestInput) {
   portForwardDestInput.addEventListener("input", () => {
     portForwardDestInput.dataset.manual = "true";
@@ -4801,6 +4850,25 @@ if (wizardPortForwardDestInput) {
       portForwardDestInput.dataset.manual = "true";
     }
     scheduleGenerateAll();
+  });
+}
+const discordWebhookInput = document.getElementById("discord_webhook");
+if (wizardDiscordWebhookInput && discordWebhookInput) {
+  if (!(wizardDiscordWebhookInput.value || "").trim()) {
+    wizardDiscordWebhookInput.value = discordWebhookInput.value || "";
+  } else if (discordWebhookInput.value !== wizardDiscordWebhookInput.value) {
+    discordWebhookInput.value = wizardDiscordWebhookInput.value;
+  }
+  wizardDiscordWebhookInput.addEventListener("input", () => {
+    if (discordWebhookInput.value !== wizardDiscordWebhookInput.value) {
+      discordWebhookInput.value = wizardDiscordWebhookInput.value;
+      scheduleGenerateAll();
+    }
+  });
+  discordWebhookInput.addEventListener("input", () => {
+    if (wizardDiscordWebhookInput.value !== discordWebhookInput.value) {
+      wizardDiscordWebhookInput.value = discordWebhookInput.value;
+    }
   });
 }
 
@@ -4860,6 +4928,13 @@ if (allowedSshInput) {
   });
 }
 
+const ddosPrimaryInput = document.getElementById("ddos_notify_primary_ip");
+if (ddosPrimaryInput) {
+  ddosPrimaryInput.addEventListener("input", () => {
+    ddosPrimaryInput.dataset.manual = "true";
+  });
+}
+
 ["cf_vps_origin", "cf_ec2_origin"].forEach((id) => {
   const input = document.getElementById(id);
   if (!input) {
@@ -4893,6 +4968,13 @@ document.querySelectorAll(".form-tab").forEach((button) => {
     generateAll();
   });
 });
+
+const onpremIpInput = document.getElementById("onprem_ip");
+if (onpremIpInput) {
+  onpremIpInput.addEventListener("input", () => {
+    applyAutoDdosPrimaryIp();
+  });
+}
 
 const storedLang = window.localStorage ? localStorage.getItem("portalLang") : null;
 const browserLang = (navigator.language || "").toLowerCase().startsWith("ja")

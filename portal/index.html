@@ -1295,6 +1295,17 @@ systemctl status failover_core</code></pre>
                 <input id="wizard_port_forward_dest_ip" type="text" placeholder="10.0.0.2" />
               </label>
             </div>
+            <div class="wizard-action-grid">
+              <label>
+                <span class="lang-en">Discord webhook (alerts)</span>
+                <span class="lang-ja">Discord Webhook（通知）</span>
+                <span class="field-hint">
+                  <span class="lang-en">For DDoS/game alerts / Example: https://discord.com/api/webhooks/...</span>
+                  <span class="lang-ja">DDoS/ゲーム通知用 / 例: https://discord.com/api/webhooks/...</span>
+                </span>
+                <input id="wizard_discord_webhook" type="text" placeholder="https://discord.com/api/webhooks/..." />
+              </label>
+            </div>
             <div id="wizard_install_status" class="status" aria-live="polite"></div>
             <div class="wizard-actions">
               <button type="button" class="wizard-next" data-next-step="2">
