@@ -25,10 +25,59 @@
         wireguard_items: "{{ wireguard_raw_configs | default(wireguard_configs | default([])) }}"
         wireguard_item_names: "{{ (wireguard_raw_configs | default(wireguard_configs | default([]))) | map(attribute='name') | list }}"
 
+    - name: Check whether WireGuard NAT is enabled
+      set_fact:
+        wireguard_nat_enabled: >-
+          {{
+            (wireguard_items | default([])
+              | selectattr('enable_nat', 'defined')
+              | selectattr('enable_nat')
+              | list
+              | length) > 0
+          }}
+
     - name: Detect WireGuard NAT interface
       set_fact:
         wireguard_nat_interface: "{{ ansible_default_ipv4.interface }}"
       when: wireguard_nat_interface | default("") | length == 0
+
+    - name: Ensure ufw is installed when WireGuard NAT is enabled (optional)
+      apt:
+        name: ufw
+        state: present
+        update_cache: "{{ wireguard_update_cache | default(true) }}"
+        cache_valid_time: "{{ (wireguard_update_cache | default(true)) | ternary(3600, omit) }}"
+      when:
+        - wireguard_ufw_manage | default(true)
+        - wireguard_nat_enabled | default(false)
+
+    - name: Check ufw status (optional)
+      command: ufw status
+      register: wireguard_ufw_status
+      changed_when: false
+      failed_when: false
+      when:
+        - wireguard_ufw_manage | default(true)
+        - wireguard_nat_enabled | default(false)
+
+    - name: Enable ufw when inactive (optional)
+      command: ufw --force enable
+      when:
+        - wireguard_ufw_manage | default(true)
+        - wireguard_nat_enabled | default(false)
+        - wireguard_ufw_status.stdout is defined
+        - "'inactive' in wireguard_ufw_status.stdout.lower()"
+      changed_when: true
+      failed_when: false
+
+    - name: Allow WireGuard port via ufw (optional)
+      command: ufw allow 51820/udp
+      register: wireguard_ufw_allow
+      changed_when: false
+      failed_when: false
+      when:
+        - wireguard_ufw_manage | default(true)
+        - wireguard_nat_enabled | default(false)
 
     - name: Check existing WireGuard configs
       stat:
