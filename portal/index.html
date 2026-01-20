@@ -987,123 +987,53 @@ systemctl status failover_core</code></pre>
         </h2>
         <p class="note">
           <span class="lang-en">
-            This section describes how the portal runs most steps safely.
+            Follow this order for the safest flow.
           </span>
           <span class="lang-ja">
-            ここでは、ポータルが安全に手順を実行する仕組みを説明します。
+            入力場所と実行順をまとめています。
           </span>
         </p>
         <div class="guide-grid">
-          <details class="guide-card">
-            <summary>
-              <span class="lang-en">Execution flow</span>
-              <span class="lang-ja">実行フロー</span>
-            </summary>
-            <ol>
-              <li>
-                <span class="lang-en">Start the portal and copy the upload token from the terminal.</span>
-                <span class="lang-ja">ポータル起動時に表示されるトークンを控えます。</span>
-              </li>
-              <li>
-                <span class="lang-en">Submit an action (Terraform/Ansible/Validate) from the UI.</span>
-                <span class="lang-ja">UIからTerraform/Ansible/検証を実行します。</span>
-              </li>
-              <li>
-                <span class="lang-en">The server validates inputs, queues a job, and returns a job ID.</span>
-                <span class="lang-ja">サーバーが入力検証し、ジョブをキューに積みます。</span>
-              </li>
-              <li>
-                <span class="lang-en">The UI polls job status and shows logs.</span>
-                <span class="lang-ja">UIが進捗を監視し、ログを表示します。</span>
-              </li>
-            </ol>
-          </details>
-
-          <details class="guide-card">
-            <summary>
-              <span class="lang-en">Allowed actions (whitelist)</span>
-              <span class="lang-ja">実行可能アクション（ホワイトリスト）</span>
-            </summary>
+          <div class="guide-card">
+            <h3>
+              <span class="lang-en">Where to start</span>
+              <span class="lang-ja">入力開始位置</span>
+            </h3>
             <ul>
               <li>
-                <span class="lang-en">Terraform: init / plan / apply / destroy</span>
-                <span class="lang-ja">Terraform: init / plan / apply / destroy</span>
+                <span class="lang-en">Project Inputs → Basics / Cloud / SSH / Services / Admin</span>
+                <span class="lang-ja">入力フォーム → 基本 / クラウド / SSH / サービス / 管理</span>
               </li>
               <li>
-                <span class="lang-en">Ansible: run with tags + target host</span>
-                <span class="lang-ja">Ansible: タグと対象ホストを指定して実行</span>
+                <span class="lang-en">Click Generate → Save to server</span>
+                <span class="lang-ja">「ファイル生成」→「サーバーに保存」</span>
+              </li>
+            </ul>
+          </div>
+          <div class="guide-card">
+            <h3>
+              <span class="lang-en">Button order</span>
+              <span class="lang-ja">ボタンの順番</span>
+            </h3>
+            <ol>
+              <li>
+                <span class="lang-en">Terraform (Cloudflare): init → plan → apply</span>
+                <span class="lang-ja">Terraform（Cloudflare）: init → plan → apply</span>
+              </li>
+              <li>
+                <span class="lang-en">Terraform (EC2): init → plan → apply</span>
+                <span class="lang-ja">Terraform（EC2）: init → plan → apply</span>
+              </li>
+              <li>
+                <span class="lang-en">Ansible: base → vps → ec2 → onprem</span>
+                <span class="lang-ja">Ansible: base → vps → ec2 → onprem</span>
               </li>
               <li>
                 <span class="lang-en">Validate: make validate</span>
                 <span class="lang-ja">検証: make validate</span>
               </li>
-              <li>
-                <span class="lang-en">Vault file generation (optional)</span>
-                <span class="lang-ja">Vaultファイル生成（任意）</span>
-              </li>
-            </ul>
-          </details>
-
-          <details class="guide-card">
-            <summary>
-              <span class="lang-en">Safety controls</span>
-              <span class="lang-ja">安全対策</span>
-            </summary>
-            <ul>
-              <li>
-                <span class="lang-en">LAN-only access + token authentication.</span>
-                <span class="lang-ja">LAN限定アクセス + トークン認証。</span>
-              </li>
-              <li>
-                <span class="lang-en">Fixed working directory and allowed arguments only.</span>
-                <span class="lang-ja">作業ディレクトリ固定、引数は許可制。</span>
-              </li>
-              <li>
-                <span class="lang-en">Two-step confirmation for destructive actions.</span>
-                <span class="lang-ja">破壊的操作は二重確認。</span>
-              </li>
-              <li>
-                <span class="lang-en">Logs stored per job and shown in the UI.</span>
-                <span class="lang-ja">ジョブログを保存してUIに表示。</span>
-              </li>
-            </ul>
-          </details>
-
-          <details class="guide-card">
-            <summary>
-              <span class="lang-en">Example API endpoints</span>
-              <span class="lang-ja">想定API例</span>
-            </summary>
-            <pre><code>POST /api/terraform/init
-POST /api/terraform/plan
-POST /api/terraform/apply
-POST /api/terraform/destroy
-POST /api/ansible/run
-POST /api/validate
-GET  /api/jobs/&lt;job_id&gt;
-GET  /api/jobs/&lt;job_id&gt;/logs</code></pre>
-          </details>
-
-          <details class="guide-card">
-            <summary>
-              <span class="lang-en">Manual-only items</span>
-              <span class="lang-ja">手動が残る項目</span>
-            </summary>
-            <ul>
-              <li>
-                <span class="lang-en">VPS purchase/provisioning (provider UI)</span>
-                <span class="lang-ja">VPSの契約/作成（プロバイダUI）</span>
-              </li>
-              <li>
-                <span class="lang-en">Cloudflare token issuance</span>
-                <span class="lang-ja">Cloudflareトークン発行</span>
-              </li>
-              <li>
-                <span class="lang-en">Domain registration</span>
-                <span class="lang-ja">ドメイン登録</span>
-              </li>
-            </ul>
-          </details>
+            </ol>
+          </div>
         </div>
       </section>
 
@@ -1189,29 +1119,29 @@ GET  /api/jobs/&lt;job_id&gt;/logs</code></pre>
           <div>
             <h3>Terraform</h3>
             <div class="actions">
-              <button type="button" class="run-action" data-action="tf-init">init</button>
-              <button type="button" class="run-action" data-action="tf-plan">plan</button>
-              <button type="button" class="run-action danger" data-action="tf-apply">apply</button>
+              <button type="button" class="run-action action-step" data-step="1" data-action="tf-init">init</button>
+              <button type="button" class="run-action action-step" data-step="2" data-action="tf-plan">plan</button>
+              <button type="button" class="run-action danger action-step" data-step="3" data-action="tf-apply">apply</button>
               <button type="button" class="run-action danger" data-action="tf-destroy">destroy</button>
             </div>
           </div>
           <div>
             <h3>Terraform (Cloudflare)</h3>
             <div class="actions">
-              <button type="button" class="run-action" data-action="tf-cf-init">init</button>
-              <button type="button" class="run-action" data-action="tf-cf-plan">plan</button>
-              <button type="button" class="run-action danger" data-action="tf-cf-apply">apply</button>
+              <button type="button" class="run-action action-step" data-step="1" data-action="tf-cf-init">init</button>
+              <button type="button" class="run-action action-step" data-step="2" data-action="tf-cf-plan">plan</button>
+              <button type="button" class="run-action danger action-step" data-step="3" data-action="tf-cf-apply">apply</button>
               <button type="button" class="run-action danger" data-action="tf-cf-destroy">destroy</button>
             </div>
           </div>
           <div>
             <h3>Ansible</h3>
             <div class="actions">
-              <button type="button" class="run-action" data-action="ansible-base">base</button>
+              <button type="button" class="run-action action-step" data-step="1" data-action="ansible-base">base</button>
+              <button type="button" class="run-action action-step" data-step="2" data-action="ansible-vps">vps</button>
+              <button type="button" class="run-action action-step" data-step="3" data-action="ansible-ec2">ec2</button>
+              <button type="button" class="run-action action-step" data-step="4" data-action="ansible-onprem">onprem</button>
               <button type="button" class="run-action" data-action="ansible-cloudflared">cloudflared</button>
-              <button type="button" class="run-action" data-action="ansible-vps">vps</button>
-              <button type="button" class="run-action" data-action="ansible-ec2">ec2</button>
-              <button type="button" class="run-action" data-action="ansible-onprem">onprem</button>
               <button type="button" class="run-action" data-action="ansible-vps-check">vps check</button>
             </div>
           </div>
@@ -1264,15 +1194,6 @@ GET  /api/jobs/&lt;job_id&gt;/logs</code></pre>
           </div>
           <div id="run_status" class="status" aria-live="polite"></div>
           <textarea id="run_log" rows="8" readonly></textarea>
-        </div>
-        <div class="output-block beginner-only">
-          <div class="output-header">
-            <h3>
-              <span class="lang-en">Next steps</span>
-              <span class="lang-ja">推奨設定</span>
-            </h3>
-          </div>
-          <textarea id="simple_next_steps" rows="10" readonly></textarea>
         </div>
       </section>
 

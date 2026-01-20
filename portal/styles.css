@@ -144,9 +144,9 @@ h1 {
 
 .layout {
   display: grid;
-  gap: 24px;
-  padding: 12px 8vw 48px;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 18px;
+  padding: 12px clamp(16px, 6vw, 64px) 40px;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   align-items: start;
   grid-auto-rows: minmax(min-content, max-content);
 }
@@ -155,9 +155,10 @@ h1 {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 18px;
-  padding: 20px;
+  padding: 16px;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
   min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 section.panel[hidden] {
@@ -311,20 +312,20 @@ select:focus {
 .actions {
   display: flex;
   justify-content: flex-start;
-  gap: 12px;
+  gap: 8px;
   flex-wrap: wrap;
 }
 
 .port-grid {
   display: grid;
   gap: 8px 16px;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
 }
 
 button {
   border: none;
   border-radius: 12px;
-  padding: 10px 16px;
+  padding: 8px 14px;
   background: var(--accent);
   color: #2d2311;
   font-weight: 700;
@@ -337,8 +338,38 @@ button:hover {
   box-shadow: 0 8px 20px rgba(244, 184, 96, 0.35);
 }
 
+.run-action.action-step {
+  position: relative;
+  padding-left: 28px;
+}
+
+.run-action.action-step::before {
+  content: attr(data-step);
+  position: absolute;
+  left: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  font-size: 0.7rem;
+  font-weight: 700;
+  background: rgba(244, 184, 96, 0.2);
+  border: 1px solid rgba(244, 184, 96, 0.45);
+  color: var(--accent);
+}
+
+button.danger.action-step::before {
+  background: rgba(239, 120, 120, 0.2);
+  border-color: rgba(239, 120, 120, 0.5);
+  color: var(--danger);
+}
+
 .outputs .output-block {
-  margin-bottom: 20px;
+  margin-bottom: 14px;
+  min-width: 0;
 }
 
 .output-header {
@@ -449,15 +480,16 @@ textarea {
 
 .guide-grid {
   display: grid;
-  gap: 16px;
-  margin-top: 16px;
+  gap: 12px;
+  margin-top: 12px;
 }
 
 .guide-card {
   background: var(--surface-2);
   border: 1px solid var(--border);
   border-radius: 14px;
-  padding: 12px 14px;
+  padding: 10px 12px;
+  min-width: 0;
 }
 
 .guide-card summary {
@@ -482,7 +514,7 @@ textarea {
 .guide-card pre {
   background: #121826;
   border-radius: 10px;
-  padding: 10px;
+  padding: 8px;
   border: 1px solid var(--border);
   overflow-x: auto;
 }
@@ -492,23 +524,24 @@ textarea {
 .guided-options {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
-  margin-top: 12px;
+  gap: 8px;
+  margin-top: 10px;
 }
 
 .guided-grid {
   display: grid;
-  gap: 16px;
-  margin-top: 16px;
+  gap: 12px;
+  margin-top: 12px;
 }
 
 .guided-step {
   background: var(--surface-2);
   border: 1px solid var(--border);
   border-radius: 14px;
-  padding: 14px;
+  padding: 12px;
   display: grid;
-  gap: 10px;
+  gap: 8px;
+  min-width: 0;
 }
 
 .guided-step[data-state="locked"] {
@@ -542,8 +575,8 @@ textarea {
 
 .custom-grid {
   display: grid;
-  gap: 10px;
-  margin-top: 12px;
+  gap: 8px;
+  margin-top: 10px;
 }
 
 .custom-item {
@@ -630,13 +663,17 @@ button[disabled] {
 
 .run-grid {
   display: grid;
-  gap: 16px;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  margin-top: 12px;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  margin-top: 10px;
 }
 
 .run-grid h3 {
   margin: 0 0 8px;
+}
+
+.run-grid > div {
+  min-width: 0;
 }
 
 button.danger {
@@ -647,9 +684,9 @@ button.danger {
 
 .template-grid {
   display: grid;
-  gap: 14px;
-  margin-top: 16px;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
 }
 
 .template-card {
@@ -657,12 +694,13 @@ button.danger {
   background: var(--surface-2);
   color: var(--text);
   border-radius: 16px;
-  padding: 16px;
+  padding: 14px;
   text-align: left;
   display: grid;
   gap: 10px;
   cursor: pointer;
   transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+  min-width: 0;
 }
 
 .template-card:hover {
