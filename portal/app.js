@@ -2507,6 +2507,10 @@ function applyAutoPortForwardDestIp(payload) {
   const autoIp = getAutoPortForwardDestIp(payload);
   if (autoIp) {
     input.value = autoIp;
+    const wizardInput = document.getElementById("wizard_port_forward_dest_ip");
+    if (wizardInput && wizardInput.dataset.manual !== "true" && !(wizardInput.value || "").trim()) {
+      wizardInput.value = autoIp;
+    }
   }
 }
 
@@ -4758,9 +4762,23 @@ if (uploadTargetInput) {
 }
 
 const portForwardDestInput = document.getElementById("port_forward_dest_ip");
+const wizardPortForwardDestInput = document.getElementById("wizard_port_forward_dest_ip");
 if (portForwardDestInput) {
   portForwardDestInput.addEventListener("input", () => {
     portForwardDestInput.dataset.manual = "true";
+    if (wizardPortForwardDestInput && wizardPortForwardDestInput.value !== portForwardDestInput.value) {
+      wizardPortForwardDestInput.value = portForwardDestInput.value;
+    }
+  });
+}
+if (wizardPortForwardDestInput) {
+  wizardPortForwardDestInput.addEventListener("input", () => {
+    wizardPortForwardDestInput.dataset.manual = "true";
+    if (portForwardDestInput && portForwardDestInput.value !== wizardPortForwardDestInput.value) {
+      portForwardDestInput.value = wizardPortForwardDestInput.value;
+      portForwardDestInput.dataset.manual = "true";
+    }
+    scheduleGenerateAll();
   });
 }
 

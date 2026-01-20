@@ -1284,6 +1284,17 @@ systemctl status failover_core</code></pre>
                 <span class="lang-ja">ツールを準備</span>
               </button>
             </div>
+            <div class="wizard-action-grid">
+              <label>
+                <span class="lang-en">Forward destination IP</span>
+                <span class="lang-ja">転送先IP</span>
+                <span class="field-hint">
+                  <span class="lang-en">WireGuard destination / Example: 10.0.0.2</span>
+                  <span class="lang-ja">WireGuard宛先 / 例: 10.0.0.2</span>
+                </span>
+                <input id="wizard_port_forward_dest_ip" type="text" placeholder="10.0.0.2" />
+              </label>
+            </div>
             <div id="wizard_install_status" class="status" aria-live="polite"></div>
             <div class="wizard-actions">
               <button type="button" class="wizard-next" data-next-step="2">
