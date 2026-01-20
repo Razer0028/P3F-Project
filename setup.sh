@@ -62,7 +62,7 @@ timezone: "$timezone"
 wireguard_manage: false
 wireguard_enable_on_boot: false
 wireguard_restart_on_change: false
-wireguard_allow_overwrite: false
+wireguard_allow_overwrite: true
 
 # Backup
 backups_manage: false

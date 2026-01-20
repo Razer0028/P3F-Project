@@ -775,7 +775,7 @@ sysctl_forward_manage: ${sysctlForwardManage}
 wireguard_manage: ${wireguardManage}
 wireguard_enable_on_boot: ${simpleMode ? "true" : "false"}
 wireguard_restart_on_change: ${simpleMode ? "true" : "false"}
-wireguard_allow_overwrite: false
+wireguard_allow_overwrite: true
 
 # Failover core
 failover_core_manage: ${failoverActive}
