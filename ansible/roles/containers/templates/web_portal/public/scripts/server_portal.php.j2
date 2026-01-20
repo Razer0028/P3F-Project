@@ -222,7 +222,9 @@ function docker_api_status($container, $hint = ''){
 }
 
 function docker_ps_names(){
+{% raw %}
     $result = docker_cmd("ps --format '{{.Names}}'");
+{% endraw %}
     if ($result['rc'] !== 0) {
         $items = docker_api_list();
         $names = [];
