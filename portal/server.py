@@ -66,6 +66,8 @@ FAILOVER_HOST_VARS_REL = "ansible/host_vars/onprem-1.yml"
 FAILOVER_RULES_MARKER = "# Managed by portal: failover core"
 CLOUDFLARED_RULES_MARKER = "# Managed by portal: cloudflared"
 CLOUDFLARED_RULES_END_MARKER = "# End managed by portal: cloudflared"
+WIREGUARD_RULES_MARKER = "# Managed by portal: wireguard"
+WIREGUARD_RULES_END_MARKER = "# End managed by portal: wireguard"
 CLOUDFLARED_DEFAULT_ORIGIN = "http://10.0.0.2:8082"
 AUTO_IMPORT_MARKER = "# Managed by portal: auto-import"
 AUTO_IMPORT_ENV = os.environ.get("PORTAL_AUTO_IMPORT", "true").strip().lower()
@@ -409,6 +411,7 @@ def build_wireguard_config_block(configs, primary, allow_overwrite=True, enable_
     if not configs:
         return ""
     lines = [
+        WIREGUARD_RULES_MARKER,
         "wireguard_manage: true",
         f"wireguard_allow_overwrite: {str(bool(allow_overwrite)).lower()}",
         f"wireguard_enable_on_boot: {str(bool(enable_on_boot)).lower()}",
@@ -444,7 +447,21 @@ def build_wireguard_config_block(configs, primary, allow_overwrite=True, enable_
             keepalive = peer.get("persistent_keepalive")
             if keepalive:
                 lines.append(f"        persistent_keepalive: {keepalive}")
-    return "\n".join(lines) + "\n"
+    lines.append(WIREGUARD_RULES_END_MARKER)
+    lines.append("")
+    return "\n".join(lines)
+
+
+def upsert_wireguard_block(existing_text, new_block):
+    if WIREGUARD_RULES_MARKER not in existing_text:
+        return (existing_text.rstrip() + "\n\n" + new_block).strip() + "\n"
+    start = existing_text.find(WIREGUARD_RULES_MARKER)
+    end_marker = WIREGUARD_RULES_END_MARKER
+    end = existing_text.find(end_marker, start)
+    if end != -1:
+        end += len(end_marker)
+        return (existing_text[:start].rstrip() + "\n" + new_block + existing_text[end:].lstrip()).rstrip() + "\n"
+    return (existing_text[:start].rstrip() + "\n" + new_block).rstrip() + "\n"
 
 
 def build_wireguard_block(configs, primary, allow_overwrite=True, enable_on_boot=True, restart_on_change=True):
@@ -677,6 +694,31 @@ def write_host_vars(output_root, host, content):
     return {rel_path: {"bytes": len(final_content.encode('utf-8'))}}
 
 
+def write_wireguard_host_vars(output_root, host, content):
+    if not content:
+        return {}
+    rel_path = f"ansible/host_vars/{host}.yml"
+    abs_path = resolve_output_path(output_root, rel_path)
+    if not abs_path:
+        return {}
+    existing = ""
+    if abs_path.exists():
+        try:
+            existing = abs_path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            existing = ""
+        if WIREGUARD_RULES_MARKER not in existing and "wireguard_manage:" in existing:
+            return {}
+        content_to_write = upsert_wireguard_block(existing, content)
+    else:
+        content_to_write = content
+    abs_path.parent.mkdir(parents=True, exist_ok=True)
+    abs_path.write_text(content_to_write, encoding="utf-8")
+    os.chmod(abs_path, 0o600)
+    record_secret_path(abs_path)
+    return {rel_path: {"bytes": len(content_to_write.encode("utf-8"))}}
+
+
 def maybe_write_auto_host_vars(output_root, inventory_text, group_vars_text, secrets, setup_mode):
     if not AUTO_IMPORT_ENABLED:
         return {}, {}
@@ -690,6 +732,7 @@ def maybe_write_auto_host_vars_simple(output_root, inventory_text, group_vars_te
     saved = {}
     errors = {}
     host_sections = {}
+    wireguard_blocks = {}
     host_groups = {"onprem-1": "onprem", "vps-1": "vps", "ec2-1": "ec2"}
     for host_name in host_groups:
         host_sections[host_name] = []
@@ -712,13 +755,13 @@ def maybe_write_auto_host_vars_simple(output_root, inventory_text, group_vars_te
             if not wg_errors:
                 onprem_block = build_wireguard_config_block(configs.get("onprem-1"), "wg0", allow_overwrite=True, enable_on_boot=True)
                 if onprem_block:
-                    host_sections["onprem-1"].append(onprem_block)
+                    wireguard_blocks["onprem-1"] = onprem_block
                 vps_block = build_wireguard_config_block(configs.get("vps-1"), "wg0", allow_overwrite=True, enable_on_boot=True)
                 if vps_block:
-                    host_sections["vps-1"].append(vps_block)
+                    wireguard_blocks["vps-1"] = vps_block
                 ec2_block = build_wireguard_config_block(configs.get("ec2-1"), "wg1", allow_overwrite=True, enable_on_boot=True)
                 if ec2_block:
-                    host_sections["ec2-1"].append(ec2_block)
+                    wireguard_blocks["ec2-1"] = ec2_block
 
     ddos_path = output_root / "tmp" / "ddos_vps_vault_snippet.txt"
     if ddos_path.exists():
@@ -734,6 +777,12 @@ def maybe_write_auto_host_vars_simple(output_root, inventory_text, group_vars_te
         if not content:
             continue
         saved.update(write_host_vars(output_root, host, content))
+
+    for host, block in wireguard_blocks.items():
+        group = host_groups.get(host, "")
+        if group and not inventory_has_group(inventory_text, group):
+            continue
+        saved.update(write_wireguard_host_vars(output_root, host, block))
 
     return saved, errors
 
