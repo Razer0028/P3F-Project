@@ -1714,15 +1714,19 @@ function renderInputWarnings() {
   const cloudflaredAuto = plan.cloudflare && value(fields.cfManageTunnels);
   const cloudflaredReady = !cloudflaredAuto || guidedState.tfCfApply;
 
+  const skipTunnelWarnings = document.body
+    && document.body.dataset.setupMode === "beginner"
+    && cloudflaredAuto
+    && guidedState.tfCfApply;
   if (features.cloudflared && cloudflaredReady) {
     if (plan.vps) {
-      if (!value(fields.cfVpsTunnelId)) {
+      if (!skipTunnelWarnings && !value(fields.cfVpsTunnelId)) {
         addWarn("Cloudflared: VPS tunnel ID is empty.", "Cloudflared: VPSトンネルIDが空です。");
       }
       if (!value(fields.cfVpsOrigin)) {
         addWarn("Cloudflared: VPS origin service is empty.", "Cloudflared: VPS転送先サービスが空です。");
       }
-      if (!value(fields.cfVpsCredentials)) {
+      if (!skipTunnelWarnings && !value(fields.cfVpsCredentials)) {
         addWarn("Cloudflared: VPS credentials JSON is empty.", "Cloudflared: VPS credentials JSONが空です。");
       }
       if (!value(fields.cfVpsHostname)) {
@@ -1730,13 +1734,13 @@ function renderInputWarnings() {
       }
     }
     if (plan.ec2) {
-      if (!value(fields.cfEc2TunnelId)) {
+      if (!skipTunnelWarnings && !value(fields.cfEc2TunnelId)) {
         addWarn("Cloudflared: EC2 tunnel ID is empty.", "Cloudflared: EC2トンネルIDが空です。");
       }
       if (!value(fields.cfEc2Origin)) {
         addWarn("Cloudflared: EC2 origin service is empty.", "Cloudflared: EC2転送先サービスが空です。");
       }
-      if (!value(fields.cfEc2Credentials)) {
+      if (!skipTunnelWarnings && !value(fields.cfEc2Credentials)) {
         addWarn("Cloudflared: EC2 credentials JSON is empty.", "Cloudflared: EC2 credentials JSONが空です。");
       }
       if (!value(fields.cfEc2Hostname)) {
@@ -1904,6 +1908,50 @@ async function fetchTerraformOutputs(stack) {
     return null;
   }
   return payload.outputs || null;
+}
+
+async function refreshCloudflareOutputsFromTerraform(force = false) {
+  const outputs = await fetchTerraformOutputs("cloudflare");
+  if (!outputs) {
+    return false;
+  }
+  const map = [
+    { id: fields.cfVpsTunnelId, key: "vps_tunnel_id" },
+    { id: fields.cfEc2TunnelId, key: "ec2_tunnel_id" },
+    { id: fields.cfVpsCredentials, key: "vps_tunnel_credentials_json" },
+    { id: fields.cfEc2Credentials, key: "ec2_tunnel_credentials_json" },
+  ];
+  let changed = false;
+  map.forEach(({ id, key }) => {
+    const input = document.getElementById(id);
+    if (!input) {
+      return;
+    }
+    if (!force && input.dataset.manual === "true") {
+      return;
+    }
+    const current = (input.value || "").trim();
+    if (current && !force) {
+      return;
+    }
+    let valueOut = outputs[key] || "";
+    if (valueOut && typeof valueOut === "object") {
+      valueOut = JSON.stringify(valueOut);
+    }
+    if (valueOut) {
+      input.value = valueOut;
+      input.dataset.manual = "auto";
+      changed = true;
+    }
+  });
+  if (changed) {
+    generateAll();
+    setActionNotice(
+      currentLang === "ja" ? "Cloudflareのトンネル情報を自動反映しました。" : "Auto-filled Cloudflare tunnel info.",
+      "ok",
+    );
+  }
+  return changed;
 }
 
 async function refreshEc2IpFromTerraform(force = false) {
@@ -2347,6 +2395,7 @@ async function loadStatus() {
       if (!ec2Ip) {
         refreshEc2IpFromTerraform(false);
       }
+      refreshCloudflareOutputsFromTerraform(false);
     }
   } catch (error) {
     setStatusMessage(messages.error, "error");
@@ -3830,6 +3879,7 @@ async function runGuidedTerraformCf() {
   });
   if (result.ok) {
     guidedState.tfCfApply = true;
+    await refreshCloudflareOutputsFromTerraform(false);
     updateGuidedSteps();
   }
 }
@@ -3951,6 +4001,7 @@ async function runWizardTerraformCf() {
   const result = await runWizardActions(["tf-cf-init", "tf-cf-apply"]);
   if (result.ok) {
     guidedState.tfCfApply = true;
+    await refreshCloudflareOutputsFromTerraform(false);
     updateGuidedSteps();
   }
 }

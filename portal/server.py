@@ -2605,6 +2605,10 @@ class PortalHandler(http.server.SimpleHTTPRequestHandler):
                     "outputs": {
                         "zone_id": terraform_output_value(outputs, "zone_id") or "",
                         "zone_name": terraform_output_value(outputs, "zone_name") or "",
+                        "vps_tunnel_id": terraform_output_value(outputs, "vps_tunnel_id") or "",
+                        "ec2_tunnel_id": terraform_output_value(outputs, "ec2_tunnel_id") or "",
+                        "vps_tunnel_credentials_json": terraform_output_value(outputs, "vps_tunnel_credentials_json") or "",
+                        "ec2_tunnel_credentials_json": terraform_output_value(outputs, "ec2_tunnel_credentials_json") or "",
                     },
                 },
             )
