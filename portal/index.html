@@ -1358,6 +1358,10 @@ systemctl status failover_core</code></pre>
               <span class="lang-en">This will build servers. No destructive actions will run.</span>
               <span class="lang-ja">この操作でサーバーが構築されます。破壊操作は行われません。</span>
             </p>
+            <p class="wizard-note">
+              <span class="lang-en">After cloud setup, save again so server settings stay in sync.</span>
+              <span class="lang-ja">クラウド作成後は、設定を揃えるためにもう一度保存してください。</span>
+            </p>
             <div class="wizard-action-grid">
               <button type="button" id="wizard_run_cf">
                 <span class="wizard-action-step">1</span>
@@ -1375,6 +1379,13 @@ systemctl status failover_core</code></pre>
                 <span class="lang-ja">サーバーを設定</span>
               </button>
             </div>
+            <div class="wizard-action-grid">
+              <button type="button" id="wizard_save_after_ec2" class="wizard-secondary">
+                <span class="lang-en">Save again after cloud setup</span>
+                <span class="lang-ja">クラウド作成後にもう一度保存</span>
+              </button>
+            </div>
+            <div id="wizard_save_status_step5" class="status" aria-live="polite"></div>
             <div class="wizard-action-grid">
               <label>
                 <span class="lang-en">Portal token</span>

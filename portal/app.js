@@ -1841,6 +1841,11 @@ function setSaveStatus(message, state) {
     wizardStatus.textContent = message;
     wizardStatus.dataset.state = state;
   }
+  const wizardStatusStep5 = document.getElementById("wizard_save_status_step5");
+  if (wizardStatusStep5) {
+    wizardStatusStep5.textContent = message;
+    wizardStatusStep5.dataset.state = state;
+  }
   updateWizard();
 }
 
@@ -3351,6 +3356,10 @@ function updateWizard() {
   if (saveBtn) {
     saveBtn.disabled = wizardState.busy || !canSave;
   }
+  const saveAfterBtn = document.getElementById("wizard_save_after_ec2");
+  if (saveAfterBtn) {
+    saveAfterBtn.disabled = wizardState.busy || !canSave;
+  }
 
   const installBtn = document.getElementById("wizard_install_tools");
   if (installBtn) {
@@ -3908,6 +3917,13 @@ async function runWizardTerraform() {
     guidedState.saved = false;
     setWizardElement(
       "wizard_save_status",
+      currentLang === "ja"
+        ? "EC2作成後はもう一度「サーバーに保存」を実行してください。"
+        : "After EC2 creation, run Save again.",
+      "info",
+    );
+    setWizardElement(
+      "wizard_save_status_step5",
       currentLang === "ja"
         ? "EC2作成後はもう一度「サーバーに保存」を実行してください。"
         : "After EC2 creation, run Save again.",
@@ -4536,6 +4552,12 @@ if (wizardGenerate) {
 const wizardSave = document.getElementById("wizard_save");
 if (wizardSave) {
   wizardSave.addEventListener("click", () => {
+    saveAll();
+  });
+}
+const wizardSaveAfterEc2 = document.getElementById("wizard_save_after_ec2");
+if (wizardSaveAfterEc2) {
+  wizardSaveAfterEc2.addEventListener("click", () => {
     saveAll();
   });
 }
