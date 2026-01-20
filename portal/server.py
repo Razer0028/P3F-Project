@@ -2059,7 +2059,7 @@ class PortalHandler(http.server.SimpleHTTPRequestHandler):
         target_path = ssh_dir / key_name
         target_path.write_bytes(data)
         os.chmod(target_path, 0o600)
-        record_secret_path(target_path)
+        record_secret_path(target_path, persistent=True)
 
         agent_error = ""
         if passphrase:
@@ -2110,9 +2110,9 @@ class PortalHandler(http.server.SimpleHTTPRequestHandler):
             if pub_path.exists():
                 os.chmod(pub_path, 0o644)
             created = True
-            record_secret_path(key_path)
+            record_secret_path(key_path, persistent=True)
             if pub_path.exists():
-                record_secret_path(pub_path)
+                record_secret_path(pub_path, persistent=True)
 
         public_key = read_public_key(key_path, passphrase)
         if not public_key:

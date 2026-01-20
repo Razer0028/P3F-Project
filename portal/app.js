@@ -4804,6 +4804,41 @@ if (wizardPortForwardDestInput) {
   });
 }
 
+const wizardKeyInputs = {
+  onprem: document.getElementById("wizard_onprem_key_name"),
+  vps: document.getElementById("wizard_vps_key_name"),
+  ec2: document.getElementById("wizard_ec2_key_name"),
+};
+const keyInputs = {
+  onprem: document.getElementById("onprem_key_name"),
+  vps: document.getElementById("vps_key_name"),
+  ec2: document.getElementById("ec2_key_name"),
+};
+["onprem", "vps", "ec2"].forEach((target) => {
+  const wizardInput = wizardKeyInputs[target];
+  const mainInput = keyInputs[target];
+  if (wizardInput && mainInput) {
+    if (!(wizardInput.value || "").trim()) {
+      wizardInput.value = mainInput.value || "";
+    } else if (mainInput.value !== wizardInput.value) {
+      mainInput.value = wizardInput.value;
+    }
+    wizardInput.addEventListener("input", () => {
+      if (mainInput.value !== wizardInput.value) {
+        mainInput.value = wizardInput.value;
+        syncUploadTargetLabels();
+        syncUploadKeyName();
+        scheduleGenerateAll();
+      }
+    });
+    mainInput.addEventListener("input", () => {
+      if (wizardInput.value !== mainInput.value) {
+        wizardInput.value = mainInput.value;
+      }
+    });
+  }
+});
+
 const adminAllowInput = document.getElementById("web_portal_admin_allow_cidrs");
 if (adminAllowInput) {
   adminAllowInput.addEventListener("input", () => {

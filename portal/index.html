@@ -1308,6 +1308,35 @@ systemctl status failover_core</code></pre>
               <span class="lang-en">Upload Cloudflare token, AWS CSV, and SSH keys.</span>
               <span class="lang-ja">Cloudflareトークン、AWS CSV、SSH鍵をアップロードしてください。</span>
             </p>
+            <div class="wizard-action-grid">
+              <label>
+                <span class="lang-en">On-prem key name</span>
+                <span class="lang-ja">オンプレ鍵名</span>
+                <span class="field-hint">
+                  <span class="lang-en">File name under ~/.ssh / Example: onprem_ed25519</span>
+                  <span class="lang-ja">~/.ssh に保存される鍵名 / 例: onprem_ed25519</span>
+                </span>
+                <input id="wizard_onprem_key_name" type="text" placeholder="onprem_ed25519" />
+              </label>
+              <label>
+                <span class="lang-en">VPS key name</span>
+                <span class="lang-ja">VPS鍵名</span>
+                <span class="field-hint">
+                  <span class="lang-en">File name under ~/.ssh / Example: vps_ed25519</span>
+                  <span class="lang-ja">~/.ssh に保存される鍵名 / 例: vps_ed25519</span>
+                </span>
+                <input id="wizard_vps_key_name" type="text" placeholder="vps_ed25519" />
+              </label>
+              <label>
+                <span class="lang-en">EC2 key name</span>
+                <span class="lang-ja">EC2鍵名</span>
+                <span class="field-hint">
+                  <span class="lang-en">File name under ~/.ssh / Example: ec2_key.pem</span>
+                  <span class="lang-ja">~/.ssh に保存される鍵名 / 例: ec2_key.pem</span>
+                </span>
+                <input id="wizard_ec2_key_name" type="text" placeholder="ec2_key.pem" />
+              </label>
+            </div>
             <div class="wizard-actions">
               <button type="button" class="wizard-next" data-next-step="3">
                 <span class="lang-en">Next</span>
