@@ -60,15 +60,14 @@
         - wireguard_ufw_manage | default(true)
         - wireguard_nat_enabled | default(false)
 
-    - name: Enable ufw when inactive (optional)
-      command: ufw --force enable
+    - name: Allow SSH before enabling ufw (optional)
+      command: ufw allow 22/tcp
+      register: wireguard_ufw_allow_ssh
+      changed_when: false
+      failed_when: false
       when:
         - wireguard_ufw_manage | default(true)
         - wireguard_nat_enabled | default(false)
-        - wireguard_ufw_status.stdout is defined
-        - "'inactive' in wireguard_ufw_status.stdout.lower()"
-      changed_when: true
-      failed_when: false
 
     - name: Allow WireGuard port via ufw (optional)
       command: ufw allow 51820/udp
@@ -182,4 +181,23 @@
       loop: "{{ wireguard_items }}"
       when:
         - wireguard_ufw_status.rc == 0
+
+    - name: Check ufw status after rules (optional)
+      command: ufw status
+      register: wireguard_ufw_status_post
+      changed_when: false
+      failed_when: false
+      when:
+        - wireguard_ufw_manage | default(true)
+        - wireguard_nat_enabled | default(false)
+
+    - name: Enable ufw when inactive (after rules)
+      command: ufw --force enable
+      when:
+        - wireguard_ufw_manage | default(true)
+        - wireguard_nat_enabled | default(false)
+        - wireguard_ufw_status_post.stdout is defined
+        - "'inactive' in wireguard_ufw_status_post.stdout.lower()"
+      changed_when: true
+      failed_when: false
         - item.enable_nat | default(false)

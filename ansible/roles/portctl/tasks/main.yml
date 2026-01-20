@@ -119,14 +119,6 @@
         - (not portctl_ufw_before_rules_stat.stat.exists) or (portctl_ufw_before_rules_allow_overwrite | default(false))
       notify: Reload ufw
 
-    - name: Enable ufw when inactive
-      command: ufw --force enable
-      when:
-        - portctl_ufw_status.stdout is defined
-        - "'inactive' in portctl_ufw_status.stdout.lower()"
-      changed_when: true
-      failed_when: false
-
     - name: Ensure portctl directories
       file:
         path: "{{ item }}"
@@ -368,3 +360,17 @@
         - portctl_manage_service | default(false)
         - portctl_apply_rules | default(true)
         - portctl_ufw_rules | length > 0
+
+    - name: Check ufw status after rules
+      command: ufw status
+      register: portctl_ufw_status_post
+      changed_when: false
+      failed_when: false
+
+    - name: Enable ufw when inactive (after rules)
+      command: ufw --force enable
+      when:
+        - portctl_ufw_status_post.stdout is defined
+        - "'inactive' in portctl_ufw_status_post.stdout.lower()"
+      changed_when: true
+      failed_when: false
