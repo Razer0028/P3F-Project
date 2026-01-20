@@ -784,9 +784,13 @@ failover_core_state: ${failoverActive === "true" ? "started" : "stopped"}
 
 # FRR
 frr_manage: ${frrManage}
+frr_manage_service: ${frrManage}
+frr_restart_on_change: ${frrManage}
 
 # Suricata
 suricata_manage: ${suricataManage}
+suricata_manage_service: ${suricataManage}
+suricata_restart_on_change: ${suricataManage}
 
 # Cloudflared
 cloudflared_manage: ${cloudflaredManage}

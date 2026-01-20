@@ -60,6 +60,7 @@ OUTPUT_TFVARS_CF_PATH = OUTPUT_ROOT / "terraform-cloudflare" / "terraform.tfvars
 SURICATA_CUSTOM_RULES_PATH = os.environ.get("PORTAL_SURICATA_RULES", "/home/gameadmin/Uploads/portal_uploads/custom.rules.txt")
 SURICATA_CUSTOM_RULES_DEST = "/etc/suricata/rules/custom.rules"
 SURICATA_RULES_MARKER = "# Managed by portal: suricata rules"
+SURICATA_RULES_END_MARKER = "# End managed by portal: suricata rules"
 
 FAILOVER_HOST_VARS_REL = "ansible/host_vars/onprem-1.yml"
 FAILOVER_RULES_MARKER = "# Managed by portal: failover core"
@@ -821,16 +822,62 @@ def build_suricata_host_vars(rules_text):
         f"suricata_custom_rules_path: {SURICATA_CUSTOM_RULES_DEST}\n"
         "suricata_custom_rules_content: |\n"
         f"{indented}\n"
+        f"{SURICATA_RULES_END_MARKER}\n"
     )
 
 
-def maybe_write_suricata_host_vars(output_root, inventory_text, group_vars_text):
+def upsert_suricata_block(existing_text, new_block):
+    if SURICATA_RULES_MARKER not in existing_text:
+        return (existing_text.rstrip() + "\n\n" + new_block).strip() + "\n"
+    start = existing_text.find(SURICATA_RULES_MARKER)
+    end_marker = SURICATA_RULES_END_MARKER
+    end = existing_text.find(end_marker, start)
+    if end != -1:
+        end += len(end_marker)
+        return (existing_text[:start].rstrip() + "\n" + new_block + existing_text[end:].lstrip()).rstrip() + "\n"
+    return (existing_text[:start].rstrip() + "\n" + new_block).rstrip() + "\n"
+
+
+def extract_yaml_block(text, key):
+    if not text:
+        return ""
+    lines = text.splitlines()
+    start = None
+    for idx, line in enumerate(lines):
+        if line.strip() == f"{key}: |":
+            start = idx + 1
+            break
+    if start is None:
+        return ""
+    block = []
+    for line in lines[start:]:
+        if line.startswith("  "):
+            block.append(line[2:])
+            continue
+        if line.strip() == "":
+            block.append("")
+            continue
+        break
+    return "\n".join(block).rstrip("\n")
+
+
+def load_suricata_rules_text(custom_path, repo_root):
+    rules_path = pathlib.Path(custom_path).expanduser() if custom_path else None
+    if rules_path and rules_path.exists():
+        text = rules_path.read_text(encoding="utf-8", errors="replace")
+        if text.strip():
+            return text
+    example_path = pathlib.Path(repo_root) / "ansible" / "host_vars" / "ec2-1.yml.example"
+    if not example_path.exists():
+        return ""
+    example_text = example_path.read_text(encoding="utf-8", errors="replace")
+    return extract_yaml_block(example_text, "suricata_custom_rules_content")
+
+
+def maybe_write_suricata_host_vars(output_root, repo_root, inventory_text, group_vars_text):
     if not parse_yaml_bool(group_vars_text, "suricata_manage"):
         return {}
-    rules_path = pathlib.Path(SURICATA_CUSTOM_RULES_PATH).expanduser()
-    if not rules_path.exists():
-        return {}
-    rules_text = rules_path.read_text(encoding="utf-8", errors="replace")
+    rules_text = load_suricata_rules_text(SURICATA_CUSTOM_RULES_PATH, repo_root)
     if not rules_text.strip():
         return {}
     content = build_suricata_host_vars(rules_text)
@@ -847,13 +894,14 @@ def maybe_write_suricata_host_vars(output_root, inventory_text, group_vars_text)
                 existing = abs_path.read_text(encoding="utf-8", errors="replace")
             except OSError:
                 existing = ""
-            if SURICATA_RULES_MARKER not in existing.splitlines()[:2]:
-                continue
+            content_to_write = upsert_suricata_block(existing, content)
+        else:
+            content_to_write = content
         abs_path.parent.mkdir(parents=True, exist_ok=True)
-        abs_path.write_text(content, encoding="utf-8")
+        abs_path.write_text(content_to_write, encoding="utf-8")
         os.chmod(abs_path, 0o600)
         record_secret_path(abs_path)
-        saved[rel_path] = {"bytes": len(content.encode("utf-8"))}
+        saved[rel_path] = {"bytes": len(content_to_write.encode("utf-8"))}
     return saved
 
 
@@ -2161,7 +2209,7 @@ class PortalHandler(http.server.SimpleHTTPRequestHandler):
 
         group_vars_text = files.get("ansible/group_vars/all.yml", "")
         inventory_text = files.get("ansible/hosts.ini", "")
-        extra_saved = maybe_write_suricata_host_vars(self.state.output_root, inventory_text, group_vars_text)
+        extra_saved = maybe_write_suricata_host_vars(self.state.output_root, self.state.repo_root, inventory_text, group_vars_text)
         if extra_saved:
             saved.update(extra_saved)
 
