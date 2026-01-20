@@ -94,6 +94,12 @@
         cache_valid_time: "{{ (portctl_update_cache | default(true)) | ternary(3600, omit) }}"
       when: portctl_install_if_missing | default(true)
 
+    - name: Check ufw status
+      command: ufw status
+      register: portctl_ufw_status
+      changed_when: false
+      failed_when: false
+
     - name: Check UFW before.rules
       stat:
         path: /etc/ufw/before.rules
@@ -112,6 +118,14 @@
         - portctl_ufw_before_rules_manage | default(true)
         - (not portctl_ufw_before_rules_stat.stat.exists) or (portctl_ufw_before_rules_allow_overwrite | default(false))
       notify: Reload ufw
+
+    - name: Enable ufw when inactive
+      command: ufw --force enable
+      when:
+        - portctl_ufw_status.stdout is defined
+        - "'inactive' in portctl_ufw_status.stdout.lower()"
+      changed_when: true
+      failed_when: false
 
     - name: Ensure portctl directories
       file:
