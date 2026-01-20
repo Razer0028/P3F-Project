@@ -1760,17 +1760,17 @@ systemctl status failover_core</code></pre>
                           <span class="lang-en">Example: zone=YOUR_DOMAIN, web=www.YOUR_DOMAIN (VPS), sub.YOUR_DOMAIN (EC2), game=game.YOUR_DOMAIN (A record, DNS only).</span>
                           <span class="lang-ja">例: zone=YOUR_DOMAIN, Web=www.YOUR_DOMAIN(VPS), sub.YOUR_DOMAIN(EC2), game=game.YOUR_DOMAIN(Aレコード/DNS only)。</span>
                         </p>
-                        <label class="wizard-hide">
+                        <label>
                           <span class="lang-en">Account ID</span>
                           <span class="lang-ja">アカウントID</span>
                           <input id="cf_account_id" type="text" value="" />
                         </label>
-                        <label class="wizard-hide">
+                        <label>
                           <span class="lang-en">Zone name (YOUR_DOMAIN)</span>
                           <span class="lang-ja">ゾーン名（YOUR_DOMAIN）</span>
                           <input id="cf_zone_name" type="text" value="" />
                         </label>
-                        <label class="wizard-hide">
+                        <label>
                           <span class="lang-en">Zone mode</span>
                           <span class="lang-ja">ゾーンモード</span>
                           <select id="cf_zone_mode">
@@ -1791,17 +1791,17 @@ systemctl status failover_core</code></pre>
                             <option value="partial">partial</option>
                           </select>
                         </label>
-                        <label class="inline wizard-hide">
+                        <label class="inline">
                           <input id="cf_manage_failover_record" type="checkbox" />
                           <span class="lang-en">Create failover A record</span>
                           <span class="lang-ja">フェイルオーバー用Aレコードを作成</span>
                         </label>
-                        <label class="wizard-hide">
+                        <label>
                           <span class="lang-en">Failover record name</span>
                           <span class="lang-ja">フェイルオーバー用レコード名</span>
                           <input id="cf_failover_record_name" type="text" value="" placeholder="game.YOUR_DOMAIN" />
                         </label>
-                        <label class="wizard-hide">
+                        <label>
                           <span class="lang-en">Failover record initial IP</span>
                           <span class="lang-ja">フェイルオーバー初期IP</span>
                           <input
@@ -1823,12 +1823,12 @@ systemctl status failover_core</code></pre>
                           <span class="lang-ja">フェイルオーバーTTL（1=auto）</span>
                           <input id="cf_failover_record_ttl" type="text" value="1" />
                         </label>
-                        <label class="inline wizard-hide">
+                        <label class="inline">
                           <input id="cf_manage_tunnels" type="checkbox" />
                           <span class="lang-en">Create tunnels + DNS (VPS/EC2)</span>
                           <span class="lang-ja">トンネルとDNSを作成（VPS/EC2）</span>
                         </label>
-                        <label class="wizard-hide">
+                        <label>
                           <span class="lang-en">VPS tunnel name</span>
                           <span class="lang-ja">VPSトンネル名</span>
                           <input
@@ -1840,12 +1840,12 @@ systemctl status failover_core</code></pre>
                             data-placeholder-ja="YOUR_VPS_TUNNEL"
                           />
                         </label>
-                        <label class="wizard-hide">
+                        <label>
                           <span class="lang-en">VPS tunnel hostname</span>
                           <span class="lang-ja">VPSトンネルホスト名</span>
                           <input id="cf_vps_hostname" type="text" value="" placeholder="www.YOUR_DOMAIN" />
                         </label>
-                        <label class="wizard-hide">
+                        <label>
                           <span class="lang-en">EC2 tunnel name</span>
                           <span class="lang-ja">EC2トンネル名</span>
                           <input
@@ -1857,7 +1857,7 @@ systemctl status failover_core</code></pre>
                             data-placeholder-ja="YOUR_EC2_TUNNEL"
                           />
                         </label>
-                        <label class="wizard-hide">
+                        <label>
                           <span class="lang-en">EC2 tunnel hostname</span>
                           <span class="lang-ja">EC2トンネルホスト名</span>
                           <input id="cf_ec2_hostname" type="text" value="" placeholder="sub.YOUR_DOMAIN" />

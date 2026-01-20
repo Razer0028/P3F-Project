@@ -2517,6 +2517,41 @@ function defaultCloudflaredOrigin() {
   return `http://${ip}:8082`;
 }
 
+function applyAutoCloudflareDefaults() {
+  if (!document.body || document.body.dataset.setupMode !== "beginner") {
+    return;
+  }
+  const zone = value(fields.cfZoneName).trim();
+  const project = value(fields.projectName).trim() || "edge-stack";
+  const vpsIp = value(fields.vpsIp).trim();
+
+  const fillIfEmpty = (fieldId, nextValue) => {
+    const input = document.getElementById(fieldId);
+    if (!input || input.dataset.manual === "true") {
+      return;
+    }
+    if ((input.value || "").trim()) {
+      return;
+    }
+    if (nextValue) {
+      input.value = nextValue;
+    }
+  };
+
+  if (zone) {
+    fillIfEmpty(fields.cfFailoverRecordName, `game.${zone}`);
+    fillIfEmpty(fields.cfVpsHostname, `www.${zone}`);
+    fillIfEmpty(fields.cfEc2Hostname, `sub.${zone}`);
+  }
+  if (project) {
+    fillIfEmpty(fields.cfVpsTunnelName, `${project}-vps`);
+    fillIfEmpty(fields.cfEc2TunnelName, `${project}-ec2`);
+  }
+  if (vpsIp) {
+    fillIfEmpty(fields.cfFailoverRecordValue, vpsIp);
+  }
+}
+
 function applyAutoCloudflaredOrigins(payload) {
   const autoIp = getAutoPortForwardDestIp(payload);
   if (!autoIp) {
@@ -2965,6 +3000,16 @@ function applyBeginnerDefaults() {
   const cloudflare = document.getElementById("plan_cloudflare");
   if (cloudflare && cloudflare.dataset.manual != "true" && !cloudflare.checked) {
     cloudflare.checked = true;
+    changed = true;
+  }
+  const cfFailover = document.getElementById("cf_manage_failover_record");
+  if (cfFailover && cfFailover.dataset.manual != "true" && !cfFailover.checked) {
+    cfFailover.checked = true;
+    changed = true;
+  }
+  const cfTunnels = document.getElementById("cf_manage_tunnels");
+  if (cfTunnels && cfTunnels.dataset.manual != "true" && !cfTunnels.checked) {
+    cfTunnels.checked = true;
     changed = true;
   }
   if (changed) {
@@ -4246,6 +4291,7 @@ function scheduleGenerateAll() {
     guidedState.saved = false;
   }
   generateTimer = setTimeout(() => {
+    applyAutoCloudflareDefaults();
     generateAll();
     updateGuidedSteps();
     updateWizard();
