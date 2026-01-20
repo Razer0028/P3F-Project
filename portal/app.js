@@ -4842,6 +4842,40 @@ if (portForwardDestInput) {
     }
   });
 }
+const wizardPortForwardEnable = document.getElementById("wizard_port_forward_enable");
+const portForwardEnableInput = document.getElementById("port_forward_enable");
+if (wizardPortForwardEnable && portForwardEnableInput) {
+  wizardPortForwardEnable.checked = portForwardEnableInput.checked;
+  wizardPortForwardEnable.addEventListener("change", () => {
+    portForwardEnableInput.checked = wizardPortForwardEnable.checked;
+    scheduleGenerateAll();
+  });
+  portForwardEnableInput.addEventListener("change", () => {
+    wizardPortForwardEnable.checked = portForwardEnableInput.checked;
+  });
+}
+
+const wizardPortMap = {
+  wizard_port_game_minecraft: "port_game_minecraft",
+  wizard_port_game_bedrock: "port_game_bedrock",
+  wizard_port_game_valheim: "port_game_valheim",
+  wizard_port_game_7dtd: "port_game_7dtd",
+};
+Object.entries(wizardPortMap).forEach(([wizardId, mainId]) => {
+  const wizardInput = document.getElementById(wizardId);
+  const mainInput = document.getElementById(mainId);
+  if (!wizardInput || !mainInput) {
+    return;
+  }
+  wizardInput.checked = mainInput.checked;
+  wizardInput.addEventListener("change", () => {
+    mainInput.checked = wizardInput.checked;
+    scheduleGenerateAll();
+  });
+  mainInput.addEventListener("change", () => {
+    wizardInput.checked = mainInput.checked;
+  });
+});
 if (wizardPortForwardDestInput) {
   wizardPortForwardDestInput.addEventListener("input", () => {
     wizardPortForwardDestInput.dataset.manual = "true";

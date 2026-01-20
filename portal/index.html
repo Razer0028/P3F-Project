@@ -1296,6 +1296,45 @@ systemctl status failover_core</code></pre>
               </label>
             </div>
             <div class="wizard-action-grid">
+              <div>
+                <div class="wizard-inline-label">
+                  <span class="lang-en">Ports to open/forward</span>
+                  <span class="lang-ja">開放/転送するポート</span>
+                </div>
+                <div class="field-hint">
+                  <span class="lang-en">Choose game ports to allow and forward.</span>
+                  <span class="lang-ja">ゲーム用ポートを許可・転送します。</span>
+                </div>
+                <div class="wizard-checkbox-grid">
+                  <label class="inline">
+                    <input id="wizard_port_game_minecraft" type="checkbox" />
+                    <span class="lang-en">Minecraft (TCP 25565)</span>
+                    <span class="lang-ja">Minecraft（TCP 25565）</span>
+                  </label>
+                  <label class="inline">
+                    <input id="wizard_port_game_bedrock" type="checkbox" />
+                    <span class="lang-en">Bedrock (UDP 19132/19133)</span>
+                    <span class="lang-ja">Bedrock（UDP 19132/19133）</span>
+                  </label>
+                  <label class="inline">
+                    <input id="wizard_port_game_valheim" type="checkbox" />
+                    <span class="lang-en">Valheim (UDP 2456-2458)</span>
+                    <span class="lang-ja">Valheim（UDP 2456-2458）</span>
+                  </label>
+                  <label class="inline">
+                    <input id="wizard_port_game_7dtd" type="checkbox" />
+                    <span class="lang-en">7 Days to Die (UDP 26900-26902)</span>
+                    <span class="lang-ja">7 Days to Die（UDP 26900-26902）</span>
+                  </label>
+                  <label class="inline">
+                    <input id="wizard_port_forward_enable" type="checkbox" />
+                    <span class="lang-en">Enable forwarding (VPS)</span>
+                    <span class="lang-ja">転送を有効化（VPS）</span>
+                  </label>
+                </div>
+              </div>
+            </div>
+            <div class="wizard-action-grid">
               <label>
                 <span class="lang-en">Discord webhook (alerts)</span>
                 <span class="lang-ja">Discord Webhook（通知）</span>
