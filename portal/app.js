@@ -3186,6 +3186,11 @@ function applyBeginnerDefaults() {
     cloudflared.checked = true;
     changed = true;
   }
+  const playerMonitor = document.getElementById("enable_player_monitor");
+  if (playerMonitor && playerMonitor.dataset.manual != "true" && !playerMonitor.checked) {
+    playerMonitor.checked = true;
+    changed = true;
+  }
   applyAutoDdosPrimaryIp();
   if (changed) {
     syncDependencies();
@@ -5003,6 +5008,28 @@ Object.entries(wizardPortMap).forEach(([wizardId, mainId]) => {
   wizardInput.checked = mainInput.checked;
   wizardInput.addEventListener("change", () => {
     mainInput.checked = wizardInput.checked;
+    scheduleGenerateAll();
+  });
+  mainInput.addEventListener("change", () => {
+    wizardInput.checked = mainInput.checked;
+  });
+});
+const wizardContainerMap = {
+  wizard_enable_minecraft: "enable_minecraft",
+  wizard_enable_valheim: "enable_valheim",
+  wizard_enable_7dtd: "enable_7dtd",
+  wizard_enable_player_monitor: "enable_player_monitor",
+};
+Object.entries(wizardContainerMap).forEach(([wizardId, mainId]) => {
+  const wizardInput = document.getElementById(wizardId);
+  const mainInput = document.getElementById(mainId);
+  if (!wizardInput || !mainInput) {
+    return;
+  }
+  wizardInput.checked = mainInput.checked;
+  wizardInput.addEventListener("change", () => {
+    mainInput.checked = wizardInput.checked;
+    mainInput.dataset.manual = "true";
     scheduleGenerateAll();
   });
   mainInput.addEventListener("change", () => {

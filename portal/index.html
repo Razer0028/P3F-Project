@@ -1335,6 +1335,45 @@ systemctl status failover_core</code></pre>
               </div>
             </div>
             <div class="wizard-action-grid">
+              <div>
+                <div class="wizard-inline-label">
+                  <span class="lang-en">Containers to deploy</span>
+                  <span class="lang-ja">導入するコンテナ</span>
+                </div>
+                <div class="field-hint">
+                  <span class="lang-en">Choose which game containers to install on the on-prem host.</span>
+                  <span class="lang-ja">オンプレに導入するゲームを選択します。</span>
+                </div>
+                <div class="wizard-checkbox-grid">
+                  <label class="inline">
+                    <input id="wizard_enable_minecraft" type="checkbox" />
+                    <span class="lang-en">Minecraft</span>
+                    <span class="lang-ja">Minecraft</span>
+                  </label>
+                  <label class="inline">
+                    <input id="wizard_enable_valheim" type="checkbox" />
+                    <span class="lang-en">Valheim</span>
+                    <span class="lang-ja">Valheim</span>
+                  </label>
+                  <label class="inline">
+                    <input id="wizard_enable_7dtd" type="checkbox" />
+                    <span class="lang-en">7 Days to Die</span>
+                    <span class="lang-ja">7 Days to Die</span>
+                  </label>
+                  <label class="inline">
+                    <input id="wizard_enable_web_portal" type="checkbox" checked disabled />
+                    <span class="lang-en">Web portal (always)</span>
+                    <span class="lang-ja">Webポータル（固定）</span>
+                  </label>
+                  <label class="inline">
+                    <input id="wizard_enable_player_monitor" type="checkbox" checked />
+                    <span class="lang-en">Player monitor (default)</span>
+                    <span class="lang-ja">プレイヤーモニタ（既定）</span>
+                  </label>
+                </div>
+              </div>
+            </div>
+            <div class="wizard-action-grid">
               <label>
                 <span class="lang-en">Discord webhook (alerts)</span>
                 <span class="lang-ja">Discord Webhook（通知）</span>
