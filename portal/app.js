@@ -4186,6 +4186,8 @@ async function handleUpload() {
     return;
   }
 
+  syncUploadKeyName();
+
   const file = fileInput.files[0];
   if (!file) {
     setUploadStatus(messages.missingFile, "error");
@@ -4198,7 +4200,12 @@ async function handleUpload() {
     return;
   }
 
-  const keyName = (keyNameInput.value || "").trim() || keyNameForTarget(targetSelect.value);
+  const target = targetSelect.value;
+  const suggestedKeyName = keyNameForTarget(target);
+  let keyName = (keyNameInput.value || "").trim();
+  if (!keyName || keyNameInput.dataset.target !== target || keyName === "auto") {
+    keyName = suggestedKeyName;
+  }
   if (!keyName) {
     setUploadStatus(messages.missingKeyName, "error");
     return;
