@@ -2831,6 +2831,7 @@ function updateGuidedSteps() {
     {
       id: "guided_step_preflight",
       statusId: "guided_status_preflight",
+      label: { en: "Portal token + Preflight", ja: "トークン入力 + 事前チェック" },
       done: () => guidedState.preflight,
       active: () => true,
       message: (labels) => guidedState.preflight ? labels.ok : labels.waiting,
@@ -2838,6 +2839,7 @@ function updateGuidedSteps() {
     {
       id: "guided_step_save",
       statusId: "guided_status_save",
+      label: { en: "Generate + Save files", ja: "ファイル生成 + サーバー保存" },
       done: () => guidedState.saved,
       active: () => true,
       message: (labels) => guidedState.saved ? labels.saved : labels.waiting,
@@ -2845,6 +2847,7 @@ function updateGuidedSteps() {
     {
       id: "guided_step_tf_cf",
       statusId: "guided_status_tf_cf",
+      label: { en: "Terraform apply (Cloudflare)", ja: "Terraform適用（Cloudflare）" },
       done: () => guidedState.tfCfApply,
       active: () => plan.cloudflare,
       message: (labels) => guidedState.tfCfApply ? labels.done : labels.waiting,
@@ -2852,6 +2855,7 @@ function updateGuidedSteps() {
     {
       id: "guided_step_tf",
       statusId: "guided_status_tf",
+      label: { en: "Terraform apply (EC2)", ja: "Terraform適用（EC2）" },
       done: () => guidedState.tfApply,
       active: () => plan.terraform,
       message: (labels) => guidedState.tfApply ? labels.done : labels.waiting,
@@ -2859,6 +2863,7 @@ function updateGuidedSteps() {
     {
       id: "guided_step_vault_pass",
       statusId: "guided_status_vault",
+      label: { en: "Vault password", ja: "Vaultパスワード" },
       done: () => getStatusValue("vault_pass.exists", false),
       active: () => true,
       message: (labels) => getStatusValue("vault_pass.exists", false) ? labels.ok : labels.missing,
@@ -2866,6 +2871,7 @@ function updateGuidedSteps() {
     {
       id: "guided_step_keys",
       statusId: "guided_status_keys",
+      label: { en: "SSH keys", ja: "SSH鍵" },
       done: () => guidedRequirementsMet(plan).keysOk,
       active: () => true,
       message: (labels) => guidedRequirementsMet(plan).keysOk ? labels.ok : labels.missing,
@@ -2873,6 +2879,7 @@ function updateGuidedSteps() {
     {
       id: "guided_step_vault_files",
       statusId: "guided_status_vault_files",
+      label: { en: "Vault secrets (host_vars)", ja: "Vault秘密情報（host_vars）" },
       done: () => guidedRequirementsMet(plan).vaultOk,
       active: () => true,
       message: (labels) => guidedRequirementsMet(plan).vaultOk ? labels.ok : labels.missing,
@@ -2880,6 +2887,7 @@ function updateGuidedSteps() {
     {
       id: "guided_step_ansible_base",
       statusId: "guided_status_ansible_base",
+      label: { en: "Ansible base", ja: "Ansible base" },
       done: () => guidedState.ansibleBase,
       active: () => true,
       message: (labels) => guidedState.ansibleBase ? labels.done : labels.waiting,
@@ -2887,6 +2895,7 @@ function updateGuidedSteps() {
     {
       id: "guided_step_ansible_vps",
       statusId: "guided_status_ansible_vps",
+      label: { en: "Ansible (VPS)", ja: "Ansible（VPS）" },
       done: () => guidedState.ansibleVps,
       active: () => plan.vps,
       message: (labels) => guidedState.ansibleVps ? labels.done : labels.waiting,
@@ -2894,6 +2903,7 @@ function updateGuidedSteps() {
     {
       id: "guided_step_ansible_portctl",
       statusId: "guided_status_ansible_portctl",
+      label: { en: "Ansible (Port forwarding)", ja: "Ansible（転送設定）" },
       done: () => guidedState.ansiblePortctl,
       active: () => plan.portctl,
       message: (labels) => guidedState.ansiblePortctl ? labels.done : labels.waiting,
@@ -2901,6 +2911,7 @@ function updateGuidedSteps() {
     {
       id: "guided_step_ansible_cloudflared",
       statusId: "guided_status_ansible_cloudflared",
+      label: { en: "Ansible (cloudflared)", ja: "Ansible（cloudflared）" },
       done: () => guidedState.ansibleCloudflared,
       active: () => plan.cloudflared,
       message: (labels) => guidedState.ansibleCloudflared ? labels.done : labels.waiting,
@@ -2908,6 +2919,7 @@ function updateGuidedSteps() {
     {
       id: "guided_step_ansible_ec2",
       statusId: "guided_status_ansible_ec2",
+      label: { en: "Ansible (EC2)", ja: "Ansible（EC2）" },
       done: () => guidedState.ansibleEc2,
       active: () => plan.ec2,
       message: (labels) => guidedState.ansibleEc2 ? labels.done : labels.waiting,
@@ -2915,6 +2927,7 @@ function updateGuidedSteps() {
     {
       id: "guided_step_ansible_onprem",
       statusId: "guided_status_ansible_onprem",
+      label: { en: "Ansible (on-prem)", ja: "Ansible（オンプレ）" },
       done: () => guidedState.ansibleOnprem,
       active: () => plan.onprem,
       message: (labels) => guidedState.ansibleOnprem ? labels.done : labels.waiting,
@@ -2922,6 +2935,7 @@ function updateGuidedSteps() {
     {
       id: "guided_step_validate",
       statusId: "guided_status_validate",
+      label: { en: "Validate", ja: "検証" },
       done: () => guidedState.validate,
       active: () => true,
       message: (labels) => guidedState.validate ? labels.done : labels.waiting,
@@ -2929,6 +2943,7 @@ function updateGuidedSteps() {
   ];
 
   let canProceed = true;
+  let blockedMessage = "";
   for (const step of steps) {
     const el = document.getElementById(step.id);
     const statusEl = document.getElementById(step.statusId);
@@ -2949,10 +2964,20 @@ function updateGuidedSteps() {
 
     if (statusEl) {
       const labels = guidedMessages[currentLang] || guidedMessages.en;
+      if (!done && !locked && !blockedMessage) {
+        if (step.label) {
+          const labelText = currentLang === "ja" ? step.label.ja : step.label.en;
+          blockedMessage = currentLang === "ja"
+            ? `先に「${labelText}」を完了してください`
+            : `Complete "${labelText}" first.`;
+        } else {
+          blockedMessage = labels.locked;
+        }
+      }
       statusEl.textContent = done
         ? labels.done
         : locked
-          ? labels.locked
+          ? (blockedMessage || labels.locked)
           : step.message(labels);
       statusEl.dataset.state = done ? "ok" : locked ? "error" : "info";
     }
