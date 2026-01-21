@@ -624,6 +624,14 @@ function buildPortPlan() {
   };
 }
 
+function deriveWgCidrFromIp(ip) {
+  const match = String(ip || "").trim().match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/);
+  if (!match) {
+    return "";
+  }
+  return `${match[1]}.${match[2]}.${match[3]}.0/24`;
+}
+
 function parseSignatureList(raw) {
   if (!raw) {
     return [];
@@ -784,8 +792,15 @@ function renderGroupVars() {
   const sysctlForwardManage = (wireguardManage === "true" || portctlManage === "true") ? "true" : "false";
   const portPlan = buildPortPlan();
   const portctlDefaultDestIp = portPlan.destIp;
-  const portctlUfwRulesBlock = portPlan.ufwRules.length
-    ? `portctl_ufw_rules:\n${portPlan.ufwRules.map((rule) => `  - \"${escapeYamlString(rule)}\"`).join("\n")}`
+  const portctlWebPort = "9000";
+  const portctlWgCidr = deriveWgCidrFromIp(portPlan.destIp);
+  const portctlUfwRuleSet = new Set(portPlan.ufwRules);
+  if (portctlWgCidr) {
+    portctlUfwRuleSet.add(`allow from ${portctlWgCidr} to any port ${portctlWebPort} proto tcp`);
+  }
+  const portctlUfwRules = Array.from(portctlUfwRuleSet);
+  const portctlUfwRulesBlock = portctlUfwRules.length
+    ? `portctl_ufw_rules:\n${portctlUfwRules.map((rule) => `  - \"${escapeYamlString(rule)}\"`).join("\n")}`
     : "portctl_ufw_rules: []";
   const portctlForwardRulesBlock = portPlan.forwardRules.length
     ? `portctl_forward_rules:\n${portPlan.forwardRules.map((rule) => [
@@ -871,7 +886,8 @@ cloudflared_manage: ${cloudflaredManage}
 portctl_manage: ${portctlManage}
 portctl_default_dest_ip: "${escapeYamlString(portctlDefaultDestIp)}"
 portctl_apply_rules: true
-portctl_enable_web_wg: false
+portctl_enable_web_wg: true
+portctl_enable_web_local: true
 ${portctlUfwRulesBlock}
 ${portctlForwardRulesBlock}
 
@@ -3197,6 +3213,7 @@ function applyBeginnerDefaults() {
     playerMonitor.checked = true;
     changed = true;
   }
+  syncWizardContainersToPorts();
   applyAutoDdosPrimaryIp();
   if (changed) {
     syncDependencies();
@@ -4991,12 +5008,50 @@ const portForwardEnableInput = document.getElementById("port_forward_enable");
 if (wizardPortForwardEnable && portForwardEnableInput) {
   wizardPortForwardEnable.checked = portForwardEnableInput.checked;
   wizardPortForwardEnable.addEventListener("change", () => {
+    wizardPortForwardEnable.dataset.manual = "true";
     portForwardEnableInput.checked = wizardPortForwardEnable.checked;
     scheduleGenerateAll();
   });
   portForwardEnableInput.addEventListener("change", () => {
     wizardPortForwardEnable.checked = portForwardEnableInput.checked;
   });
+}
+
+function syncWizardContainersToPorts() {
+  if (!wizardActive()) {
+    return;
+  }
+  const mappings = [
+    ["wizard_enable_minecraft", "wizard_port_game_minecraft", "port_game_minecraft"],
+    ["wizard_enable_valheim", "wizard_port_game_valheim", "port_game_valheim"],
+    ["wizard_enable_7dtd", "wizard_port_game_7dtd", "port_game_7dtd"],
+  ];
+  let anyGame = false;
+  mappings.forEach(([containerId, wizardPortId, mainPortId]) => {
+    const containerInput = document.getElementById(containerId);
+    const wizardPort = document.getElementById(wizardPortId);
+    const mainPort = document.getElementById(mainPortId);
+    if (!containerInput || !wizardPort || !mainPort) {
+      return;
+    }
+    if (containerInput.checked) {
+      anyGame = true;
+    }
+    if (wizardPort.dataset.manual === "true") {
+      return;
+    }
+    const shouldCheck = containerInput.checked;
+    if (wizardPort.checked !== shouldCheck) {
+      wizardPort.checked = shouldCheck;
+      mainPort.checked = shouldCheck;
+    }
+  });
+  if (wizardPortForwardEnable && portForwardEnableInput) {
+    if (wizardPortForwardEnable.dataset.manual !== "true" && anyGame) {
+      wizardPortForwardEnable.checked = true;
+      portForwardEnableInput.checked = true;
+    }
+  }
 }
 
 const wizardPortMap = {
@@ -5013,6 +5068,7 @@ Object.entries(wizardPortMap).forEach(([wizardId, mainId]) => {
   }
   wizardInput.checked = mainInput.checked;
   wizardInput.addEventListener("change", () => {
+    wizardInput.dataset.manual = "true";
     mainInput.checked = wizardInput.checked;
     scheduleGenerateAll();
   });
@@ -5034,8 +5090,10 @@ Object.entries(wizardContainerMap).forEach(([wizardId, mainId]) => {
   }
   wizardInput.checked = mainInput.checked;
   wizardInput.addEventListener("change", () => {
+    wizardInput.dataset.manual = "true";
     mainInput.checked = wizardInput.checked;
     mainInput.dataset.manual = "true";
+    syncWizardContainersToPorts();
     scheduleGenerateAll();
   });
   mainInput.addEventListener("change", () => {
