@@ -49,6 +49,17 @@
              if (frr_generate_config | default(false))
              else (frr_daemons_content | default('')) }}
 
+    - name: Determine FRR service readiness
+      set_fact:
+        frr_config_ready: "{{ (frr_config_final | length > 0) or (frr_conf_stat.stat.exists | default(false)) }}"
+        frr_daemons_ready: "{{ (frr_daemons_final | length > 0) or (frr_daemons_stat.stat.exists | default(false)) }}"
+        frr_service_ready: "{{ frr_config_ready and frr_daemons_ready }}"
+
+    - name: Warn when FRR service is skipped due to missing config
+      debug:
+        msg: "FRR service skipped: frr.conf/daemons not ready (set frr_generate_config or frr_config_content/daemons)."
+      when: (frr_manage_service | default(false)) and not (frr_service_ready | default(false))
+
     - name: Select frr.conf owner/group
       set_fact:
         frr_conf_owner: "{{ frr_conf_stat.stat.pw_name | default(frr_owner_default) }}"
@@ -106,4 +117,4 @@
         name: "{{ frr_service_name }}"
         enabled: "{{ frr_enable_service | default(true) }}"
         state: "{{ frr_service_state }}"
-      when: frr_manage_service | default(false)
+      when: (frr_manage_service | default(false)) and (frr_service_ready | default(false))
