@@ -8,6 +8,11 @@
       changed_when: false
       failed_when: false
 
+    - name: Set detected cloudflared binary path
+      set_fact:
+        cloudflared_binary_path: "{{ cloudflared_binary.stdout }}"
+      when: cloudflared_binary.rc == 0 and (cloudflared_binary.stdout | default('')) | length > 0
+
     - name: Install cloudflared when missing
       when: cloudflared_install_if_missing | default(false) and cloudflared_binary.rc != 0
       block:
@@ -45,6 +50,29 @@
           apt:
             deb: "/tmp/cloudflared-linux-{{ cloudflared_download_arch }}.deb"
             state: present
+
+    - name: Re-check cloudflared binary after install
+      command: command -v cloudflared
+      register: cloudflared_binary_after
+      changed_when: false
+      failed_when: false
+      when: cloudflared_binary.rc != 0
+
+    - name: Update cloudflared binary path after install
+      set_fact:
+        cloudflared_binary_path: "{{ cloudflared_binary_after.stdout }}"
+      when:
+        - cloudflared_binary.rc != 0
+        - cloudflared_binary_after.rc == 0
+        - (cloudflared_binary_after.stdout | default('')) | length > 0
+
+    - name: Fail when cloudflared binary is still missing
+      fail:
+        msg: "cloudflared binary not found after install. Check package repo or download step."
+      when:
+        - cloudflared_binary.rc != 0
+        - cloudflared_binary_after is defined
+        - cloudflared_binary_after.rc != 0
 
     - name: Ensure /etc/cloudflared exists
       file:

@@ -1,7 +1,7 @@
 ---
 cloudflared_manage: false
 cloudflared_require_vars: false
-cloudflared_install_if_missing: false
+cloudflared_install_if_missing: true
 cloudflared_update_cache: true
 cloudflared_restart_on_change: false
 cloudflared_allow_overwrite: false
