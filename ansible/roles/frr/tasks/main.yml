@@ -53,7 +53,10 @@
       set_fact:
         frr_config_ready: "{{ (frr_config_final | length > 0) or (frr_conf_stat.stat.exists | default(false)) }}"
         frr_daemons_ready: "{{ (frr_daemons_final | length > 0) or (frr_daemons_stat.stat.exists | default(false)) }}"
-        frr_service_ready: "{{ frr_config_ready and frr_daemons_ready }}"
+
+    - name: Combine FRR readiness
+      set_fact:
+        frr_service_ready: "{{ (frr_config_ready | default(false)) and (frr_daemons_ready | default(false)) }}"
 
     - name: Warn when FRR service is skipped due to missing config
       debug:
