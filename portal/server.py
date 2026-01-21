@@ -2318,7 +2318,14 @@ class PortalHandler(http.server.SimpleHTTPRequestHandler):
         if extra_saved:
             saved.update(extra_saved)
 
-        failover_saved = maybe_write_failover_host_vars(self.state.output_root, self.state.repo_root, inventory_text, group_vars_text)
+        force_failover = setup_mode == "beginner"
+        failover_saved = maybe_write_failover_host_vars(
+            self.state.output_root,
+            self.state.repo_root,
+            inventory_text,
+            group_vars_text,
+            force=force_failover,
+        )
         if failover_saved:
             saved.update(failover_saved)
 
