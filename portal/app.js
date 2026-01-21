@@ -2667,8 +2667,11 @@ function applyAutoDdosPrimaryIp() {
   if ((input.value || "").trim()) {
     return;
   }
+  const portForward = value(fields.portForwardDestIp).trim();
   const onpremIp = value(fields.onpremIp).trim();
-  if (onpremIp) {
+  if (portForward) {
+    input.value = portForward;
+  } else if (onpremIp) {
     input.value = onpremIp;
   }
 }
