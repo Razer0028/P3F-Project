@@ -763,7 +763,7 @@ function getFeatureFlags() {
     frr: value(fields.enableFrr),
     suricata: value(fields.enableSuricata),
     cloudflared: value(fields.enableCloudflared),
-    portctl: value(fields.enablePortctl),
+    portctl: value(fields.enablePortctl) || value(fields.portForwardEnable),
   };
 }
 
@@ -788,9 +788,9 @@ function renderGroupVars() {
   const frrManage = value(fields.enableFrr) ? "true" : "false";
   const suricataManage = value(fields.enableSuricata) ? "true" : "false";
   const cloudflaredManage = value(fields.enableCloudflared) ? "true" : "false";
-  const portctlManage = value(fields.enablePortctl) ? "true" : "false";
-  const sysctlForwardManage = (wireguardManage === "true" || portctlManage === "true") ? "true" : "false";
   const portPlan = buildPortPlan();
+  const portctlManage = (value(fields.enablePortctl) || portPlan.forwardEnabled) ? "true" : "false";
+  const sysctlForwardManage = (wireguardManage === "true" || portctlManage === "true") ? "true" : "false";
   const portctlDefaultDestIp = portPlan.destIp;
   const portctlWebPort = "9000";
   const portctlWgCidr = deriveWgCidrFromIp(portPlan.destIp);

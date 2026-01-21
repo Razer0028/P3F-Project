@@ -77,6 +77,32 @@ archive_path_for() {
     fi
 }
 
+compose_cmd() {
+    if /usr/bin/docker compose version >/dev/null 2>&1; then
+        echo "/usr/bin/docker compose"
+        return 0
+    fi
+    if command -v docker-compose >/dev/null 2>&1; then
+        echo "docker-compose"
+        return 0
+    fi
+    echo ""
+}
+
+compose_running() {
+    local dir="$1"
+    local cmd
+    cmd="$(compose_cmd)"
+    if [ -z "$cmd" ]; then
+        return 1
+    fi
+    (cd "$dir" && $cmd ps --status running -q 2>/dev/null | head -n1) | grep -q .
+}
+
+container_exists() {
+    /usr/bin/docker ps -a --filter "name=^/$1$" --format '{{.ID}}' 2>/dev/null | grep -q .
+}
+
 is_allowed() {
     local name="$1"
     for c in "${ALLOWED_CONTAINERS[@]}"; do
@@ -190,6 +216,13 @@ case "$action" in
         if [ -z "$st" ]; then
             state="stopped"
             detail=""
+            compose_dir="$(compose_dir_for "$c")"
+            if [ -n "$compose_dir" ] && [ -f "$compose_dir/docker-compose.yml" ]; then
+                if compose_running "$compose_dir"; then
+                    state="running"
+                    detail="running (compose)"
+                fi
+            fi
         else
             state="running"
             detail="$st"
@@ -307,8 +340,25 @@ PY
         exit 1
     fi
 
-    /usr/bin/docker stop "$container" >/tmp/docker_manage_tmp 2>&1
-    code=$?
+    if container_exists "$container"; then
+        /usr/bin/docker stop "$container" >/tmp/docker_manage_tmp 2>&1
+        code=$?
+    else
+        compose_dir="$(compose_dir_for "$container")"
+        if [ -n "$compose_dir" ] && [ -f "$compose_dir/docker-compose.yml" ]; then
+            cmd="$(compose_cmd)"
+            if [ -z "$cmd" ]; then
+                echo "DENY: docker compose not available" >/tmp/docker_manage_tmp
+                code=1
+            else
+                (cd "$compose_dir" && $cmd stop) >/tmp/docker_manage_tmp 2>&1
+                code=$?
+            fi
+        else
+            echo "DENY: compose dir not found for $container" >/tmp/docker_manage_tmp
+            code=1
+        fi
+    fi
 
     ts=$(date '+%F %T')
     echo "$ts [$who] STOP $container code=$code" >> "$LOGFILE"
