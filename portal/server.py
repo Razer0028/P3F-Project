@@ -2283,6 +2283,9 @@ class PortalHandler(http.server.SimpleHTTPRequestHandler):
             response_json(self, 400, {"ok": False, "error": "No files provided"})
             return
 
+        if setup_mode == "beginner":
+            ensure_vault_pass()
+
         saved = {}
         errors = {}
         warnings = {}

@@ -1418,7 +1418,6 @@ function renderNextSteps() {
     };
 
     addStep("（ポータル）入力 → ファイル生成 → サーバーに保存");
-    addStep("Vaultパスワード作成（初回のみ）", vaultCommands);
 
     const vaultEdits = [];
     if (plan.onprem) vaultEdits.push(`ansible-vault edit ${hostVarsPath("onprem-1.yml")}`);
@@ -2195,6 +2194,7 @@ function renderStatus(payload) {
   list.innerHTML = "";
 
   const labels = statusLabels[currentLang] || statusLabels.en;
+  const setupMode = (document.body && document.body.dataset.setupMode) || "custom";
   const files = payload.files || {};
   const plan = getPlanOptions();
 
@@ -2237,13 +2237,15 @@ function renderStatus(payload) {
     );
   }
 
-  const vaultPass = payload.vault_pass || {};
-  addStatusItem(
-    list,
-    `${labels.vaultPass} (${vaultPass.path || "~/.config/edge-stack/vault_pass"})`,
-    vaultPass.exists,
-    vaultPass.exists ? labels.ok : labels.missing,
-  );
+  if (setupMode !== "beginner") {
+    const vaultPass = payload.vault_pass || {};
+    addStatusItem(
+      list,
+      `${labels.vaultPass} (${vaultPass.path || "~/.config/edge-stack/vault_pass"})`,
+      vaultPass.exists,
+      vaultPass.exists ? labels.ok : labels.missing,
+    );
+  }
 
   const secrets = payload.secrets || {};
   if (plan.cloudflare) {
@@ -2845,6 +2847,7 @@ function guidedRequirementsMet(plan) {
 function updateGuidedSteps() {
   const plan = getPlanOptions();
   syncDependencies();
+  const setupMode = (document.body && document.body.dataset.setupMode) || "custom";
 
   if (plan.cloudflared && !plan.vps) {
     const cloudflared = document.getElementById("plan_cloudflared");
@@ -2900,7 +2903,7 @@ function updateGuidedSteps() {
       statusId: "guided_status_vault",
       label: { en: "Vault password", ja: "Vaultパスワード" },
       done: () => getStatusValue("vault_pass.exists", false),
-      active: () => true,
+      active: () => setupMode !== "beginner",
       message: (labels) => getStatusValue("vault_pass.exists", false) ? labels.ok : labels.missing,
     },
     {
