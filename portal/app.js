@@ -2510,10 +2510,15 @@ function syncUploadKeyName() {
     return;
   }
   const suggested = keyNameForTarget(targetSelect.value);
+  const currentTarget = targetSelect.value || "";
+  const lastTarget = keyNameInput.dataset.target || "";
+  const manual = keyNameInput.dataset.manual === "true";
   const current = (keyNameInput.value || "").trim();
-  if (!current || current === "auto") {
+  if (!manual || currentTarget !== lastTarget || !current || current === "auto") {
     keyNameInput.value = suggested;
+    keyNameInput.dataset.manual = "false";
   }
+  keyNameInput.dataset.target = currentTarget;
 }
 
 function syncUploadTargetLabels() {
@@ -4879,6 +4884,13 @@ if (uploadTargetInput) {
   uploadTargetInput.addEventListener("change", () => {
     syncUploadTargetLabels();
     syncUploadKeyName();
+  });
+}
+
+const uploadKeyNameInput = document.getElementById("upload_key_name");
+if (uploadKeyNameInput) {
+  uploadKeyNameInput.addEventListener("input", () => {
+    uploadKeyNameInput.dataset.manual = "true";
   });
 }
 
