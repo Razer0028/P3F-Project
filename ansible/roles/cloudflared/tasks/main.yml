@@ -11,10 +11,36 @@
     - name: Set detected cloudflared binary path
       set_fact:
         cloudflared_binary_path: "{{ cloudflared_binary.stdout }}"
+        cloudflared_binary_found: true
       when: cloudflared_binary.rc == 0 and (cloudflared_binary.stdout | default('')) | length > 0
 
+    - name: Check cloudflared binary candidates
+      stat:
+        path: "{{ item }}"
+      loop: "{{ cloudflared_binary_candidates }}"
+      register: cloudflared_binary_candidates_stat
+      when: cloudflared_binary.rc != 0
+
+    - name: Set cloudflared binary path from candidates
+      set_fact:
+        cloudflared_binary_path: >-
+          {{ (cloudflared_binary_candidates_stat.results
+              | selectattr('stat.exists', 'equalto', true)
+              | map(attribute='stat.path')
+              | list
+              | first) }}
+        cloudflared_binary_found: true
+      when:
+        - cloudflared_binary.rc != 0
+        - (cloudflared_binary_candidates_stat.results
+          | selectattr('stat.exists', 'equalto', true)
+          | list
+          | length) > 0
+
     - name: Install cloudflared when missing
-      when: cloudflared_install_if_missing | default(false) and cloudflared_binary.rc != 0
+      when:
+        - cloudflared_install_if_missing | default(false)
+        - not (cloudflared_binary_found | default(false))
       block:
         - name: Install cloudflared package
           apt:
@@ -22,57 +48,130 @@
             state: present
             update_cache: "{{ cloudflared_update_cache | default(true) }}"
             cache_valid_time: "{{ (cloudflared_update_cache | default(true)) | ternary(3600, omit) }}"
-      rescue:
-        - name: Set cloudflared download architecture
+
+        - name: Re-check cloudflared binary after apt
+          command: command -v cloudflared
+          register: cloudflared_binary_after
+          changed_when: false
+          failed_when: false
+
+        - name: Set cloudflared binary path from PATH after apt
           set_fact:
-            cloudflared_download_arch: "{{ 'arm64' if ansible_architecture in ['aarch64', 'arm64'] else 'amd64' if ansible_architecture in ['x86_64', 'amd64'] else '' }}"
+            cloudflared_binary_path: "{{ cloudflared_binary_after.stdout }}"
+            cloudflared_binary_found: true
+          when:
+            - cloudflared_binary_after.rc == 0
+            - (cloudflared_binary_after.stdout | default('')) | length > 0
 
-        - name: Fail on unsupported architecture
+        - name: Check cloudflared binary candidates after apt
+          stat:
+            path: "{{ item }}"
+          loop: "{{ cloudflared_binary_candidates }}"
+          register: cloudflared_binary_candidates_after
+          when: cloudflared_binary_after.rc != 0
+
+        - name: Set cloudflared binary path from candidates after apt
+          set_fact:
+            cloudflared_binary_path: >-
+              {{ (cloudflared_binary_candidates_after.results
+                  | selectattr('stat.exists', 'equalto', true)
+                  | map(attribute='stat.path')
+                  | list
+                  | first) }}
+            cloudflared_binary_found: true
+          when:
+            - cloudflared_binary_after.rc != 0
+            - cloudflared_binary_candidates_after is defined
+            - (cloudflared_binary_candidates_after.results
+              | selectattr('stat.exists', 'equalto', true)
+              | list
+              | length) > 0
+
+        - name: Download cloudflared deb when still missing
+          when:
+            - cloudflared_binary_after.rc != 0
+            - cloudflared_binary_candidates_after is not defined or
+              (cloudflared_binary_candidates_after.results
+                | selectattr('stat.exists', 'equalto', true)
+                | list
+                | length) == 0
+          block:
+            - name: Set cloudflared download architecture
+              set_fact:
+                cloudflared_download_arch: "{{ 'arm64' if ansible_architecture in ['aarch64', 'arm64'] else 'amd64' if ansible_architecture in ['x86_64', 'amd64'] else '' }}"
+
+            - name: Fail on unsupported architecture
+              fail:
+                msg: "Unsupported architecture for cloudflared download: {{ ansible_architecture }}"
+              when: cloudflared_download_arch | length == 0
+
+            - name: Ensure curl is available
+              apt:
+                name: curl
+                state: present
+                update_cache: true
+
+            - name: Download cloudflared deb
+              command: >-
+                curl -fL --retry 3 --retry-delay 2
+                --output /tmp/cloudflared-linux-{{ cloudflared_download_arch }}.deb
+                https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-{{ cloudflared_download_arch }}.deb
+              args:
+                creates: "/tmp/cloudflared-linux-{{ cloudflared_download_arch }}.deb"
+
+            - name: Install cloudflared deb
+              apt:
+                deb: "/tmp/cloudflared-linux-{{ cloudflared_download_arch }}.deb"
+                state: present
+
+        - name: Final check for cloudflared binary
+          command: command -v cloudflared
+          register: cloudflared_binary_final
+          changed_when: false
+          failed_when: false
+
+        - name: Set cloudflared binary path from PATH after download
+          set_fact:
+            cloudflared_binary_path: "{{ cloudflared_binary_final.stdout }}"
+            cloudflared_binary_found: true
+          when:
+            - cloudflared_binary_final.rc == 0
+            - (cloudflared_binary_final.stdout | default('')) | length > 0
+
+        - name: Check cloudflared binary candidates after download
+          stat:
+            path: "{{ item }}"
+          loop: "{{ cloudflared_binary_candidates }}"
+          register: cloudflared_binary_candidates_final
+          when: cloudflared_binary_final.rc != 0
+
+        - name: Set cloudflared binary path from candidates after download
+          set_fact:
+            cloudflared_binary_path: >-
+              {{ (cloudflared_binary_candidates_final.results
+                  | selectattr('stat.exists', 'equalto', true)
+                  | map(attribute='stat.path')
+                  | list
+                  | first) }}
+            cloudflared_binary_found: true
+          when:
+            - cloudflared_binary_final.rc != 0
+            - cloudflared_binary_candidates_final is defined
+            - (cloudflared_binary_candidates_final.results
+              | selectattr('stat.exists', 'equalto', true)
+              | list
+              | length) > 0
+
+        - name: Fail when cloudflared binary is still missing
           fail:
-            msg: "Unsupported architecture for cloudflared download: {{ ansible_architecture }}"
-          when: cloudflared_download_arch | length == 0
-
-        - name: Ensure curl is available
-          apt:
-            name: curl
-            state: present
-            update_cache: true
-
-        - name: Download cloudflared deb
-          command: >-
-            curl -fL --retry 3 --retry-delay 2
-            --output /tmp/cloudflared-linux-{{ cloudflared_download_arch }}.deb
-            https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-{{ cloudflared_download_arch }}.deb
-          args:
-            creates: "/tmp/cloudflared-linux-{{ cloudflared_download_arch }}.deb"
-
-        - name: Install cloudflared deb
-          apt:
-            deb: "/tmp/cloudflared-linux-{{ cloudflared_download_arch }}.deb"
-            state: present
-
-    - name: Re-check cloudflared binary after install
-      command: command -v cloudflared
-      register: cloudflared_binary_after
-      changed_when: false
-      failed_when: false
-      when: cloudflared_binary.rc != 0
-
-    - name: Update cloudflared binary path after install
-      set_fact:
-        cloudflared_binary_path: "{{ cloudflared_binary_after.stdout }}"
-      when:
-        - cloudflared_binary.rc != 0
-        - cloudflared_binary_after.rc == 0
-        - (cloudflared_binary_after.stdout | default('')) | length > 0
-
-    - name: Fail when cloudflared binary is still missing
-      fail:
-        msg: "cloudflared binary not found after install. Check package repo or download step."
-      when:
-        - cloudflared_binary.rc != 0
-        - cloudflared_binary_after is defined
-        - cloudflared_binary_after.rc != 0
+            msg: "cloudflared binary not found after install. Check package repo or download step."
+          when:
+            - cloudflared_binary_final.rc != 0
+            - cloudflared_binary_candidates_final is not defined or
+              (cloudflared_binary_candidates_final.results
+                | selectattr('stat.exists', 'equalto', true)
+                | list
+                | length) == 0
 
     - name: Ensure /etc/cloudflared exists
       file:

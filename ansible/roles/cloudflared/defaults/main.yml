@@ -15,6 +15,10 @@ cloudflared_packages:
   - cloudflared
 
 cloudflared_binary_path: /usr/bin/cloudflared
+cloudflared_binary_candidates:
+  - /usr/local/bin/cloudflared
+  - /usr/bin/cloudflared
+  - /bin/cloudflared
 
 cloudflared_config_path: /etc/cloudflared/config.yml
 cloudflared_credentials_path: ""
