@@ -344,6 +344,7 @@ const wizardState = {
   step: 1,
   busy: false,
   generated: false,
+  failoverReady: false,
   uploads: {
     cloudflare: false,
     aws: false,
@@ -770,7 +771,9 @@ function renderGroupVars() {
   const containersGroup = containersGroupValue();
   const containersManageUser = value(fields.containersManageUser) ? "true" : "false";
   const wireguardManage = value(fields.enableWireguard) ? "true" : "false";
-  const failoverManage = value(fields.enableFailover) ? "true" : "false";
+  const failoverRequested = value(fields.enableFailover) ? "true" : "false";
+  const failoverAllowed = simpleMode ? wizardState.failoverReady : true;
+  const failoverManage = (failoverRequested === "true" && failoverAllowed) ? "true" : "false";
   const failoverState = simpleMode
     ? "stopped"
     : (failoverManage === "true" ? "started" : "stopped");
@@ -1977,6 +1980,35 @@ async function refreshEc2IpFromTerraform(force = false) {
   return true;
 }
 
+async function refreshFailoverReadyFromTerraform() {
+  const setupMode = (document.body && document.body.dataset.setupMode) || "custom";
+  if (setupMode !== "beginner") {
+    return true;
+  }
+  const ec2Outputs = await fetchTerraformOutputs("ec2");
+  const cfOutputs = await fetchTerraformOutputs("cloudflare");
+  const vpsIp = (value(fields.vpsIp) || "").trim();
+  const ec2Ready = Boolean(
+    ec2Outputs
+    && (ec2Outputs.elastic_ip || ec2Outputs.public_ip)
+    && ec2Outputs.instance_id
+    && ec2Outputs.failover_access_key_id
+    && ec2Outputs.failover_secret_access_key,
+  );
+  const cfReady = Boolean(
+    cfOutputs
+    && cfOutputs.zone_id
+    && cfOutputs.failover_record_id
+    && cfOutputs.failover_record_name,
+  );
+  const ready = Boolean(ec2Ready && cfReady && vpsIp);
+  if (wizardState.failoverReady !== ready) {
+    wizardState.failoverReady = ready;
+    generateAll();
+  }
+  return ready;
+}
+
 async function saveAll() {
   const messages = saveMessages[currentLang] || saveMessages.en;
   const token = tokenValue();
@@ -2002,6 +2034,8 @@ async function saveAll() {
   if (plan.ec2 && !value(fields.ec2Ip)) {
     await refreshEc2IpFromTerraform(true);
   }
+
+  await refreshFailoverReadyFromTerraform();
 
   generateAll();
 
@@ -2396,6 +2430,7 @@ async function loadStatus() {
         refreshEc2IpFromTerraform(false);
       }
       refreshCloudflareOutputsFromTerraform(false);
+      refreshFailoverReadyFromTerraform();
     }
   } catch (error) {
     setStatusMessage(messages.error, "error");

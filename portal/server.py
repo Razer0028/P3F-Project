@@ -2605,6 +2605,8 @@ class PortalHandler(http.server.SimpleHTTPRequestHandler):
                     "outputs": {
                         "zone_id": terraform_output_value(outputs, "zone_id") or "",
                         "zone_name": terraform_output_value(outputs, "zone_name") or "",
+                        "failover_record_id": terraform_output_value(outputs, "failover_record_id") or "",
+                        "failover_record_name": terraform_output_value(outputs, "failover_record_name") or "",
                         "vps_tunnel_id": terraform_output_value(outputs, "vps_tunnel_id") or "",
                         "ec2_tunnel_id": terraform_output_value(outputs, "ec2_tunnel_id") or "",
                         "vps_tunnel_credentials_json": terraform_output_value(outputs, "vps_tunnel_credentials_json") or "",
@@ -2626,6 +2628,8 @@ class PortalHandler(http.server.SimpleHTTPRequestHandler):
                     "public_ip": terraform_output_value(outputs, "public_ip") or "",
                     "elastic_ip": terraform_output_value(outputs, "elastic_ip") or "",
                     "instance_id": terraform_output_value(outputs, "instance_id") or "",
+                    "failover_access_key_id": terraform_output_value(outputs, "failover_access_key_id") or "",
+                    "failover_secret_access_key": terraform_output_value(outputs, "failover_secret_access_key") or "",
                 },
             },
         )
