@@ -1002,7 +1002,7 @@ def maybe_write_suricata_host_vars(output_root, repo_root, inventory_text, group
         abs_path.parent.mkdir(parents=True, exist_ok=True)
         abs_path.write_text(content_to_write, encoding="utf-8")
         os.chmod(abs_path, 0o600)
-        record_secret_path(abs_path)
+        record_secret_path(abs_path, persistent=True)
         saved[rel_path] = {"bytes": len(content_to_write.encode("utf-8"))}
     return saved
 
@@ -1085,7 +1085,7 @@ def maybe_write_failover_host_vars(output_root, repo_root, inventory_text, group
     failover_path.parent.mkdir(parents=True, exist_ok=True)
     failover_path.write_text(content, encoding="utf-8")
     os.chmod(failover_path, 0o600)
-    record_secret_path(failover_path)
+    record_secret_path(failover_path, persistent=True)
     return {FAILOVER_HOST_VARS_REL: {"bytes": len(content.encode("utf-8"))}}
 
 
@@ -1187,7 +1187,7 @@ def maybe_write_cloudflared_host_vars(output_root, repo_root, inventory_text, gr
         abs_path.parent.mkdir(parents=True, exist_ok=True)
         abs_path.write_text(content, encoding="utf-8")
         os.chmod(abs_path, 0o600)
-        record_secret_path(abs_path)
+        record_secret_path(abs_path, persistent=True)
         saved[rel_path] = {"bytes": len(content.encode("utf-8"))}
     return saved
 
