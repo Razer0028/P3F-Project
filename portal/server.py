@@ -1058,7 +1058,7 @@ def maybe_write_failover_host_vars(output_root, repo_root, inventory_text, group
             existing = failover_path.read_text(encoding="utf-8", errors="replace")
         except OSError:
             existing = ""
-        if FAILOVER_RULES_MARKER not in existing.splitlines()[:2]:
+        if FAILOVER_RULES_MARKER not in existing.splitlines()[:2] and not force:
             return {}
 
     content = "\n".join(
@@ -1082,11 +1082,45 @@ def maybe_write_failover_host_vars(output_root, repo_root, inventory_text, group
         ]
     )
 
+    if failover_path.exists():
+        try:
+            existing = failover_path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            existing = ""
+        content = upsert_failover_block(existing, content)
+
     failover_path.parent.mkdir(parents=True, exist_ok=True)
     failover_path.write_text(content, encoding="utf-8")
     os.chmod(failover_path, 0o600)
     record_secret_path(failover_path, persistent=True)
     return {FAILOVER_HOST_VARS_REL: {"bytes": len(content.encode("utf-8"))}}
+
+
+def upsert_failover_block(existing_text, new_block):
+    if FAILOVER_RULES_MARKER not in existing_text:
+        return (existing_text.rstrip() + "\n\n" + new_block).strip() + "\n"
+    lines = existing_text.splitlines()
+    start = None
+    for idx, line in enumerate(lines):
+        if line.strip() == FAILOVER_RULES_MARKER:
+            start = idx
+            break
+    if start is None:
+        return (existing_text.rstrip() + "\n\n" + new_block).strip() + "\n"
+    end = len(lines)
+    for idx in range(start + 1, len(lines)):
+        if lines[idx].strip() == "":
+            end = idx + 1
+            break
+    prefix = "\n".join(lines[:start]).rstrip()
+    suffix = "\n".join(lines[end:]).lstrip()
+    if prefix and suffix:
+        return f"{prefix}\n{new_block}\n{suffix}\n"
+    if prefix:
+        return f"{prefix}\n{new_block}\n"
+    if suffix:
+        return f"{new_block}\n{suffix}\n"
+    return f"{new_block}\n"
 
 
 def build_cloudflared_host_vars(tunnel_id, hostname, origin, credentials_json):
