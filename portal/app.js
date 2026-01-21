@@ -765,7 +765,7 @@ function renderGroupVars() {
   const backupFull = value(fields.backupFullEnabled) ? "true" : "false";
   const backupGames = value(fields.backupGamesEnabled) ? "true" : "false";
   const backupsManage = (backupFull === "true" || backupGames === "true") ? "true" : "false";
-  const containersStart = value(fields.containersStart) ? "true" : "false";
+  let containersStart = value(fields.containersStart) ? "true" : "false";
   const containersRoot = containersRootValue();
   const containersOwner = containersOwnerValue();
   const containersGroup = containersGroupValue();
@@ -796,6 +796,9 @@ function renderGroupVars() {
     ].join("\n")).join("\n")}`
     : "portctl_forward_rules: []";
   const containers = enabledContainers();
+  if (simpleMode && containers.length) {
+    containersStart = "true";
+  }
   const containersManage = containers.length ? "true" : "false";
   const dockerManage = containers.length ? "true" : "false";
   const containersBlock = containers.length
