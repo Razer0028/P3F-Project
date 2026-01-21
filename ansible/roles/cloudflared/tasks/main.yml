@@ -48,6 +48,13 @@
             state: present
             update_cache: "{{ cloudflared_update_cache | default(true) }}"
             cache_valid_time: "{{ (cloudflared_update_cache | default(true)) | ternary(3600, omit) }}"
+          register: cloudflared_apt_install
+          failed_when: false
+
+        - name: Warn when cloudflared apt package is unavailable
+          debug:
+            msg: "cloudflared apt package is unavailable; falling back to direct download."
+          when: cloudflared_apt_install is defined and cloudflared_apt_install.failed | default(false)
 
         - name: Re-check cloudflared binary after apt
           command: command -v cloudflared
