@@ -810,6 +810,17 @@ function renderGroupVars() {
       "    dest_ip: \"" + escapeYamlString(rule.dest_ip) + "\"",
     ].join("\n")).join("\n")}`
     : "portctl_forward_rules: []";
+  const wireguardUfwRulesBlock = portPlan.ufwRules.length
+    ? `wireguard_ufw_rules:\n${portPlan.ufwRules.map((rule) => `  - \"${escapeYamlString(rule)}\"`).join("\n")}`
+    : "wireguard_ufw_rules: []";
+  const wireguardForwardRulesBlock = portPlan.forwardRules.length
+    ? `wireguard_forward_rules:\n${portPlan.forwardRules.map((rule) => [
+      "  - ext_port: \"" + escapeYamlString(rule.ext_port) + "\"",
+      "    dest_port: \"" + escapeYamlString(rule.dest_port) + "\"",
+      "    protocol: \"" + escapeYamlString(rule.protocol) + "\"",
+      "    dest_ip: \"" + escapeYamlString(rule.dest_ip) + "\"",
+    ].join("\n")).join("\n")}`
+    : "wireguard_forward_rules: []";
   const containers = enabledContainers();
   if (simpleMode && containers.length) {
     containersStart = "true";
@@ -863,6 +874,8 @@ wireguard_manage: ${wireguardManage}
 wireguard_enable_on_boot: ${simpleMode ? "true" : "false"}
 wireguard_restart_on_change: ${simpleMode ? "true" : "false"}
 wireguard_allow_overwrite: true
+${wireguardUfwRulesBlock}
+${wireguardForwardRulesBlock}
 
 # Failover core
 failover_core_manage: ${failoverManage}
@@ -885,7 +898,7 @@ cloudflared_manage: ${cloudflaredManage}
 # Portctl
 portctl_manage: ${portctlManage}
 portctl_default_dest_ip: "${escapeYamlString(portctlDefaultDestIp)}"
-portctl_apply_rules: true
+portctl_apply_rules: false
 portctl_enable_web_wg: true
 portctl_enable_web_local: true
 ${portctlUfwRulesBlock}

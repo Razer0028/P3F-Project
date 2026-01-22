@@ -182,6 +182,109 @@
       when:
         - wireguard_ufw_status.rc == 0
 
+    - name: Install forwarding helper when rules are provided
+      copy:
+        dest: /usr/local/sbin/edge-stack-forwarding.py
+        owner: root
+        group: root
+        mode: "0755"
+        content: |
+          #!/usr/bin/env python3
+          import json
+          import os
+          import re
+          import shutil
+          import subprocess
+
+          rules = json.loads(os.environ.get("EDGE_FORWARD_RULES", "[]") or "[]")
+          ufw_rules = json.loads(os.environ.get("EDGE_UFW_RULES", "[]") or "[]")
+          nat_if = os.environ.get("EDGE_NAT_IF", "")
+
+          def run(cmd):
+              subprocess.run(cmd, shell=True, check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+          if shutil.which("ufw"):
+              for rule in ufw_rules:
+                  rule = str(rule).strip()
+                  if rule:
+                      run(f"ufw {rule}")
+
+              for rule in rules:
+                  proto = str(rule.get("protocol", "")).lower()
+                  protos = ["tcp", "udp"] if proto == "both" else [proto]
+                  dest_ip = str(rule.get("dest_ip", "")).strip()
+                  dest_port = str(rule.get("dest_port", "")).strip()
+                  if not dest_ip or not dest_port:
+                      continue
+                  for p in protos:
+                      if p in ("tcp", "udp"):
+                          run(f"ufw route allow proto {p} from any to {dest_ip} port {dest_port}")
+
+          if not rules or not nat_if:
+              raise SystemExit(0)
+
+          before_rules = "/etc/ufw/before.rules"
+          try:
+              content = open(before_rules, "r", encoding="utf-8").read()
+          except Exception:
+              raise SystemExit(0)
+
+          dnat_lines = []
+          for rule in rules:
+              proto = str(rule.get("protocol", "")).lower()
+              protos = ["tcp", "udp"] if proto == "both" else [proto]
+              dest_ip = str(rule.get("dest_ip", "")).strip()
+              ext_port = str(rule.get("ext_port", "")).strip()
+              dest_port = str(rule.get("dest_port", "")).strip() or ext_port
+              if not dest_ip or not ext_port or not dest_port:
+                  continue
+              ext_ipt = ext_port.replace("-", ":")
+              dest_ipt = dest_port.replace("-", ":")
+              for p in protos:
+                  if p not in ("tcp", "udp"):
+                      continue
+                  dnat_lines.append(
+                      f"-A PREROUTING -i {nat_if} -p {p} --dport {ext_ipt} -j DNAT --to-destination {dest_ip}:{dest_ipt}"
+                  )
+
+          marker_start = "# EDGE-STACK NAT BEGIN"
+          marker_end = "# EDGE-STACK NAT END"
+          block = "\n".join([marker_start] + dnat_lines + [marker_end]) + "\n"
+
+          if "*nat" not in content:
+              nat_block = "*nat\n:PREROUTING ACCEPT [0:0]\n:POSTROUTING ACCEPT [0:0]\n"
+              nat_block += block + "COMMIT\n\n"
+              content = nat_block + content
+          else:
+              block_re = re.compile(re.escape(marker_start) + r".*?" + re.escape(marker_end) + r"\n?", re.S)
+              if block_re.search(content):
+                  content = block_re.sub(block, content)
+              else:
+                  nat_start = content.find("*nat")
+                  nat_commit = content.find("COMMIT", nat_start)
+                  if nat_commit != -1:
+                      content = content[:nat_commit] + block + content[nat_commit:]
+
+          with open(before_rules, "w", encoding="utf-8") as fh:
+              fh.write(content)
+
+          run("ufw reload")
+      when:
+        - wireguard_ufw_manage | default(true)
+        - (wireguard_ufw_rules | default([]) | length > 0) or (wireguard_forward_rules | default([]) | length > 0)
+
+    - name: Apply forwarding rules via helper (optional)
+      command: /usr/local/sbin/edge-stack-forwarding.py
+      environment:
+        EDGE_NAT_IF: "{{ wireguard_nat_interface | default('') }}"
+        EDGE_FORWARD_RULES: "{{ wireguard_forward_rules | default([]) | to_json }}"
+        EDGE_UFW_RULES: "{{ wireguard_ufw_rules | default([]) | to_json }}"
+      changed_when: false
+      failed_when: false
+      when:
+        - wireguard_ufw_manage | default(true)
+        - (wireguard_ufw_rules | default([]) | length > 0) or (wireguard_forward_rules | default([]) | length > 0)
+
     - name: Check ufw status after rules (optional)
       command: ufw status
       register: wireguard_ufw_status_post
@@ -200,4 +303,3 @@
         - "'inactive' in wireguard_ufw_status_post.stdout.lower()"
       changed_when: true
       failed_when: false
-        - item.enable_nat | default(false)

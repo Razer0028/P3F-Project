@@ -97,9 +97,11 @@ compose_running() {
         (cd "$dir" && $cmd ps --status running -q 2>/dev/null | head -n1) | grep -q .
         return $?
     fi
+{% raw %}
     /usr/bin/docker ps \
         --filter "label=com.docker.compose.project.working_dir=${dir}" \
         --format '{{.ID}}' 2>/dev/null | grep -q .
+{% endraw %}
 }
 
 compose_first_container() {
