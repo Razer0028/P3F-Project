@@ -100,7 +100,9 @@ compose_running() {
 }
 
 container_exists() {
+{% raw %}
     /usr/bin/docker ps -a --filter "name=^/$1$" --format '{{.ID}}' 2>/dev/null | grep -q .
+{% endraw %}
 }
 
 is_allowed() {
