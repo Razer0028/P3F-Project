@@ -350,8 +350,8 @@
             path: "{{ containers_root }}/minecraft/data"
             state: directory
             owner: "{{ containers_owner }}"
-            group: "{{ containers_group }}"
-            mode: "0755"
+            group: "www-data"
+            mode: "0775"
         - name: Extract minecraft build context
           unarchive:
             src: "archives/minecraft.tar.gz"
@@ -365,6 +365,14 @@
             owner: "{{ containers_owner }}"
             group: "{{ containers_group }}"
             mode: "0755"
+        - name: Ensure minecraft whitelist is writable by web portal
+          copy:
+            dest: "{{ containers_root }}/minecraft/data/whitelist.json"
+            content: "[]\n"
+            owner: "{{ containers_owner }}"
+            group: "www-data"
+            mode: "0664"
+            force: false
 
     - name: Deploy valheim container files
       when: "'valheim' in containers_enabled"
