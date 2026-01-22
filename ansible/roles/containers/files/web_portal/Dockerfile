@@ -17,7 +17,7 @@ RUN apt-get update \
       https://download.docker.com/linux/debian bookworm stable" \
       > /etc/apt/sources.list.d/docker.list \
  && apt-get update \
- && apt-get install -y docker-ce-cli apache2 libapache2-mod-php \
+ && apt-get install -y docker-ce-cli docker-compose-plugin apache2 libapache2-mod-php \
     php php-cli php-curl php-mbstring php-xml php-json php-zip php-gd \
     unzip git composer apache2-utils python3
 

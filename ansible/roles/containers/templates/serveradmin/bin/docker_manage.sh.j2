@@ -93,10 +93,22 @@ compose_running() {
     local dir="$1"
     local cmd
     cmd="$(compose_cmd)"
-    if [ -z "$cmd" ]; then
-        return 1
+    if [ -n "$cmd" ]; then
+        (cd "$dir" && $cmd ps --status running -q 2>/dev/null | head -n1) | grep -q .
+        return $?
     fi
-    (cd "$dir" && $cmd ps --status running -q 2>/dev/null | head -n1) | grep -q .
+    /usr/bin/docker ps \
+        --filter "label=com.docker.compose.project.working_dir=${dir}" \
+        --format '{{.ID}}' 2>/dev/null | grep -q .
+}
+
+compose_first_container() {
+    local dir="$1"
+{% raw %}
+    /usr/bin/docker ps -a \
+        --filter "label=com.docker.compose.project.working_dir=${dir}" \
+        --format '{{.Names}}' 2>/dev/null | head -n1
+{% endraw %}
 }
 
 container_exists() {
@@ -324,9 +336,22 @@ PY
             echo "DENY: compose dir not found for $container"
             exit 1
         fi
-        (cd "$compose_dir" && /usr/bin/docker compose up -d --build) >/tmp/docker_manage_tmp 2>&1
-        code=$?
-        action_label="UP"
+        fallback="$(compose_first_container "$compose_dir")"
+        if [ -n "$fallback" ]; then
+            /usr/bin/docker start "$fallback" >/tmp/docker_manage_tmp 2>&1
+            code=$?
+            action_label="START"
+        else
+            cmd="$(compose_cmd)"
+            if [ -z "$cmd" ]; then
+                echo "DENY: docker compose not available" >/tmp/docker_manage_tmp
+                code=1
+            else
+                (cd "$compose_dir" && $cmd up -d --build) >/tmp/docker_manage_tmp 2>&1
+                code=$?
+                action_label="UP"
+            fi
+        fi
     fi
 
     ts=$(date +%F %T)
@@ -348,13 +373,19 @@ PY
     else
         compose_dir="$(compose_dir_for "$container")"
         if [ -n "$compose_dir" ] && [ -f "$compose_dir/docker-compose.yml" ]; then
-            cmd="$(compose_cmd)"
-            if [ -z "$cmd" ]; then
-                echo "DENY: docker compose not available" >/tmp/docker_manage_tmp
-                code=1
-            else
-                (cd "$compose_dir" && $cmd stop) >/tmp/docker_manage_tmp 2>&1
+            fallback="$(compose_first_container "$compose_dir")"
+            if [ -n "$fallback" ]; then
+                /usr/bin/docker stop "$fallback" >/tmp/docker_manage_tmp 2>&1
                 code=$?
+            else
+                cmd="$(compose_cmd)"
+                if [ -z "$cmd" ]; then
+                    echo "DENY: docker compose not available" >/tmp/docker_manage_tmp
+                    code=1
+                else
+                    (cd "$compose_dir" && $cmd stop) >/tmp/docker_manage_tmp 2>&1
+                    code=$?
+                fi
             fi
         else
             echo "DENY: compose dir not found for $container" >/tmp/docker_manage_tmp
@@ -381,8 +412,14 @@ PY
         exit 1
     fi
 
-    (cd "$compose_dir" && /usr/bin/docker compose build) >/tmp/docker_manage_tmp 2>&1
-    code=$?
+    cmd="$(compose_cmd)"
+    if [ -z "$cmd" ]; then
+        echo "DENY: docker compose not available" >/tmp/docker_manage_tmp
+        code=1
+    else
+        (cd "$compose_dir" && $cmd build) >/tmp/docker_manage_tmp 2>&1
+        code=$?
+    fi
 
     ts=$(date '+%F %T')
     echo "$ts [$who] BUILD $container dir=$compose_dir code=$code" >> "$LOGFILE"
@@ -403,8 +440,14 @@ PY
         exit 1
     fi
 
-    (cd "$compose_dir" && /usr/bin/docker compose down --remove-orphans --rmi local) >/tmp/docker_manage_tmp 2>&1
-    code=$?
+    cmd="$(compose_cmd)"
+    if [ -z "$cmd" ]; then
+        echo "DENY: docker compose not available" >/tmp/docker_manage_tmp
+        code=1
+    else
+        (cd "$compose_dir" && $cmd down --remove-orphans --rmi local) >/tmp/docker_manage_tmp 2>&1
+        code=$?
+    fi
 
     ts=$(date '+%F %T')
     echo "$ts [$who] DELETE $container dir=$compose_dir code=$code" >> "$LOGFILE"
@@ -440,7 +483,12 @@ PY
         chown -R "$owner_pair" "$compose_dir" || true
       fi
       if [ -f "$compose_dir/docker-compose.yml" ]; then
-        (cd "$compose_dir" && /usr/bin/docker compose build)
+        cmd="$(compose_cmd)"
+        if [ -z "$cmd" ]; then
+          echo "DENY: docker compose not available"
+        else
+          (cd "$compose_dir" && $cmd build)
+        fi
       else
         echo "WARN: docker-compose.yml not found in $compose_dir"
       fi
@@ -468,7 +516,12 @@ PY
 
     {
       if [ -f "$compose_dir/docker-compose.yml" ]; then
-        (cd "$compose_dir" && /usr/bin/docker compose down --remove-orphans --rmi local) || true
+        cmd="$(compose_cmd)"
+        if [ -n "$cmd" ]; then
+          (cd "$compose_dir" && $cmd down --remove-orphans --rmi local) || true
+        else
+          echo "WARN: docker compose not available"
+        fi
       fi
       rm -rf "$compose_dir"
     } >/tmp/docker_manage_tmp 2>&1
