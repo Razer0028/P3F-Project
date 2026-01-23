@@ -48,6 +48,18 @@ CLI で使う場合:
 aws configure
 ```
 
+### 必要な権限（Terraform 用）
+最低限、EC2/VPC を作成・削除できる権限が必要です。
+
+- 例（最小構成）: `docs/iam_terraform_policy.json`
+  - EC2 の Read/Write（VPC/SG/IGW/Route/EIP/EC2 など）
+- 追加で IAM ユーザーやアクセスキーを Terraform で作成する場合:
+  - `iam:CreateUser`, `iam:CreateAccessKey`, `iam:AttachUserPolicy`,
+    `iam:PutUserPolicy`, `iam:DeleteUser`, `iam:DeleteAccessKey` などが必要
+
+**簡単に進める場合は `AdministratorAccess` を付与しても動作します**  
+（本番利用では最小権限を推奨）。
+
 ## 4. よくある注意点
 - トークン/アクセスキーは漏洩させないでください。
 - DNS の反映には数分〜数時間かかる場合があります。

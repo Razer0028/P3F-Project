@@ -16,6 +16,12 @@ IaC workspace for the on-prem + VPS + EC2 failover stack.
 - Terraform (1.5+) for EC2 provisioning (optional).
 - SSH keys for on-prem, VPS, EC2 (stored under ~/.ssh on the portal host, usually /root/.ssh).
 
+## Docs
+
+- `docs/overview.md`: 構成概要/通信フロー
+- `docs/credentials_guide.md`: Cloudflare/AWS 認証情報とドメイン準備
+- `docs/operations.md`: 管理者ポータル/portctl/フェイルオーバー運用
+
 ## Public distribution notes
 
 - Keep secrets local. Do not commit `~/.config/edge-stack/ansible/host_vars/*.yml` or `~/.config/edge-stack/ansible/hosts.ini`.
