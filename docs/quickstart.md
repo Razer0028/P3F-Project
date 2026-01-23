@@ -17,6 +17,14 @@
 - `~/.config/edge-stack/terraform/terraform.tfvars`
 - `~/.config/edge-stack/ansible/host_vars/*`（Vault パスワードがある場合）
 
+## 1.5 認証情報とドメインの準備
+Cloudflare のトークン作成、AWS IAM ユーザー/アクセスキー作成、ドメインの準備は
+下記のガイドにまとめています。
+
+```
+docs/credentials_guide.md
+```
+
 ## 2. Vault パスワード
 Vault を使うためのパスワードファイルを作成します。
 

@@ -353,6 +353,13 @@
           <div class="doc-note">
             フル版は <code>docs/iam_terraform_policy.json</code> にあります。
           </div>
+          <h3>IAM ユーザー/アクセスキー作成手順</h3>
+          <ol>
+            <li>AWS Console → IAM → Users → Create user</li>
+            <li>「アクセスキー - プログラムによるアクセス」を有効化</li>
+            <li>権限は <code>docs/iam_terraform_policy.json</code> の最小権限を付与</li>
+            <li>アクセスキー作成後に CSV を保存</li>
+          </ol>
           <h3>ポータル / 付帯スクリプト</h3>
           <ul>
             <li>ガイド付き/カスタムの 2 モード</li>
@@ -490,6 +497,14 @@ make validate</code></pre>
               </ul>
             </div>
           </div>
+          <h3>API トークン作成手順</h3>
+          <ol>
+            <li>Cloudflare の「マイプロフィール」→「API トークン」へ移動</li>
+            <li>「トークンを作成」→ テンプレート（例: Edit zone DNS）を選択</li>
+            <li>必要に応じて権限を追加（例: Zone:DNS:Edit / Zone:Read / Tunnel:Edit）</li>
+            <li>対象ゾーンを使用ドメインのみに限定</li>
+            <li>作成後、トークンを控える（表示は一度だけ）</li>
+          </ol>
           <p>手順例（VPS/EC2 共通）</p>
           <pre><code>cloudflared tunnel login
 cloudflared tunnel create &lt;vps_tunnel_name&gt;

@@ -107,6 +107,7 @@ an EC2 write policy for create/destroy.
 Notes:
 - Vault password file: `~/.config/edge-stack/vault_pass` (or set `ANSIBLE_VAULT_PASSWORD_FILE`).
 - WireGuard wg0/wg1 should not be active at the same time. The failover_core script enforces this.
+- Credentials guide (JP): `docs/credentials_guide.md`
 
 ## One-command workflows
 
