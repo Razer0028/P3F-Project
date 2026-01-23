@@ -19,6 +19,8 @@ CONFIG_PATH="/opt/serveradmin/config/portal_services.json"
 DEFAULT_CONTAINERS=("minecraft_server" "valheim_server" "7dtd-server")
 ALLOWED_CONTAINERS=()
 
+PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
 declare -A COMPOSE_DIRS
 
 action="$1"
@@ -135,7 +137,7 @@ case "$action" in
     echo "{"
     first=1
     for c in "${ALLOWED_CONTAINERS[@]}"; do
-        st=$(docker ps --filter "name=^/${c}$" --format '{{.Status}}')
+        st=$(/usr/bin/docker ps --filter "name=^/${c}$" --format '{{.Status}}')
 
         if [ -z "$st" ]; then
             state="stopped"

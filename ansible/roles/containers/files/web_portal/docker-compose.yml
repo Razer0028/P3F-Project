@@ -23,8 +23,7 @@ services:
       - {{ containers_root }}/minecraft:{{ containers_root }}/minecraft
       - {{ containers_root }}/valheim_server:{{ containers_root }}/valheim_server
       - {{ containers_root }}/7dtd_server:{{ containers_root }}/7dtd_server
-      # player_monitor の状態（これだけでOK）
-      - {{ containers_root }}/monitor/opt_serveradmin:/opt/serveradmin:ro
-      - {{ containers_root }}/monitor/opt_serveradmin/config/portal_services.json:/opt/serveradmin/config/portal_services.json
+      # serveradmin（実体を参照）
+      - /opt/serveradmin:/opt/serveradmin:ro
 
       - /var/run/docker.sock:/var/run/docker.sock
