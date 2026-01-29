@@ -6,7 +6,6 @@ import pathlib
 import shutil
 import socketserver
 import http.server
-import cgi
 import threading
 import time
 import uuid
@@ -19,6 +18,8 @@ import io
 import configparser
 import secrets
 from urllib.parse import urlparse, parse_qs
+from email import policy
+from email.parser import BytesParser
 
 ALLOWED_UPLOAD_TARGETS = {
     "onprem": "onprem_ed25519",
@@ -80,6 +81,80 @@ WG_ALLOWED_IPS = "0.0.0.0/0"
 WG_KEEPALIVE = 25
 WG_MTU = 1420
 WG_NAT_INTERFACE_PLACEHOLDER = "<AUTO_IFACE>"
+
+
+class UploadFile:
+    def __init__(self, filename, data):
+        self.filename = filename
+        self.file = io.BytesIO(data)
+
+
+class SimpleForm:
+    def __init__(self, fields):
+        self._fields = fields
+
+    def getfirst(self, key, default=""):
+        value = self._fields.get(key, default)
+        if isinstance(value, list):
+            value = value[0] if value else default
+        if isinstance(value, UploadFile):
+            return default
+        return value if value is not None else default
+
+    def __contains__(self, key):
+        return key in self._fields
+
+    def __getitem__(self, key):
+        return self._fields[key]
+
+
+def parse_multipart_fields(body, content_type):
+    if "multipart/form-data" not in content_type:
+        return SimpleForm({})
+    header = f"Content-Type: {content_type}\r\nMIME-Version: 1.0\r\n\r\n".encode("utf-8")
+    msg = BytesParser(policy=policy.default).parsebytes(header + body)
+    if not msg.is_multipart():
+        return SimpleForm({})
+    fields = {}
+    for part in msg.iter_parts():
+        name = part.get_param("name", header="Content-Disposition")
+        if not name:
+            continue
+        filename = part.get_param("filename", header="Content-Disposition")
+        payload = part.get_payload(decode=True) or b""
+        if filename:
+            item = UploadFile(filename, payload)
+        else:
+            charset = part.get_content_charset() or "utf-8"
+            try:
+                item = payload.decode(charset)
+            except UnicodeDecodeError:
+                item = payload.decode("utf-8", errors="ignore")
+        if name in fields:
+            existing = fields[name]
+            if isinstance(existing, list):
+                existing.append(item)
+            else:
+                fields[name] = [existing, item]
+        else:
+            fields[name] = item
+    return SimpleForm(fields)
+
+
+def read_multipart_form(handler, content_length, content_type):
+    body = handler.rfile.read(content_length)
+    return parse_multipart_fields(body, content_type)
+
+
+def get_form_file(form, key):
+    if key not in form:
+        return None
+    item = form[key]
+    if isinstance(item, list):
+        item = item[0] if item else None
+    if isinstance(item, UploadFile):
+        return item
+    return None
 
 def response_json(handler, status, payload):
     data = json.dumps(payload).encode("utf-8")
@@ -2050,14 +2125,7 @@ class PortalHandler(http.server.SimpleHTTPRequestHandler):
             response_json(self, 400, {"ok": False, "error": "Invalid content type"})
             return
 
-        form = cgi.FieldStorage(
-            fp=self.rfile,
-            headers=self.headers,
-            environ={
-                "REQUEST_METHOD": "POST",
-                "CONTENT_TYPE": content_type,
-            },
-        )
+        form = read_multipart_form(self, content_length, content_type)
 
         form_token = form.getfirst("token", "")
         if form_token != token:
@@ -2069,12 +2137,8 @@ class PortalHandler(http.server.SimpleHTTPRequestHandler):
             response_json(self, 400, {"ok": False, "error": "Invalid target"})
             return
 
-        if "file" not in form:
-            response_json(self, 400, {"ok": False, "error": "No file provided"})
-            return
-
-        file_item = form["file"]
-        if not getattr(file_item, "file", None):
+        file_item = get_form_file(form, "file")
+        if not file_item or not getattr(file_item, "file", None):
             response_json(self, 400, {"ok": False, "error": "Invalid file"})
             return
 
@@ -2187,18 +2251,12 @@ class PortalHandler(http.server.SimpleHTTPRequestHandler):
             response_json(self, 400, {"ok": False, "error": "Invalid content type"})
             return
 
-        form = cgi.FieldStorage(
-            fp=self.rfile,
-            headers=self.headers,
-            environ={
-                "REQUEST_METHOD": "POST",
-                "CONTENT_TYPE": content_type,
-            },
-        )
+        form = read_multipart_form(self, content_length, content_type)
 
         token_value = (form.getfirst("token", "") or "").strip()
-        if "file" in form and getattr(form["file"], "file", None):
-            data = form["file"].file.read(MAX_UPLOAD_BYTES + 1)
+        file_item = get_form_file(form, "file")
+        if file_item and getattr(file_item, "file", None):
+            data = file_item.file.read(MAX_UPLOAD_BYTES + 1)
             if len(data) > MAX_UPLOAD_BYTES:
                 response_json(self, 413, {"ok": False, "error": "File too large"})
                 return
@@ -2243,18 +2301,9 @@ class PortalHandler(http.server.SimpleHTTPRequestHandler):
             response_json(self, 400, {"ok": False, "error": "Invalid content type"})
             return
 
-        form = cgi.FieldStorage(
-            fp=self.rfile,
-            headers=self.headers,
-            environ={
-                "REQUEST_METHOD": "POST",
-                "CONTENT_TYPE": content_type,
-            },
-        )
+        form = read_multipart_form(self, content_length, content_type)
 
-        file_item = form["file"] if "file" in form else None
-        if isinstance(file_item, list):
-            file_item = file_item[0] if file_item else None
+        file_item = get_form_file(form, "file")
         if file_item is None or getattr(file_item, "file", None) is None:
             response_json(self, 400, {"ok": False, "error": "No file provided"})
             return
