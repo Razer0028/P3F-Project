@@ -32,19 +32,19 @@ copy_if_missing() {
     return 0
   fi
   if [ ! -f "$src" ]; then
-    warn "Missing example file: $src"
+    warn "サンプルファイルがありません: $src"
     return 1
   fi
   cp "$src" "$dest"
-  info "Created: $dest"
+  info "作成しました: $dest"
 }
 
 has_cmd() {
   command -v "$1" >/dev/null 2>&1
 }
 
-info "Bootstrap: ${PROJECT_SLUG}"
-info "Repo: $ROOT_DIR"
+info "ブートストラップ: ${PROJECT_SLUG}"
+info "リポジトリ: $ROOT_DIR"
 
 missing=()
 for cmd in python3 ansible ansible-playbook ansible-vault ssh ssh-keyscan; do
@@ -54,11 +54,11 @@ for cmd in python3 ansible ansible-playbook ansible-vault ssh ssh-keyscan; do
 done
 
 if [ "${#missing[@]}" -gt 0 ]; then
-  warn "Missing tools: ${missing[*]}"
+  warn "不足しているツール: ${missing[*]}"
 fi
 
 if ! has_cmd terraform; then
-  warn "Terraform not found (optional, required for EC2/Cloudflare provisioning)."
+  warn "Terraform が見つかりません（任意。EC2/Cloudflare のプロビジョニングに必要）。"
 fi
 
 ensure_dir "$CONFIG_DIR"
@@ -69,8 +69,8 @@ ensure_dir "$TF_DIR"
 ensure_dir "$TF_CF_DIR"
 
 if [ ! -f "$VAULT_PASS" ]; then
-  warn "Vault password file not found: $VAULT_PASS"
-  warn "Create it with:"
+  warn "Vault パスワードファイルがありません: $VAULT_PASS"
+  warn "次のコマンドで作成してください:"
   warn "  printf '%s\n' 'YOUR_VAULT_PASSWORD' > $VAULT_PASS && chmod 600 $VAULT_PASS"
 fi
 
@@ -86,28 +86,28 @@ for host in onprem-1 vps-1 ec2-1; do
     continue
   fi
   if [ ! -f "$example" ]; then
-    warn "Missing example vault file: $example"
+    warn "サンプル Vault ファイルがありません: $example"
     continue
   fi
   if [ ! -f "$VAULT_PASS" ]; then
-    warn "Skip vault create for $host (vault password missing)."
+    warn "$host の Vault 作成をスキップします（Vault パスワードがありません）。"
     continue
   fi
   if ! has_cmd ansible-vault; then
-    warn "Skip vault create for $host (ansible-vault missing)."
+    warn "$host の Vault 作成をスキップします（ansible-vault がありません）。"
     continue
   fi
   tmp="$(mktemp)"
   cp "$example" "$tmp"
   ANSIBLE_VAULT_PASSWORD_FILE="$VAULT_PASS" ansible-vault encrypt "$tmp" --output "$target" >/dev/null
   rm -f "$tmp"
-  info "Created vault file: $target"
+  info "Vault ファイルを作成しました: $target"
   chmod 600 "$target" || true
 
 done
 
-info "Bootstrap complete."
-info "Next steps:"
-info "  - Review ${ANSIBLE_DIR}/hosts.ini and terraform tfvars files"
-info "  - Fill vault files with secrets (ansible-vault edit ...)"
-info "  - Run: make validate"
+info "ブートストラップが完了しました。"
+info "次の手順:"
+info "  - ${ANSIBLE_DIR}/hosts.ini と terraform の tfvars を確認してください"
+info "  - Vault ファイルに機密情報を記入してください（ansible-vault edit ...）"
+info "  - 実行: make validate"

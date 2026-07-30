@@ -18,7 +18,7 @@ function run_cmd($cmd, $stdin = null) {
     ];
     $proc = proc_open($cmd, $desc, $pipes);
     if (!is_resource($proc)) {
-        return ['code' => 1, 'stdout' => '', 'stderr' => 'proc_open failed'];
+        return ['code' => 1, 'stdout' => '', 'stderr' => 'プロセスの起動に失敗しました'];
     }
     if ($stdin !== null) {
         fwrite($pipes[0], $stdin);
@@ -76,7 +76,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['mode'] ?? '') === 'save') 
                 $_SESSION['flash'] = "✅ 設定を保存しました";
             } else {
                 $err = trim($res['stderr'] ?: $res['stdout']);
-                $_SESSION['flash'] = "❌ 保存に失敗しました: " . ($err ?: 'unknown error');
+                $_SESSION['flash'] = "❌ 保存に失敗しました: " . ($err ?: '不明なエラー');
             }
         }
         $selectedGame = $game ?: $selectedGame;

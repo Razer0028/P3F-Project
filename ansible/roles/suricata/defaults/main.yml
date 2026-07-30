@@ -15,7 +15,8 @@ suricata_default_manage: true
 suricata_run: "yes"
 suricata_listenmode: af-packet
 suricata_interface: "{{ ansible_default_ipv4.interface | default('eth0') }}"
-suricata_pidfile: /var/run/suricata.pid
+# /var/run は /run への互換シンボリックリンクなので /run を直接指定する
+suricata_pidfile: /run/suricata.pid
 
 suricata_packages:
   - suricata

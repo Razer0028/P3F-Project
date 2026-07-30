@@ -1,6 +1,9 @@
 {
-    "name": "takai/authdemo",
+    "name": "edge-stack/web-portal",
+    "description": "ゲームサーバー用 Web ポータル（管理画面・公開ページ）",
+    "type": "project",
+    "license": "proprietary",
     "require": {
-        "google/apiclient": "^2.0"
+        "php": ">=8.2"
     }
 }

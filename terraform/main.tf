@@ -136,8 +136,8 @@ locals {
     ? try(tonumber(data.external.failover_access_keys_lookup[0].result.count), 0)
     : 0
   )
-  failover_access_keys_exist  = var.create_failover_iam && local.failover_access_keys_count > 0
-  failover_access_key_create  = var.create_failover_iam && !local.failover_access_key_provided && !local.failover_access_keys_exist
+  failover_access_keys_exist = var.create_failover_iam && local.failover_access_keys_count > 0
+  failover_access_key_create = var.create_failover_iam && !local.failover_access_key_provided && !local.failover_access_keys_exist
   failover_access_key_id_value = (
     local.failover_access_key_provided
     ? var.failover_access_key_id
@@ -198,6 +198,11 @@ resource "aws_route_table_association" "public" {
   route_table_id = aws_route_table.public.id
 }
 
+# 注意: aws_security_group_rule は AWS プロバイダ v5 以降で非推奨（後継は
+# aws_vpc_security_group_ingress_rule / _egress_rule）。移行するとリソース
+# アドレスが変わり state 移行と一時的なルール再作成が必要になるため、
+# 稼働中の環境を壊さないよう本リポジトリでは現行リソースを維持している。
+# 移行手順は docs/operations.md を参照。
 resource "aws_security_group" "edge" {
   name        = "${var.instance_name}-sg"
   description = "Security group for edge node"
@@ -262,7 +267,7 @@ resource "aws_key_pair" "edge" {
   lifecycle {
     precondition {
       condition     = length(trimspace(var.key_pair_public_key)) > 0
-      error_message = "Set key_pair_public_key when key_pair_mode=create or auto."
+      error_message = "key_pair_mode が create または auto の場合は key_pair_public_key を指定してください。"
     }
   }
 }
@@ -295,7 +300,7 @@ data "aws_iam_policy_document" "failover" {
   count = local.create_failover_policy ? 1 : 0
 
   statement {
-    actions   = [
+    actions = [
       "ec2:DescribeInstances",
       "ec2:DescribeInstanceStatus",
     ]
@@ -334,7 +339,7 @@ resource "aws_iam_user_policy_attachment" "failover" {
   lifecycle {
     precondition {
       condition     = local.failover_user_name != "" && local.failover_policy_arn != ""
-      error_message = "Failed to resolve failover IAM user or policy."
+      error_message = "フェイルオーバー用 IAM ユーザーまたはポリシーを特定できませんでした。"
     }
   }
 }
@@ -346,7 +351,7 @@ resource "aws_iam_access_key" "failover" {
   lifecycle {
     precondition {
       condition     = local.failover_user_name != ""
-      error_message = "Failed to resolve failover IAM user."
+      error_message = "フェイルオーバー用 IAM ユーザーを特定できませんでした。"
     }
   }
 }

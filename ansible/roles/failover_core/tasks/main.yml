@@ -1,14 +1,14 @@
 ---
-- name: Failover core configuration
+- name: フェイルオーバーコアの構成
   when: failover_core_manage | default(false)
   block:
-    - name: Set default BFD peer for failover core
-      set_fact:
+    - name: フェイルオーバーコアの既定 BFD ピアを設定
+      ansible.builtin.set_fact:
         failover_wg0_bfd_peer: '{{ (frr_bfd_peers | default([])) | first | default(''10.100.0.1'') }}'
       when: (failover_wg0_bfd_peer | default('')) | length == 0
 
-    - name: Validate failover core variables
-      assert:
+    - name: フェイルオーバーコアの変数を検証
+      ansible.builtin.assert:
         that:
           - failover_instance_id | length > 0
           - failover_ec2_ip | length > 0
@@ -19,35 +19,35 @@
           - failover_vps_ip | length > 0
           - failover_wg0_bfd_peer | length > 0
         fail_msg: >-
-          failover_core requires instance_id/ec2_ip/cf_token/cf_zone_id/
-          cf_record_id/dns_record_name/vps_ip/wg0_bfd_peer to be set.
+          failover_core には instance_id/ec2_ip/cf_token/cf_zone_id/
+          cf_record_id/dns_record_name/vps_ip/wg0_bfd_peer の設定が必要です。
       when: failover_core_require_vars | default(true)
 
-    - name: Install failover core packages
-      apt:
+    - name: フェイルオーバーコア用パッケージをインストール
+      ansible.builtin.apt:
         name: "{{ failover_core_packages }}"
         state: present
         update_cache: "{{ failover_core_update_cache | default(true) }}"
         cache_valid_time: "{{ (failover_core_update_cache | default(true)) | ternary(3600, omit) }}"
 
-    - name: Ensure failover core directory
-      file:
+    - name: フェイルオーバーコア用ディレクトリを作成
+      ansible.builtin.file:
         path: "{{ failover_core_path }}"
         state: directory
         owner: root
         group: root
         mode: "0755"
 
-    - name: Ensure failover state directory
-      file:
+    - name: フェイルオーバー状態ディレクトリを作成
+      ansible.builtin.file:
         path: "{{ failover_state_dir }}"
         state: directory
         owner: root
         group: root
         mode: "0755"
 
-    - name: Ensure AWS config directory for failover
-      file:
+    - name: フェイルオーバー用 AWS 設定ディレクトリを作成
+      ansible.builtin.file:
         path: "{{ failover_aws_dir }}"
         state: directory
         owner: root
@@ -58,8 +58,8 @@
         - failover_aws_access_key_id | length > 0
         - failover_aws_secret_access_key | length > 0
 
-    - name: Ensure AWS credentials file exists
-      file:
+    - name: AWS 認証情報ファイルを用意
+      ansible.builtin.file:
         path: "{{ failover_aws_credentials_path }}"
         state: touch
         owner: root
@@ -71,8 +71,8 @@
         - failover_aws_secret_access_key | length > 0
       no_log: true
 
-    - name: Write AWS access key for failover
-      ini_file:
+    - name: フェイルオーバー用 AWS アクセスキーを書き込み
+      community.general.ini_file:
         path: "{{ failover_aws_credentials_path }}"
         section: "{{ \"default\" if (failover_aws_profile | default(\"default\")) == \"default\" else failover_aws_profile }}"
         option: aws_access_key_id
@@ -84,8 +84,8 @@
         - failover_aws_secret_access_key | length > 0
       no_log: true
 
-    - name: Write AWS secret for failover
-      ini_file:
+    - name: フェイルオーバー用 AWS シークレットを書き込み
+      community.general.ini_file:
         path: "{{ failover_aws_credentials_path }}"
         section: "{{ \"default\" if (failover_aws_profile | default(\"default\")) == \"default\" else failover_aws_profile }}"
         option: aws_secret_access_key
@@ -97,8 +97,8 @@
         - failover_aws_secret_access_key | length > 0
       no_log: true
 
-    - name: Write AWS session token for failover (optional)
-      ini_file:
+    - name: フェイルオーバー用 AWS セッショントークンを書き込み（任意）
+      community.general.ini_file:
         path: "{{ failover_aws_credentials_path }}"
         section: "{{ \"default\" if (failover_aws_profile | default(\"default\")) == \"default\" else failover_aws_profile }}"
         option: aws_session_token
@@ -111,8 +111,8 @@
         - failover_aws_session_token | length > 0
       no_log: true
 
-    - name: Remove AWS session token when empty
-      ini_file:
+    - name: AWS セッショントークンが空の場合は削除
+      community.general.ini_file:
         path: "{{ failover_aws_credentials_path }}"
         section: "{{ \"default\" if (failover_aws_profile | default(\"default\")) == \"default\" else failover_aws_profile }}"
         option: aws_session_token
@@ -125,8 +125,8 @@
         - failover_aws_session_token | length == 0
       no_log: true
 
-    - name: Ensure AWS config file exists
-      file:
+    - name: AWS 設定ファイルを用意
+      ansible.builtin.file:
         path: "{{ failover_aws_config_path }}"
         state: touch
         owner: root
@@ -139,8 +139,8 @@
         - failover_aws_secret_access_key | length > 0
       no_log: true
 
-    - name: Write AWS region for failover
-      ini_file:
+    - name: フェイルオーバー用 AWS リージョンを書き込み
+      community.general.ini_file:
         path: "{{ failover_aws_config_path }}"
         section: "{{ \"default\" if (failover_aws_profile | default(\"default\")) == \"default\" else \"profile \" ~ failover_aws_profile }}"
         option: region
@@ -153,8 +153,8 @@
         - failover_aws_secret_access_key | length > 0
       no_log: true
 
-    - name: Write AWS output format for failover
-      ini_file:
+    - name: フェイルオーバー用 AWS 出力形式を書き込み
+      community.general.ini_file:
         path: "{{ failover_aws_config_path }}"
         section: "{{ \"default\" if (failover_aws_profile | default(\"default\")) == \"default\" else \"profile \" ~ failover_aws_profile }}"
         option: output
@@ -167,8 +167,8 @@
         - failover_aws_secret_access_key | length > 0
       no_log: true
 
-    - name: Deploy failover core script
-      template:
+    - name: フェイルオーバーコアスクリプトを配置
+      ansible.builtin.template:
         src: failover_core.py.j2
         dest: "{{ failover_core_script }}"
         owner: root
@@ -177,8 +177,8 @@
       notify: Restart failover core
       no_log: true
 
-    - name: Deploy ddos receiver script
-      template:
+    - name: DDoS レシーバースクリプトを配置
+      ansible.builtin.template:
         src: ddos_receiver.sh.j2
         dest: "{{ failover_ddos_receiver_script }}"
         owner: root
@@ -187,8 +187,8 @@
       when: failover_ddos_receiver_manage | default(true)
       notify: Restart ddos receiver
 
-    - name: Deploy failover core service unit
-      template:
+    - name: フェイルオーバーコアのサービスユニットを配置
+      ansible.builtin.template:
         src: failover_core.service.j2
         dest: "{{ failover_core_service }}"
         owner: root
@@ -198,8 +198,8 @@
         - Reload systemd
         - Restart failover core
 
-    - name: Deploy ddos receiver service unit
-      template:
+    - name: DDoS レシーバーのサービスユニットを配置
+      ansible.builtin.template:
         src: ddos_receiver.service.j2
         dest: "{{ failover_ddos_receiver_service }}"
         owner: root
@@ -210,19 +210,19 @@
         - Reload systemd
         - Restart ddos receiver
 
-    - name: Ensure systemd daemon reloaded
-      systemd:
+    - name: systemd デーモンを再読み込み
+      ansible.builtin.systemd_service:
         daemon_reload: true
 
-    - name: Ensure failover core service state
-      systemd:
+    - name: フェイルオーバーコアサービスの状態を設定
+      ansible.builtin.systemd_service:
         name: "{{ failover_core_service_name }}"
         enabled: "{{ failover_core_enable | default(true) }}"
-        state: "{{ failover_core_state | default(started) }}"
+        state: "{{ failover_core_state | default('started') }}"
 
-    - name: Ensure ddos receiver service state
-      systemd:
+    - name: DDoS レシーバーサービスの状態を設定
+      ansible.builtin.systemd_service:
         name: "{{ failover_ddos_receiver_service_name }}"
         enabled: "{{ failover_ddos_receiver_enable | default(true) }}"
-        state: "{{ failover_ddos_receiver_state | default(started) }}"
+        state: "{{ failover_ddos_receiver_state | default('started') }}"
       when: failover_ddos_receiver_manage | default(true)

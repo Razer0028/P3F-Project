@@ -1,24 +1,24 @@
 ---
 - name: Restart portctl
-  systemd:
+  ansible.builtin.systemd_service:
     name: "{{ portctl_service_name }}"
     state: restarted
   when: portctl_manage_service | default(false) and portctl_restart_on_change | default(false)
 
 - name: Restart portctl web
-  systemd:
+  ansible.builtin.systemd_service:
     name: "{{ portctl_web_service_name }}"
     state: restarted
   when: portctl_manage_service | default(false) and portctl_restart_on_change | default(false) and portctl_enable_web_wg | default(true)
 
 - name: Restart portctl web local
-  systemd:
+  ansible.builtin.systemd_service:
     name: "{{ portctl_web_local_service_name }}"
     state: restarted
   when: portctl_manage_service | default(false) and portctl_restart_on_change | default(false) and portctl_enable_web_local | default(true)
 
 - name: Reload ufw
-  command: ufw reload
+  ansible.builtin.command: ufw reload
   register: ufw_reload
   changed_when: ufw_reload.rc == 0
   failed_when: false

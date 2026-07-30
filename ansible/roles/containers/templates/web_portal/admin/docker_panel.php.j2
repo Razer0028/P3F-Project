@@ -131,8 +131,7 @@ foreach ($services as $serviceId => $service) {
 }
 
 exec('uptime', $uptimeOut);
-$uptimeText = implode("
-", $uptimeOut);
+$uptimeText = implode("\n", $uptimeOut);
 $uptimeShort = null;
 if (preg_match('/up\s+([^,]+(?:,\s*\d+:\d+)?),\s+\d+\s+user/', $uptimeText, $m)) {
     $uptimeShort = trim($m[1]);
@@ -151,8 +150,7 @@ if ($loadAverages) {
 }
 
 exec('free -h', $memOut);
-$memText = implode("
-", $memOut);
+$memText = implode("\n", $memOut);
 exec('free -m', $memOutRaw);
 $memTotal = $memUsed = $memAvail = null;
 if (!empty($memOutRaw)) {
@@ -174,8 +172,7 @@ if ($memTotal) {
 }
 
 exec('df -h /', $diskOut);
-$diskText = implode("
-", $diskOut);
+$diskText = implode("\n", $diskOut);
 exec('df -Pm /', $diskOutRaw);
 $diskUsedPercent = null;
 $diskUsedGb = $diskTotalGb = null;
@@ -195,8 +192,7 @@ $playerLog = '';
 if ($playerMonitorEnabled && is_readable($playerLogPath)) {
     $tailOut = [];
     exec('tail -n 30 ' . escapeshellarg($playerLogPath), $tailOut);
-    $playerLog = implode("
-", $tailOut);
+    $playerLog = implode("\n", $tailOut);
 }
 
 $wlList = $minecraftEnabled ? wl_read() : [];
@@ -587,12 +583,12 @@ button.action-btn.sm{padding:6px 10px;font-size:var(--fz-11);}
     <div class="brand-icon">⚙️</div>
     <div class="brand-texts">
       <div class="brand-title">サーバー運用コンソール</div>
-      <div class="brand-sub">Container Orchestration / Internal Admin</div>
+      <div class="brand-sub">コンテナ管理 / 内部管理用</div>
     </div>
   </div>
 
   <div class="header-right">
-    <div class="login-user">ログイン中: <?= h($_SESSION['user_email']) ?></div>
+    <div class="login-user">ログイン中: <?= h($_SESSION['user_email'] ?? '不明') ?></div>
     <div class="header-links">
       <a href="/admin/index.php">管理メニューへ戻る</a>
     </div>
@@ -608,7 +604,7 @@ button.action-btn.sm{padding:6px 10px;font-size:var(--fz-11);}
     <?php if (empty($displayOrder)): ?>
     <div class="card">
       <div class="card-head">
-        <div class="iconbox"><img src="/images/soldir.jpg" alt="No containers"></div>
+        <div class="iconbox"><img src="/images/soldir.jpg" alt="コンテナなし"></div>
         <div class="head-texts">
           <div class="head-title-row">
             <span>対象コンテナなし</span>
@@ -667,7 +663,7 @@ button.action-btn.sm{padding:6px 10px;font-size:var(--fz-11);}
     <?php if (!empty($gameRows)): ?>
     <div class="card">
       <div class="card-head">
-        <div class="iconbox"><img src="/images/soldir.jpg" alt="Catalog"></div>
+        <div class="iconbox"><img src="/images/soldir.jpg" alt="カタログ"></div>
         <div class="head-texts">
           <div class="head-title-row">
             <span>ゲームコンテナの導入/削除</span>
@@ -746,70 +742,70 @@ button.action-btn.sm{padding:6px 10px;font-size:var(--fz-11);}
     <?php if ($playerMonitorEnabled): ?>
     <div class="card">
       <div class="card-head">
-        <div class="iconbox"><img src="/images/soldir.jpg" alt="Server"></div>
+        <div class="iconbox"><img src="/images/soldir.jpg" alt="サーバー"></div>
         <div class="head-texts">
           <div class="head-title-row">
             <span>サーバーリソース状況</span>
           </div>
-          <div class="head-sub">CPU負荷 / Uptime / メモリ / ディスク</div>
+          <div class="head-sub">CPU 負荷 / 稼働時間 / メモリ / ディスク</div>
         </div>
       </div>
       <div class="card-body">
         <div class="stat-grid">
           <div class="stat-card">
-            <div class="stat-label">CPU Load</div>
+            <div class="stat-label">CPU 負荷</div>
             <div class="stat-value">
               <?php if ($loadAverages): ?>
                 <?= h(number_format($loadAverages[0], 2)) ?> / <?= h(number_format($loadAverages[1], 2)) ?> / <?= h(number_format($loadAverages[2], 2)) ?>
               <?php else: ?>
-                n/a
+                取得不可
               <?php endif; ?>
             </div>
             <?php if ($cpuLoadPercent !== null): ?>
               <div class="stat-bar"><span style="width: <?= h($cpuLoadPercent) ?>%"></span></div>
-              <div class="stat-meta"><?= h($cpuLoadPercent) ?>% / <?= h($cpuCount) ?> cores</div>
+              <div class="stat-meta"><?= h($cpuLoadPercent) ?>% / <?= h($cpuCount) ?> コア</div>
             <?php else: ?>
               <div class="stat-meta">CPU情報なし</div>
             <?php endif; ?>
           </div>
 
           <div class="stat-card">
-            <div class="stat-label">Memory</div>
+            <div class="stat-label">メモリ</div>
             <div class="stat-value">
               <?php if ($memTotalGb !== null): ?>
                 <?= h($memUsedGb) ?> GB / <?= h($memTotalGb) ?> GB
               <?php else: ?>
-                n/a
+                取得不可
               <?php endif; ?>
             </div>
             <?php if ($memUsedPercent !== null): ?>
               <div class="stat-bar"><span style="width: <?= h($memUsedPercent) ?>%"></span></div>
-              <div class="stat-meta"><?= h($memUsedPercent) ?>% used</div>
+              <div class="stat-meta"><?= h($memUsedPercent) ?>% 使用</div>
             <?php else: ?>
               <div class="stat-meta">メモリ情報なし</div>
             <?php endif; ?>
           </div>
 
           <div class="stat-card">
-            <div class="stat-label">Disk /</div>
+            <div class="stat-label">ディスク /</div>
             <div class="stat-value">
               <?php if ($diskTotalGb !== null): ?>
                 <?= h($diskUsedGb) ?> GB / <?= h($diskTotalGb) ?> GB
               <?php else: ?>
-                n/a
+                取得不可
               <?php endif; ?>
             </div>
             <?php if ($diskUsedPercent !== null): ?>
               <div class="stat-bar"><span style="width: <?= h($diskUsedPercent) ?>%"></span></div>
-              <div class="stat-meta"><?= h($diskUsedPercent) ?>% used</div>
+              <div class="stat-meta"><?= h($diskUsedPercent) ?>% 使用</div>
             <?php else: ?>
               <div class="stat-meta">ディスク情報なし</div>
             <?php endif; ?>
           </div>
 
           <div class="stat-card">
-            <div class="stat-label">Uptime</div>
-            <div class="stat-value"><?= h($uptimeShort ?: 'n/a') ?></div>
+            <div class="stat-label">稼働時間</div>
+            <div class="stat-value"><?= h($uptimeShort ?: '取得不可') ?></div>
             <div class="stat-meta">最新更新: <?= h(date('H:i')) ?></div>
           </div>
         </div>
@@ -837,7 +833,7 @@ button.action-btn.sm{padding:6px 10px;font-size:var(--fz-11);}
     <!-- 最近のプレイヤーログ -->
     <div class="card">
       <div class="card-head">
-        <div class="iconbox"><img src="/images/ark.png" alt="Logs"></div>
+        <div class="iconbox"><img src="/images/ark.png" alt="ログ"></div>
         <div class="head-texts">
           <div class="head-title-row">
             <span>最近のプレイヤーログ (最新30行)</span>
@@ -847,7 +843,7 @@ button.action-btn.sm{padding:6px 10px;font-size:var(--fz-11);}
       </div>
       <div class="card-body">
         <div class="section-block">
-          <div class="section-title">join / leave / auto-stop</div>
+          <div class="section-title">参加 / 退出 / 自動停止</div>
           <div class="section-desc">player_monitor.py の記録</div>
           <div class="mono-field log-scroll"><?= h($playerLog ?: "まだログがありません: {$playerLogPath}") ?></div>
         </div>
@@ -859,7 +855,7 @@ button.action-btn.sm{padding:6px 10px;font-size:var(--fz-11);}
     <?php if ($minecraftEnabled): ?>
     <div class="card">
       <div class="card-head">
-        <div class="iconbox"><img src="/images/minecraft.png" alt="Whitelist"></div>
+        <div class="iconbox"><img src="/images/minecraft.png" alt="ホワイトリスト"></div>
         <div class="head-texts">
           <div class="head-title-row">
             <span>Minecraft ホワイトリスト管理</span>
@@ -886,7 +882,7 @@ button.action-btn.sm{padding:6px 10px;font-size:var(--fz-11);}
             ?>
             <div class="wl-row">
               <div class="wl-name"><?= h($pname) ?></div>
-              <form method="post" style="margin:0;" onsubmit="return confirm('<?= h($pname) ?> を削除しますか？');">
+              <form method="post" style="margin:0;" onsubmit="return confirm(<?= h(json_encode($pname . ' を削除しますか？', JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_UNICODE)) ?>);">
                 <input type="hidden" name="mode" value="wl_delete">
                 <input type="hidden" name="csrf" value="<?= h($csrf) ?>">
                 <input type="hidden" name="player" value="<?= h($pname) ?>">

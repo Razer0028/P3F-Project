@@ -6,10 +6,18 @@ docker_update_cache: true
 docker_cache_valid_time: 0
 docker_restart_on_change: true
 
+# Debian 13 (trixie) の標準リポジトリのパッケージ名。
+# docker-compose-plugin / docker-buildx-plugin は download.docker.com 専用の名前で、
+# Debian 標準リポジトリには存在しない（tasks 側の在庫チェックで黙って除外され、
+# compose も buildx も入らない状態になっていた）。
+# docker-compose（v1, Python 版）は trixie で削除済みなので使わない。
+# download.docker.com を使う構成にする場合は host_vars で
+# [docker-ce, docker-ce-cli, containerd.io, docker-compose-plugin, docker-buildx-plugin]
+# に差し替える。
 docker_packages:
   - docker.io
-  - docker-compose-plugin
-  - docker-buildx-plugin
+  - docker-compose-v2
+  - docker-buildx
 
 docker_users: []
 

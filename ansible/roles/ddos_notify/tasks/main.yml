@@ -1,23 +1,23 @@
 ---
-- name: DDoS notify setup
+- name: DDoS 通知のセットアップ
   when: ddos_notify_manage | default(false)
   block:
-    - name: Validate DDoS notify variables
-      assert:
+    - name: DDoS 通知の変数を検証
+      ansible.builtin.assert:
         that:
           - ddos_notify_primary_ip | length > 0
-        fail_msg: "ddos_notify_primary_ip must be set"
+        fail_msg: "ddos_notify_primary_ip を設定してください"
 
-    - name: Ensure DDoS notify directory
-      file:
+    - name: DDoS 通知用ディレクトリを作成
+      ansible.builtin.file:
         path: "{{ ddos_notify_config_dir }}"
         state: directory
         owner: root
         group: root
         mode: "0755"
 
-    - name: Deploy DDoS notify script
-      template:
+    - name: DDoS 通知スクリプトを配置
+      ansible.builtin.template:
         src: ddos_watch_udp.py.j2
         dest: "{{ ddos_notify_script_path }}"
         owner: root
@@ -25,8 +25,8 @@
         mode: "0755"
       notify: Restart ddos notify
 
-    - name: Deploy DDoS notify systemd unit
-      template:
+    - name: DDoS 通知の systemd ユニットを配置
+      ansible.builtin.template:
         src: ddos_watch.service.j2
         dest: "{{ ddos_notify_unit_path }}"
         owner: root
@@ -34,8 +34,8 @@
         mode: "0644"
       notify: Restart ddos notify
 
-    - name: Ensure DDoS notify service state
-      systemd:
+    - name: DDoS 通知サービスの状態を設定
+      ansible.builtin.systemd_service:
         name: "{{ ddos_notify_service_name }}"
         enabled: true
         state: "{{ ddos_notify_service_state }}"

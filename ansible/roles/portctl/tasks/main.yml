@@ -1,22 +1,22 @@
 ---
-- name: Portctl configuration
+- name: portctl の構成
   when: portctl_manage | default(false)
   block:
 
-    - name: Detect portctl public interface
-      set_fact:
+    - name: portctl の公開インターフェースを検出
+      ansible.builtin.set_fact:
         portctl_public_interface: "{{ ansible_default_ipv4.interface }}"
       when: portctl_public_interface | default("") | length == 0
 
-    - name: Detect portctl NAT interface
-      set_fact:
+    - name: portctl の NAT インターフェースを検出
+      ansible.builtin.set_fact:
         portctl_nat_interface: "{{ portctl_public_interface }}"
       when:
         - portctl_nat_interface | default("") | length == 0
         - portctl_public_interface | default("") | length > 0
 
-    - name: Derive portctl WG bind from wireguard configs
-      set_fact:
+    - name: WireGuard 設定から portctl の WG バインドアドレスを導出
+      ansible.builtin.set_fact:
         portctl_web_wg_bind: >-
           {{
             (wireguard_configs | default([])
@@ -30,8 +30,8 @@
         - portctl_web_wg_bind | default("") | length == 0
         - wireguard_configs is defined
 
-    - name: Select portctl WG raw config content
-      set_fact:
+    - name: portctl の WG 生設定内容を選択
+      ansible.builtin.set_fact:
         portctl_wg_raw_content: >-
           {{
             (wireguard_raw_configs | default([])
@@ -45,8 +45,8 @@
         - portctl_web_wg_bind | default("") | length == 0
         - wireguard_raw_configs is defined
 
-    - name: Parse portctl WG address from raw config
-      set_fact:
+    - name: 生設定から portctl の WG アドレスを解析
+      ansible.builtin.set_fact:
         portctl_web_wg_bind: >-
           {{
             (
@@ -63,8 +63,8 @@
       when:
         - portctl_web_wg_bind | default("") | length == 0
         - portctl_wg_raw_content | default("") | length > 0
-    - name: Detect portctl WG bind address from live interface
-      command: ip -o -f inet addr show dev {{ portctl_wg_interface }}
+    - name: 稼働中インターフェースから portctl の WG バインドアドレスを検出
+      ansible.builtin.command: ip -o -f inet addr show dev {{ portctl_wg_interface }}
       register: portctl_wg_addr_raw
       changed_when: false
       failed_when: false
@@ -72,41 +72,41 @@
         - portctl_web_wg_bind | default("") | length == 0
         - portctl_enable_web_wg | default(true)
 
-    - name: Set portctl_web_wg_bind from live interface
-      set_fact:
+    - name: 稼働中インターフェースから portctl_web_wg_bind を設定
+      ansible.builtin.set_fact:
         portctl_web_wg_bind: "{{ (portctl_wg_addr_raw.stdout | regex_search('\\d+\\.\\d+\\.\\d+\\.\\d+')) | default('') }}"
       when:
         - portctl_web_wg_bind | default("") | length == 0
         - portctl_wg_addr_raw is defined
         - (portctl_wg_addr_raw.rc | default(1)) == 0
-    - name: Validate portctl variables
-      assert:
+    - name: portctl の変数を検証
+      ansible.builtin.assert:
         that:
           - not (portctl_enable_web_wg | default(true)) or (portctl_web_wg_bind | length > 0)
         fail_msg: >-
-          portctl_web_wg_bind must be set when portctl_enable_web_wg is true.
+          portctl_enable_web_wg が true の場合は portctl_web_wg_bind を設定してください。
 
-    - name: Install portctl packages
-      apt:
+    - name: portctl 用パッケージをインストール
+      ansible.builtin.apt:
         name: "{{ portctl_packages }}"
         state: present
         update_cache: "{{ portctl_update_cache | default(true) }}"
         cache_valid_time: "{{ (portctl_update_cache | default(true)) | ternary(3600, omit) }}"
       when: portctl_install_if_missing | default(true)
 
-    - name: Check ufw status
-      command: ufw status
+    - name: ufw の状態を確認
+      ansible.builtin.command: ufw status
       register: portctl_ufw_status
       changed_when: false
       failed_when: false
 
-    - name: Check UFW before.rules
-      stat:
+    - name: UFW before.rules を確認
+      ansible.builtin.stat:
         path: /etc/ufw/before.rules
       register: portctl_ufw_before_rules_stat
 
-    - name: Deploy UFW before.rules when missing
-      template:
+    - name: UFW before.rules が無い場合に配置
+      ansible.builtin.template:
         src: before.rules.j2
         dest: /etc/ufw/before.rules
         owner: root
@@ -119,8 +119,8 @@
         - (not portctl_ufw_before_rules_stat.stat.exists) or (portctl_ufw_before_rules_allow_overwrite | default(false))
       notify: Reload ufw
 
-    - name: Ensure portctl directories
-      file:
+    - name: portctl 用ディレクトリを作成
+      ansible.builtin.file:
         path: "{{ item }}"
         state: directory
         owner: root
@@ -132,43 +132,43 @@
         - "{{ portctl_web_root }}"
         - /var/lib/php/portctl-sessions
 
-    - name: Read existing agent metadata
-      stat:
+    - name: 既存エージェントの情報を取得
+      ansible.builtin.stat:
         path: "{{ portctl_agent_path }}"
       register: portctl_agent_stat
 
-    - name: Read existing web metadata
-      stat:
+    - name: 既存 Web UI の情報を取得
+      ansible.builtin.stat:
         path: "{{ portctl_web_root }}/index.php"
       register: portctl_web_stat
 
-    - name: Read existing config metadata
-      stat:
+    - name: 既存設定ファイルの情報を取得
+      ansible.builtin.stat:
         path: "{{ portctl_config_path }}"
       register: portctl_config_stat
 
-    - name: Read existing rules metadata
-      stat:
+    - name: 既存ルールファイルの情報を取得
+      ansible.builtin.stat:
         path: "{{ portctl_rules_path }}"
       register: portctl_rules_stat
 
-    - name: Warn when agent exists and overwrite is disabled
-      debug:
-        msg: "Existing {{ portctl_agent_path }} found; set portctl_allow_overwrite: true to replace"
+    - name: エージェントが存在し上書きが無効な場合に警告
+      ansible.builtin.debug:
+        msg: "{{ portctl_agent_path }} が既に存在します。置き換えるには portctl_allow_overwrite: true を指定してください"
       when: portctl_agent_stat.stat.exists and not (portctl_allow_overwrite | default(false))
 
-    - name: Warn when web UI exists and overwrite is disabled
-      debug:
-        msg: "Existing {{ portctl_web_root }}/index.php found; set portctl_allow_overwrite: true to replace"
+    - name: Web UI が存在し上書きが無効な場合に警告
+      ansible.builtin.debug:
+        msg: "{{ portctl_web_root }}/index.php が既に存在します。置き換えるには portctl_allow_overwrite: true を指定してください"
       when: portctl_web_stat.stat.exists and not (portctl_allow_overwrite | default(false))
 
-    - name: Warn when config exists and overwrite is disabled
-      debug:
-        msg: "Existing {{ portctl_config_path }} found; set portctl_allow_overwrite: true to replace"
+    - name: 設定ファイルが存在し上書きが無効な場合に警告
+      ansible.builtin.debug:
+        msg: "{{ portctl_config_path }} が既に存在します。置き換えるには portctl_allow_overwrite: true を指定してください"
       when: portctl_config_stat.stat.exists and not (portctl_allow_overwrite | default(false))
 
-    - name: Deploy portctl agent
-      copy:
+    - name: portctl エージェントを配置
+      ansible.builtin.copy:
         src: agent.py
         dest: "{{ portctl_agent_path }}"
         owner: root
@@ -178,8 +178,8 @@
         backup: "{{ portctl_allow_overwrite | default(false) }}"
       notify: Restart portctl
 
-    - name: Deploy portctl web UI
-      copy:
+    - name: portctl Web UI を配置
+      ansible.builtin.copy:
         src: portctl-web/index.php
         dest: "{{ portctl_web_root }}/index.php"
         owner: root
@@ -191,8 +191,8 @@
         - Restart portctl web
         - Restart portctl web local
 
-    - name: Ensure portctl rules file
-      copy:
+    - name: portctl ルールファイルを用意
+      ansible.builtin.copy:
         dest: "{{ portctl_rules_path }}"
         content: "[]\n"
         owner: root
@@ -201,8 +201,8 @@
         force: false
       when: not portctl_rules_stat.stat.exists
 
-    - name: Deploy portctl config
-      template:
+    - name: portctl 設定ファイルを配置
+      ansible.builtin.template:
         src: config.json.j2
         dest: "{{ portctl_config_path }}"
         owner: root
@@ -212,8 +212,8 @@
         backup: "{{ portctl_allow_overwrite | default(false) }}"
       notify: Restart portctl
 
-    - name: Deploy portctl systemd unit
-      template:
+    - name: portctl の systemd ユニットを配置
+      ansible.builtin.template:
         src: portctl.service.j2
         dest: "/etc/systemd/system/{{ portctl_service_name }}.service"
         owner: root
@@ -221,8 +221,8 @@
         mode: "0644"
       register: portctl_unit
 
-    - name: Deploy portctl web systemd unit (wg)
-      template:
+    - name: portctl Web の systemd ユニットを配置（wg）
+      ansible.builtin.template:
         src: portctl-web.service.j2
         dest: "/etc/systemd/system/{{ portctl_web_service_name }}.service"
         owner: root
@@ -231,8 +231,8 @@
       when: portctl_enable_web_wg | default(true)
       register: portctl_web_unit
 
-    - name: Deploy portctl web systemd unit (local)
-      template:
+    - name: portctl Web の systemd ユニットを配置（ローカル）
+      ansible.builtin.template:
         src: portctl-web-local.service.j2
         dest: "/etc/systemd/system/{{ portctl_web_local_service_name }}.service"
         owner: root
@@ -241,34 +241,34 @@
       when: portctl_enable_web_local | default(true)
       register: portctl_web_local_unit
 
-    - name: Reload systemd daemon
-      systemd:
+    - name: systemd デーモンを再読み込み
+      ansible.builtin.systemd_service:
         daemon_reload: true
-      when: portctl_unit.changed or (portctl_web_unit is defined and portctl_web_unit.changed) or (portctl_web_local_unit is defined and portctl_web_local_unit.changed)
+      when: portctl_unit is changed or (portctl_web_unit is defined and portctl_web_unit is changed) or (portctl_web_local_unit is defined and portctl_web_local_unit is changed)
 
-    - name: Ensure portctl service state
-      systemd:
+    - name: portctl サービスの状態を設定
+      ansible.builtin.systemd_service:
         name: "{{ portctl_service_name }}"
         enabled: true
         state: "{{ portctl_service_state }}"
       when: portctl_manage_service | default(false)
 
-    - name: Ensure portctl web service state (wg)
-      systemd:
+    - name: portctl Web サービスの状態を設定（wg）
+      ansible.builtin.systemd_service:
         name: "{{ portctl_web_service_name }}"
         enabled: true
         state: "{{ portctl_web_service_state }}"
       when: portctl_manage_service | default(false) and portctl_enable_web_wg | default(true)
 
-    - name: Ensure portctl web service state (local)
-      systemd:
+    - name: portctl Web サービスの状態を設定（ローカル）
+      ansible.builtin.systemd_service:
         name: "{{ portctl_web_local_service_name }}"
         enabled: true
         state: "{{ portctl_web_local_service_state }}"
       when: portctl_manage_service | default(false) and portctl_enable_web_local | default(true)
 
-    - name: Wait for portctl socket
-      wait_for:
+    - name: portctl のソケットを待機
+      ansible.builtin.wait_for:
         path: /run/portctl.sock
         timeout: 10
       when:
@@ -276,8 +276,8 @@
         - portctl_apply_rules | default(true)
         - (portctl_forward_rules | length > 0) or (portctl_ufw_rules | length > 0)
 
-    - name: Apply port forwarding rules
-      shell: |
+    - name: ポート転送ルールを適用
+      ansible.builtin.shell: |
         python3 - <<'PY'
         import json
         import os
@@ -319,8 +319,8 @@
         - portctl_apply_rules | default(true)
         - portctl_forward_rules | length > 0
 
-    - name: Apply UFW allow rules
-      shell: |
+    - name: UFW の許可ルールを適用
+      ansible.builtin.shell: |
         python3 - <<'PY'
         import json
         import os
@@ -361,14 +361,14 @@
         - portctl_apply_rules | default(true)
         - portctl_ufw_rules | length > 0
 
-    - name: Check ufw status after rules
-      command: ufw status
+    - name: ルール適用後に ufw の状態を確認
+      ansible.builtin.command: ufw status
       register: portctl_ufw_status_post
       changed_when: false
       failed_when: false
 
-    - name: Enable ufw when inactive (after rules)
-      command: ufw --force enable
+    - name: ufw が無効な場合に有効化（ルール適用後）
+      ansible.builtin.command: ufw --force enable
       when:
         - portctl_ufw_status_post.stdout is defined
         - "'inactive' in portctl_ufw_status_post.stdout.lower()"

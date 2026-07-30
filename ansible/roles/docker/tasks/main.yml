@@ -1,36 +1,38 @@
 ---
-- name: Docker configuration
+- name: Docker 設定
   when: docker_manage | default(false)
   block:
-    - name: Check for docker binary
-      command: command -v docker
+    # command は shell の組み込みコマンドなので ansible.builtin.command では実行できず、
+    # 常に rc != 0（= docker 未導入扱い）になっていた。shell モジュールで判定する。
+    - name: docker バイナリの有無を確認
+      ansible.builtin.shell: command -v docker
       register: docker_binary
       changed_when: false
       failed_when: false
 
-    - name: Check docker package availability
-      command: apt-cache show {{ item }}
+    - name: docker パッケージの提供状況を確認
+      ansible.builtin.command: apt-cache show {{ item }}
       register: docker_pkg_checks
       changed_when: false
       failed_when: false
       loop: "{{ docker_packages }}"
       when: (docker_install_if_missing | default(true) | bool) and docker_binary.rc != 0
 
-    - name: Select docker packages to install
-      set_fact:
+    - name: 導入する docker パッケージを選択
+      ansible.builtin.set_fact:
         docker_packages_to_install: "{{ docker_pkg_checks.results | selectattr('rc', 'equalto', 0) | map(attribute='item') | list }}"
       when: (docker_install_if_missing | default(true) | bool) and docker_binary.rc != 0
 
-    - name: Fail when no docker packages are available
-      fail:
-        msg: "No docker packages found in apt cache. Check apt sources or set docker_packages."
+    - name: 利用可能な docker パッケージが無い場合は中断
+      ansible.builtin.fail:
+        msg: "apt キャッシュに docker パッケージが見つかりません。apt のリポジトリ設定を確認するか、docker_packages を指定してください。"
       when:
         - (docker_install_if_missing | default(true) | bool)
         - docker_binary.rc != 0
         - docker_packages_to_install | default([]) | length == 0
 
-    - name: Install docker packages when missing
-      apt:
+    - name: docker が無い場合にパッケージを導入
+      ansible.builtin.apt:
         name: "{{ docker_packages_to_install | default(docker_packages) }}"
         state: present
         update_cache: "{{ docker_update_cache | default(true) }}"
@@ -44,21 +46,21 @@
         - docker_binary.rc != 0
         - docker_packages_to_install | default(docker_packages) | length > 0
 
-    - name: Ensure docker group exists
-      group:
+    - name: docker グループを作成
+      ansible.builtin.group:
         name: docker
         state: present
 
-    - name: Add users to docker group
-      user:
+    - name: ユーザーを docker グループに追加
+      ansible.builtin.user:
         name: "{{ item }}"
         groups: docker
         append: true
       loop: "{{ docker_users }}"
       when: docker_users | length > 0
 
-    - name: Ensure docker config directory
-      file:
+    - name: docker 設定ディレクトリを作成
+      ansible.builtin.file:
         path: /etc/docker
         state: directory
         owner: root
@@ -66,8 +68,8 @@
         mode: "0755"
       when: docker_manage_daemon_config | default(false)
 
-    - name: Write daemon.json
-      template:
+    - name: daemon.json を書き出し
+      ansible.builtin.template:
         src: daemon.json.j2
         dest: "{{ docker_daemon_config_path }}"
         owner: root
@@ -76,8 +78,8 @@
       when: docker_manage_daemon_config | default(false)
       notify: Restart docker
 
-    - name: Ensure docker service state
-      systemd:
+    - name: docker サービスの状態を設定
+      ansible.builtin.systemd_service:
         name: "{{ docker_service_name }}"
         enabled: "{{ docker_manage_service | default(true) }}"
         state: "{{ docker_manage_service | default(true) | ternary('started', 'stopped') }}"

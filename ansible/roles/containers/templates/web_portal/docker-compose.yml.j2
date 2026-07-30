@@ -1,8 +1,11 @@
-version: "3.9"
-
 services:
   web:
-    build: .
+    build:
+      context: .
+      args:
+        # ホスト側 docker グループの GID。合っていないと www-data が
+        # /var/run/docker.sock を直接読めず sudo 経由にフォールバックする。
+        DOCKER_GID: "{{ web_portal_docker_gid | default(125) }}"
     container_name: web_portal
     restart: always
 
@@ -15,6 +18,8 @@ services:
       LANG: ja_JP.UTF-8
       LC_ALL: ja_JP.UTF-8
       DISCORD_WEBHOOK_URL: "${DISCORD_WEBHOOK_URL}"
+      # Docker Engine の API バージョンを固定する（管理画面が docker.sock を直接叩くため）。
+      DOCKER_API_VERSION: "{{ web_portal_docker_api_version | default('1.41') }}"
 
     volumes:
       - ./public:/var/www/html/public

@@ -1,4 +1,4 @@
 ---
-- name: "${role} role placeholder"
-  debug:
-    msg: "${role} role not implemented yet"
+- name: "nginx ロールのプレースホルダー"
+  ansible.builtin.debug:
+    msg: "nginx ロールは未実装です"

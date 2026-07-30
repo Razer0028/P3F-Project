@@ -7,6 +7,9 @@ TF_CF_DIR := terraform-cloudflare
 TF_VARS := $(CONFIG_DIR)/terraform/terraform.tfvars
 TF_CF_VARS := $(CONFIG_DIR)/terraform-cloudflare/terraform.tfvars
 
+deps:
+	ansible-galaxy collection install -r ansible/requirements.yml
+
 bootstrap:
 	$(ANSIBLE)
 
@@ -61,12 +64,12 @@ deploy-ec2:
 
 portal:
 	@token=$$(openssl rand -hex 8); \
-	echo "Upload token: $$token"; \
-	echo "Open http://127.0.0.1:8000 in your browser"; \
+	echo "アップロード用トークン: $$token"; \
+	echo "ブラウザで http://127.0.0.1:8000 を開いてください"; \
 	PORTAL_UPLOAD_TOKEN=$$token python3 portal/server.py --bind 127.0.0.1 --port 8000
 
 portal-lan:
 	@token=$$(openssl rand -hex 8); \
-	echo "Upload token: $$token"; \
-	echo "Open http://<server-lan-ip>:8000 in your browser"; \
+	echo "アップロード用トークン: $$token"; \
+	echo "ブラウザで http://<サーバーのLAN IP>:8000 を開いてください"; \
 	PORTAL_UPLOAD_TOKEN=$$token python3 portal/server.py --bind 0.0.0.0 --port 8000

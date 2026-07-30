@@ -1,6 +1,6 @@
 ---
 - name: Restart frr
-  systemd:
+  ansible.builtin.systemd_service:
     name: "{{ frr_service_name }}"
     state: restarted
   when: frr_restart_on_change | default(false)

@@ -20,6 +20,12 @@ steamcmd_tarball: "/opt/serveradmin/archives/steamcmd_linux.tar.gz"
 
 web_portal_discord_webhook: ""
 
+# ホスト側 docker グループの GID。`getent group docker` の値に合わせる。
+# 合っていない場合、管理画面は sudo 経由で docker を叩くフォールバックになる。
+web_portal_docker_gid: 125
+# 管理画面が docker.sock を直接叩くときに使う Engine API バージョン。
+web_portal_docker_api_version: "1.41"
+
 web_portal_admin_enable: false
 web_portal_admin_user: ""
 web_portal_admin_password: ""

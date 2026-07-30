@@ -1,6 +1,6 @@
 ---
 - name: Restart docker
-  systemd:
+  ansible.builtin.systemd_service:
     name: "{{ docker_service_name }}"
     state: restarted
   when: docker_restart_on_change | default(true)

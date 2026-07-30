@@ -1,17 +1,17 @@
 ---
-- name: Container stack setup
+- name: コンテナスタックのセットアップ
   when: containers_manage | default(false)
   block:
-    - name: Ensure container group exists
-      group:
+    - name: コンテナ用グループを作成
+      ansible.builtin.group:
         name: "{{ containers_group }}"
         state: present
       when:
         - containers_manage_user | default(true)
         - containers_group != "root"
 
-    - name: Ensure container user exists
-      user:
+    - name: コンテナ用ユーザーを作成
+      ansible.builtin.user:
         name: "{{ containers_owner }}"
         group: "{{ containers_group }}"
         state: present
@@ -20,55 +20,57 @@
         - containers_manage_user | default(true)
         - containers_owner != "root"
 
-    - name: Read containers owner uid
-      command: id -u {{ containers_owner }}
+    - name: コンテナ所有者の uid を取得
+      ansible.builtin.command: id -u {{ containers_owner }}
       register: containers_owner_uid_cmd
       changed_when: false
       when: containers_owner != "root"
 
-    - name: Read containers owner gid
-      command: id -g {{ containers_owner }}
+    - name: コンテナ所有者の gid を取得
+      ansible.builtin.command: id -g {{ containers_owner }}
       register: containers_owner_gid_cmd
       changed_when: false
       when: containers_owner != "root"
 
-    - name: Set containers owner uid/gid facts
-      set_fact:
+    - name: コンテナ所有者の uid/gid をファクトに設定
+      ansible.builtin.set_fact:
         containers_owner_uid: "{{ containers_owner_uid_cmd.stdout }}"
         containers_owner_gid: "{{ containers_owner_gid_cmd.stdout }}"
       when: containers_owner != "root"
 
-    - name: Set containers owner uid/gid for root
-      set_fact:
+    - name: root 用にコンテナ所有者の uid/gid を設定
+      ansible.builtin.set_fact:
         containers_owner_uid: 0
         containers_owner_gid: 0
       when: containers_owner == "root"
 
-    - name: Ensure container root
-      file:
+    - name: コンテナ配置先ディレクトリを作成
+      ansible.builtin.file:
         path: "{{ containers_root }}"
         state: directory
         owner: "{{ containers_owner }}"
         group: "{{ containers_group }}"
         mode: "0755"
 
-    - name: Detect docker compose command
+    - name: docker compose コマンドを検出
       block:
-        - name: Check configured compose command
-          shell: "{{ containers_compose_cmd }} version"
+        - name: 設定された compose コマンドを確認
+          ansible.builtin.shell: "{{ containers_compose_cmd }} version"
           register: containers_compose_check
           changed_when: false
           failed_when: false
 
-        - name: Check legacy docker-compose command
-          command: docker-compose --version
+        - name: 旧 docker-compose コマンドを確認
+          ansible.builtin.command: docker-compose --version
           register: containers_compose_legacy
           changed_when: false
           failed_when: false
 
-        - name: Install docker-compose when missing (optional)
-          apt:
-            name: docker-compose
+        # docker-compose（v1, Python 版）は Debian 13 で削除されたため
+        # `docker compose` を提供する v2 プラグインを入れる。
+        - name: docker-compose が無い場合にインストール（任意）
+          ansible.builtin.apt:
+            name: docker-compose-v2
             state: present
             update_cache: "{{ containers_compose_update_cache | default(true) }}"
             cache_valid_time: "{{ (containers_compose_update_cache | default(true)) | ternary(containers_compose_cache_valid_time | default(0), omit) }}"
@@ -81,58 +83,58 @@
             - (containers_compose_check.rc | default(1)) != 0
             - (containers_compose_legacy.rc | default(1)) != 0
 
-        - name: Re-check compose commands after install
+        - name: インストール後に compose コマンドを再確認
           when:
             - containers_install_compose | default(true)
             - (containers_compose_check.rc | default(1)) != 0
             - (containers_compose_legacy.rc | default(1)) != 0
           block:
-            - name: Check configured compose command (post-install)
-              shell: "{{ containers_compose_cmd }} version"
+            - name: 設定された compose コマンドを確認（インストール後）
+              ansible.builtin.shell: "{{ containers_compose_cmd }} version"
               register: containers_compose_check
               changed_when: false
               failed_when: false
 
-            - name: Check legacy docker-compose command (post-install)
-              command: docker-compose --version
+            - name: 旧 docker-compose コマンドを確認（インストール後）
+              ansible.builtin.command: docker-compose --version
               register: containers_compose_legacy
               changed_when: false
               failed_when: false
 
-        - name: Select available compose command
-          set_fact:
+        - name: 利用可能な compose コマンドを選択
+          ansible.builtin.set_fact:
             containers_compose_cmd: >-
               {{ 'docker-compose'
                  if (containers_compose_check.rc | default(1)) != 0 and (containers_compose_legacy.rc | default(1)) == 0
                  else containers_compose_cmd }}
 
-        - name: Verify selected compose command
-          shell: "{{ containers_compose_cmd }} version"
+        - name: 選択した compose コマンドを検証
+          ansible.builtin.shell: "{{ containers_compose_cmd }} version"
           register: containers_compose_final_check
           changed_when: false
           failed_when: false
 
-        - name: Fallback to legacy compose when selected command fails
+        - name: 選択したコマンドが失敗した場合は旧 compose にフォールバック
           when: (containers_compose_final_check.rc | default(1)) != 0
           block:
-            - name: Check legacy docker-compose command (fallback)
-              command: docker-compose --version
+            - name: 旧 docker-compose コマンドを確認（フォールバック）
+              ansible.builtin.command: docker-compose --version
               register: containers_compose_legacy_final
               changed_when: false
               failed_when: false
 
-            - name: Use legacy docker-compose when available
-              set_fact:
+            - name: 利用可能な場合は旧 docker-compose を使用
+              ansible.builtin.set_fact:
                 containers_compose_cmd: "docker-compose"
               when: (containers_compose_legacy_final.rc | default(1)) == 0
 
-            - name: Fail when no compose command is available
-              fail:
-                msg: "Neither docker compose nor docker-compose is available"
+            - name: 利用可能な compose コマンドが無い場合は失敗させる
+              ansible.builtin.fail:
+                msg: "docker compose も docker-compose も利用できません"
               when: (containers_compose_legacy_final.rc | default(1)) != 0
 
-    - name: Ensure /opt/serveradmin tree
-      file:
+    - name: /opt/serveradmin 配下のディレクトリ構成を作成
+      ansible.builtin.file:
         path: "{{ item }}"
         state: directory
         owner: root
@@ -146,16 +148,16 @@
         - /opt/serveradmin/status
         - /opt/serveradmin/config
 
-    - name: Ensure archives directory
-      file:
+    - name: アーカイブ用ディレクトリを作成
+      ansible.builtin.file:
         path: /opt/serveradmin/archives
         state: directory
         owner: root
         group: root
         mode: "0755"
 
-    - name: Copy game archives
-      copy:
+    - name: ゲームアーカイブをコピー
+      ansible.builtin.copy:
         src: "archives/{{ item }}"
         dest: "/opt/serveradmin/archives/{{ item }}"
         owner: root
@@ -166,16 +168,16 @@
         - valheim.tar.gz
         - 7dtd.tar.gz
 
-    - name: Ensure mirror archives directory
-      file:
+    - name: ミラー用アーカイブディレクトリを作成
+      ansible.builtin.file:
         path: "{{ containers_root }}/monitor/opt_serveradmin/archives"
         state: directory
         owner: "{{ containers_owner }}"
         group: "{{ containers_group }}"
         mode: "0755"
 
-    - name: Copy game archives (mirror)
-      copy:
+    - name: ゲームアーカイブをコピー（ミラー）
+      ansible.builtin.copy:
         src: "archives/{{ item }}"
         dest: "{{ containers_root }}/monitor/opt_serveradmin/archives/{{ item }}"
         owner: "{{ containers_owner }}"
@@ -186,29 +188,29 @@
         - valheim.tar.gz
         - 7dtd.tar.gz
 
-    - name: Ensure SteamCMD assets
+    - name: SteamCMD 資材を準備
       when: "'valheim' in containers_enabled or '7dtd' in containers_enabled"
       block:
-        - name: Ensure SteamCMD directory exists
-          file:
+        - name: SteamCMD 用ディレクトリを作成
+          ansible.builtin.file:
             path: "{{ steamcmd_dir }}"
             state: directory
             owner: "{{ steamcmd_owner }}"
             group: "{{ steamcmd_group }}"
             mode: "0755"
 
-        - name: Check SteamCMD install
-          stat:
+        - name: SteamCMD のインストール状況を確認
+          ansible.builtin.stat:
             path: "{{ steamcmd_dir }}/steamcmd.sh"
           register: steamcmd_stat
 
-        - name: Check SteamCMD tarball
-          stat:
+        - name: SteamCMD の tarball を確認
+          ansible.builtin.stat:
             path: "{{ steamcmd_tarball }}"
           register: steamcmd_tarball_stat
 
-        - name: Download SteamCMD
-          get_url:
+        - name: SteamCMD をダウンロード
+          ansible.builtin.get_url:
             url: "https://steamcdn-a.akamaihd.net/client/installer/steamcmd_linux.tar.gz"
             dest: "{{ steamcmd_tarball }}"
             mode: "0644"
@@ -217,19 +219,19 @@
             - not steamcmd_stat.stat.exists
             - not steamcmd_tarball_stat.stat.exists
 
-        - name: Set SteamCMD tarball exists flag
-          set_fact:
+        - name: SteamCMD tarball の存在フラグを設定
+          ansible.builtin.set_fact:
             steamcmd_tarball_exists: "{{ steamcmd_tarball_stat.stat.exists or (steamcmd_download is defined and steamcmd_download is succeeded) }}"
 
-        - name: Fail when SteamCMD tarball missing
-          fail:
-            msg: "SteamCMD tarball not found at {{ steamcmd_tarball }}. Place it there or enable outbound DNS for download."
+        - name: SteamCMD tarball が無い場合は失敗させる
+          ansible.builtin.fail:
+            msg: "SteamCMD の tarball が {{ steamcmd_tarball }} に見つかりません。配置するか、ダウンロード用に外向き DNS を有効にしてください。"
           when:
             - not steamcmd_stat.stat.exists
             - not steamcmd_tarball_exists
 
-        - name: Extract SteamCMD
-          unarchive:
+        - name: SteamCMD を展開
+          ansible.builtin.unarchive:
             src: "{{ steamcmd_tarball }}"
             dest: "{{ steamcmd_dir }}"
             remote_src: true
@@ -239,8 +241,8 @@
             - not steamcmd_stat.stat.exists
             - steamcmd_tarball_exists
 
-        - name: Ensure SteamCMD binaries are executable
-          file:
+        - name: SteamCMD のバイナリに実行権限を付与
+          ansible.builtin.file:
             path: "{{ item }}"
             owner: "{{ steamcmd_owner }}"
             group: "{{ steamcmd_group }}"
@@ -250,8 +252,8 @@
             - "{{ steamcmd_dir }}/linux32/steamcmd"
           when: steamcmd_tarball_exists
 
-    - name: Ensure monitor serveradmin tree
-      file:
+    - name: モニター用 serveradmin ディレクトリ構成を作成
+      ansible.builtin.file:
         path: "{{ item }}"
         state: directory
         owner: "{{ containers_owner }}"
@@ -265,8 +267,8 @@
         - "{{ containers_root }}/monitor/opt_serveradmin/status"
         - "{{ containers_root }}/monitor/opt_serveradmin/config"
 
-    - name: Install serveradmin helper scripts
-      template:
+    - name: serveradmin 補助スクリプトを配置
+      ansible.builtin.template:
         src: "serveradmin/bin/{{ item }}.j2"
         dest: "/opt/serveradmin/bin/{{ item }}"
         owner: root
@@ -276,8 +278,8 @@
         - docker_manage.sh
         - game_admin.sh
 
-    - name: Install serveradmin monitor scripts
-      copy:
+    - name: serveradmin 監視スクリプトを配置
+      ansible.builtin.copy:
         src: "serveradmin/scripts/{{ item }}"
         dest: "/opt/serveradmin/scripts/{{ item }}"
         owner: root
@@ -286,8 +288,8 @@
       loop:
         - player_monitor.py
 
-    - name: Mirror helper scripts for monitor mount
-      template:
+    - name: モニターマウント用に補助スクリプトをミラー
+      ansible.builtin.template:
         src: "serveradmin/bin/{{ item }}.j2"
         dest: "{{ containers_root }}/monitor/opt_serveradmin/bin/{{ item }}"
         owner: "{{ containers_owner }}"
@@ -297,8 +299,8 @@
         - docker_manage.sh
         - game_admin.sh
 
-    - name: Mirror monitor scripts for monitor mount
-      copy:
+    - name: モニターマウント用に監視スクリプトをミラー
+      ansible.builtin.copy:
         src: "serveradmin/scripts/{{ item }}"
         dest: "{{ containers_root }}/monitor/opt_serveradmin/scripts/{{ item }}"
         owner: "{{ containers_owner }}"
@@ -307,8 +309,8 @@
       loop:
         - player_monitor.py
 
-    - name: Ensure status JSON exists
-      copy:
+    - name: ステータス JSON を用意
+      ansible.builtin.copy:
         dest: "{{ item }}"
         content: "{}\n"
         owner: "{{ containers_owner }}"
@@ -319,54 +321,54 @@
         - /opt/serveradmin/status/current_players.json
         - "{{ containers_root }}/monitor/opt_serveradmin/status/current_players.json"
 
-    - name: Write portal services config (host)
-      template:
+    - name: ポータルサービス設定を書き出し（ホスト）
+      ansible.builtin.template:
         src: portal_services.json.j2
         dest: /opt/serveradmin/config/portal_services.json
         owner: root
         group: root
         mode: "0644"
 
-    - name: Write portal services config (monitor mount)
-      template:
+    - name: ポータルサービス設定を書き出し（モニターマウント）
+      ansible.builtin.template:
         src: portal_services.json.j2
         dest: "{{ containers_root }}/monitor/opt_serveradmin/config/portal_services.json"
         owner: "{{ containers_owner }}"
         group: "www-data"
         mode: "0664"
 
-    - name: Deploy minecraft container files
+    - name: minecraft コンテナ用ファイルを配置
       when: "'minecraft' in containers_enabled"
       block:
-        - name: Ensure minecraft directory
-          file:
+        - name: minecraft 用ディレクトリを作成
+          ansible.builtin.file:
             path: "{{ containers_root }}/minecraft"
             state: directory
             owner: "{{ containers_owner }}"
             group: "{{ containers_group }}"
             mode: "0755"
-        - name: Ensure minecraft data directory
-          file:
+        - name: minecraft のデータディレクトリを作成
+          ansible.builtin.file:
             path: "{{ containers_root }}/minecraft/data"
             state: directory
             owner: "{{ containers_owner }}"
             group: "www-data"
             mode: "0775"
-        - name: Extract minecraft build context
-          unarchive:
+        - name: minecraft のビルドコンテキストを展開
+          ansible.builtin.unarchive:
             src: "archives/minecraft.tar.gz"
             dest: "{{ containers_root }}/minecraft"
             owner: "{{ containers_owner }}"
             group: "{{ containers_group }}"
 
-        - name: Ensure minecraft start script is executable
-          file:
+        - name: minecraft の起動スクリプトに実行権限を付与
+          ansible.builtin.file:
             path: "{{ containers_root }}/minecraft/start.sh"
             owner: "{{ containers_owner }}"
             group: "{{ containers_group }}"
             mode: "0755"
-        - name: Ensure minecraft whitelist is writable by web portal
-          copy:
+        - name: minecraft の whitelist を Web ポータルから書き込み可能にする
+          ansible.builtin.copy:
             dest: "{{ containers_root }}/minecraft/data/whitelist.json"
             content: "[]\n"
             owner: "{{ containers_owner }}"
@@ -374,61 +376,61 @@
             mode: "0664"
             force: false
 
-    - name: Deploy valheim container files
+    - name: valheim コンテナ用ファイルを配置
       when: "'valheim' in containers_enabled"
       block:
-        - name: Ensure valheim directory
-          file:
+        - name: valheim 用ディレクトリを作成
+          ansible.builtin.file:
             path: "{{ containers_root }}/valheim_server"
             state: directory
             owner: "{{ containers_owner }}"
             group: "{{ containers_group }}"
             mode: "0755"
-        - name: Ensure valheim data directory
-          file:
+        - name: valheim のデータディレクトリを作成
+          ansible.builtin.file:
             path: "{{ containers_root }}/valheim_server/data"
             state: directory
             owner: "{{ containers_owner }}"
             group: "{{ containers_group }}"
             mode: "0755"
-        - name: Extract valheim build context
-          unarchive:
+        - name: valheim のビルドコンテキストを展開
+          ansible.builtin.unarchive:
             src: "archives/valheim.tar.gz"
             dest: "{{ containers_root }}/valheim_server"
             owner: "{{ containers_owner }}"
             group: "{{ containers_group }}"
 
-        - name: Normalize valheim data volume path
-          replace:
+        - name: valheim のデータボリュームパスを正規化
+          ansible.builtin.replace:
             path: "{{ containers_root }}/valheim_server/docker-compose.yml"
             regexp: "/home/gameadmin/valheim_server/data"
             replace: "./data"
 
-        - name: Normalize valheim steamcmd volume path
-          replace:
+        - name: valheim の steamcmd ボリュームパスを正規化
+          ansible.builtin.replace:
             path: "{{ containers_root }}/valheim_server/docker-compose.yml"
             regexp: "/home/gameadmin/steamcmd"
             replace: "{{ steamcmd_dir }}"
 
-        - name: Ensure valheim start script is executable
-          file:
+        - name: valheim の起動スクリプトに実行権限を付与
+          ansible.builtin.file:
             path: "{{ containers_root }}/valheim_server/run_valheim.sh"
             owner: "{{ containers_owner }}"
             group: "{{ containers_group }}"
             mode: "0755"
 
-    - name: Deploy 7dtd container files
+    - name: 7dtd コンテナ用ファイルを配置
       when: "'7dtd' in containers_enabled"
       block:
-        - name: Ensure 7dtd directory
-          file:
+        - name: 7dtd 用ディレクトリを作成
+          ansible.builtin.file:
             path: "{{ containers_root }}/7dtd_server"
             state: directory
             owner: "{{ containers_owner }}"
             group: "{{ containers_group }}"
             mode: "0755"
-        - name: Ensure 7dtd data directories
-          file:
+        - name: 7dtd のデータディレクトリを作成
+          ansible.builtin.file:
             path: "{{ containers_root }}/7dtd_server/{{ item }}"
             state: directory
             owner: "{{ containers_owner }}"
@@ -438,45 +440,45 @@
             - serverfiles
             - data
             - logs
-        - name: Extract 7dtd build context
-          unarchive:
+        - name: 7dtd のビルドコンテキストを展開
+          ansible.builtin.unarchive:
             src: "archives/7dtd.tar.gz"
             dest: "{{ containers_root }}/7dtd_server"
             owner: "{{ containers_owner }}"
             group: "{{ containers_group }}"
 
-        - name: Normalize 7dtd steamcmd volume path
-          replace:
+        - name: 7dtd の steamcmd ボリュームパスを正規化
+          ansible.builtin.replace:
             path: "{{ containers_root }}/7dtd_server/docker-compose.yml"
             regexp: "/home/gameadmin/steamcmd"
             replace: "{{ steamcmd_dir }}"
 
-        - name: Ensure 7dtd check_mapcount returns success
-          lineinfile:
+        - name: 7dtd の check_mapcount が成功を返すようにする
+          ansible.builtin.lineinfile:
             path: "{{ containers_root }}/7dtd_server/start_7dtd.sh"
             line: "  return 0"
             insertbefore: "^}$"
             firstmatch: true
 
-        - name: Ensure 7dtd start script is executable
-          file:
+        - name: 7dtd の起動スクリプトに実行権限を付与
+          ansible.builtin.file:
             path: "{{ containers_root }}/7dtd_server/start_7dtd.sh"
             owner: "{{ containers_owner }}"
             group: "{{ containers_group }}"
             mode: "0755"
 
-    - name: Deploy web portal files
+    - name: Web ポータル用ファイルを配置
       when: "'web_portal' in containers_enabled"
       block:
-        - name: Ensure web portal directory
-          file:
+        - name: Web ポータル用ディレクトリを作成
+          ansible.builtin.file:
             path: "{{ containers_root }}/web"
             state: directory
             owner: "{{ containers_owner }}"
             group: "{{ containers_group }}"
             mode: "0755"
-        - name: Copy web portal core files
-          copy:
+        - name: Web ポータルの主要ファイルをコピー
+          ansible.builtin.copy:
             src: "web_portal/{{ item }}"
             dest: "{{ containers_root }}/web/{{ item }}"
             owner: "{{ containers_owner }}"
@@ -485,15 +487,15 @@
           loop:
             - Dockerfile
             - sudoers_www
-        - name: Render web portal docker-compose
-          template:
+        - name: Web ポータルの docker-compose を生成
+          ansible.builtin.template:
             src: web_portal/docker-compose.yml.j2
             dest: "{{ containers_root }}/web/docker-compose.yml"
             owner: "{{ containers_owner }}"
             group: "{{ containers_group }}"
             mode: "0644"
-        - name: Copy web portal directories
-          copy:
+        - name: Web ポータルのディレクトリをコピー
+          ansible.builtin.copy:
             src: "web_portal/{{ item }}/"
             dest: "{{ containers_root }}/web/{{ item }}/"
             owner: "{{ containers_owner }}"
@@ -503,77 +505,77 @@
             - admin
             - public
 
-        - name: Remove nested web portal directories
-          file:
+        - name: Web ポータルの入れ子ディレクトリを削除
+          ansible.builtin.file:
             path: "{{ containers_root }}/web/{{ item }}/{{ item }}"
             state: absent
           loop:
             - admin
             - public
 
-        - name: Ensure web portal scripts directory
-          file:
+        - name: Web ポータルの scripts ディレクトリを作成
+          ansible.builtin.file:
             path: "{{ containers_root }}/web/public/scripts"
             state: directory
             owner: "{{ containers_owner }}"
             group: "{{ containers_group }}"
             mode: "0755"
 
-        - name: Render web portal portal_config.php
-          template:
+        - name: Web ポータルの portal_config.php を生成
+          ansible.builtin.template:
             src: web_portal/public/scripts/portal_config.php.j2
             dest: "{{ containers_root }}/web/public/scripts/portal_config.php"
             owner: "{{ containers_owner }}"
             group: "{{ containers_group }}"
             mode: "0644"
-        - name: Render web portal server_portal.php
-          template:
+        - name: Web ポータルの server_portal.php を生成
+          ansible.builtin.template:
             src: web_portal/public/scripts/server_portal.php.j2
             dest: "{{ containers_root }}/web/public/scripts/server_portal.php"
             owner: "{{ containers_owner }}"
             group: "{{ containers_group }}"
             mode: "0644"
-        - name: Render web portal docker_panel.php
-          template:
+        - name: Web ポータルの docker_panel.php を生成
+          ansible.builtin.template:
             src: web_portal/admin/docker_panel.php.j2
             dest: "{{ containers_root }}/web/admin/docker_panel.php"
             owner: "{{ containers_owner }}"
             group: "{{ containers_group }}"
             mode: "0644"
 
-        - name: Ensure web portal apache directory
-          file:
+        - name: Web ポータルの apache ディレクトリを作成
+          ansible.builtin.file:
             path: "{{ containers_root }}/web/apache"
             state: directory
             owner: "{{ containers_owner }}"
             group: "{{ containers_group }}"
             mode: "0755"
 
-        - name: Render web portal apache vhost
-          template:
+        - name: Web ポータルの apache vhost を生成
+          ansible.builtin.template:
             src: 000-default.conf.j2
             dest: "{{ containers_root }}/web/apache/000-default.conf"
             owner: "{{ containers_owner }}"
             group: "{{ containers_group }}"
             mode: "0644"
 
-        - name: Validate web portal admin credentials
-          assert:
+        - name: Web ポータルの管理者資格情報を検証
+          ansible.builtin.assert:
             that:
               - web_portal_admin_user | length > 0
               - web_portal_admin_password | length > 0
-            fail_msg: "web_portal_admin_enable requires web_portal_admin_user and web_portal_admin_password"
+            fail_msg: "web_portal_admin_enable を有効にする場合は web_portal_admin_user と web_portal_admin_password が必要です"
           when: web_portal_admin_enable | default(false)
           no_log: true
 
-        - name: Compute web portal admin digest
-          set_fact:
+        - name: Web ポータルの管理者ダイジェストを計算
+          ansible.builtin.set_fact:
             web_portal_admin_htdigest_line: "{{ web_portal_admin_user }}:{{ web_portal_admin_realm | default(\"admin-panel\") }}:{{ (web_portal_admin_user ~ \":\" ~ (web_portal_admin_realm | default(\"admin-panel\")) ~ \":\" ~ web_portal_admin_password) | hash(\"md5\") }}"
           when: web_portal_admin_enable | default(false)
           no_log: true
 
-        - name: Write web portal admin digest (generated)
-          copy:
+        - name: Web ポータルの管理者ダイジェストを書き出し（自動生成）
+          ansible.builtin.copy:
             dest: "{{ containers_root }}/web/admin/.htdigest"
             content: "{{ web_portal_admin_htdigest_line }}\n"
             owner: "{{ containers_owner }}"
@@ -582,8 +584,8 @@
           when: web_portal_admin_enable | default(false)
           no_log: true
 
-        - name: Write web portal admin digest (manual)
-          copy:
+        - name: Web ポータルの管理者ダイジェストを書き出し（手動指定）
+          ansible.builtin.copy:
             dest: "{{ containers_root }}/web/admin/.htdigest"
             content: "{{ web_portal_admin_htdigest | trim }}\n"
             owner: "{{ containers_owner }}"
@@ -594,16 +596,16 @@
             - web_portal_admin_htdigest | default("") | length > 0
           no_log: true
 
-        - name: Remove web portal admin digest when unset
-          file:
+        - name: 未設定の場合は Web ポータルの管理者ダイジェストを削除
+          ansible.builtin.file:
             path: "{{ containers_root }}/web/admin/.htdigest"
             state: absent
           when:
             - not (web_portal_admin_enable | default(false))
             - web_portal_admin_htdigest | default("") | length == 0
 
-        - name: Write web portal .env (optional)
-          copy:
+        - name: Web ポータルの .env を書き出し（任意）
+          ansible.builtin.copy:
             dest: "{{ containers_root }}/web/.env"
             content: "DISCORD_WEBHOOK_URL={{ web_portal_discord_webhook }}\n"
             owner: "{{ containers_owner }}"
@@ -612,18 +614,18 @@
           when: web_portal_discord_webhook | default('') | length > 0
           no_log: true
 
-    - name: Deploy player monitor files
+    - name: プレイヤーモニター用ファイルを配置
       when: "'player_monitor' in containers_enabled"
       block:
-        - name: Ensure monitor directory
-          file:
+        - name: モニター用ディレクトリを作成
+          ansible.builtin.file:
             path: "{{ containers_root }}/monitor"
             state: directory
             owner: "{{ containers_owner }}"
             group: "{{ containers_group }}"
             mode: "0755"
-        - name: Copy monitor files
-          copy:
+        - name: モニター用ファイルをコピー
+          ansible.builtin.copy:
             src: "monitor/{{ item }}"
             dest: "{{ containers_root }}/monitor/{{ item }}"
             owner: "{{ containers_owner }}"
@@ -633,50 +635,50 @@
             - Dockerfile
             - player_monitor.logrotate
             - start.sh
-        - name: Render monitor docker-compose
-          template:
+        - name: モニターの docker-compose を生成
+          ansible.builtin.template:
             src: monitor/docker-compose.yml.j2
             dest: "{{ containers_root }}/monitor/docker-compose.yml"
             owner: "{{ containers_owner }}"
             group: "{{ containers_group }}"
             mode: "0644"
 
-    - name: Start minecraft container
+    - name: minecraft コンテナを起動
       when:
         - containers_start | default(false)
         - "'minecraft' in containers_enabled"
-      command: "{{ containers_compose_cmd | default('docker compose') }} up -d --build"
+      ansible.builtin.command: "{{ containers_compose_cmd | default('docker compose') }} up -d --build"
       args:
         chdir: "{{ containers_root }}/minecraft"
 
-    - name: Start valheim container
+    - name: valheim コンテナを起動
       when:
         - containers_start | default(false)
         - "'valheim' in containers_enabled"
-      command: "{{ containers_compose_cmd | default('docker compose') }} up -d --build"
+      ansible.builtin.command: "{{ containers_compose_cmd | default('docker compose') }} up -d --build"
       args:
         chdir: "{{ containers_root }}/valheim_server"
 
-    - name: Start 7dtd container
+    - name: 7dtd コンテナを起動
       when:
         - containers_start | default(false)
         - "'7dtd' in containers_enabled"
-      command: "{{ containers_compose_cmd | default('docker compose') }} up -d --build"
+      ansible.builtin.command: "{{ containers_compose_cmd | default('docker compose') }} up -d --build"
       args:
         chdir: "{{ containers_root }}/7dtd_server"
 
-    - name: Start web portal container
+    - name: Web ポータルコンテナを起動
       when:
         - containers_start | default(false)
         - "'web_portal' in containers_enabled"
-      command: "{{ containers_compose_cmd | default('docker compose') }} up -d --build"
+      ansible.builtin.command: "{{ containers_compose_cmd | default('docker compose') }} up -d --build"
       args:
         chdir: "{{ containers_root }}/web"
 
-    - name: Start player monitor container
+    - name: プレイヤーモニターコンテナを起動
       when:
         - containers_start | default(false)
         - "'player_monitor' in containers_enabled"
-      command: "{{ containers_compose_cmd | default('docker compose') }} up -d --build"
+      ansible.builtin.command: "{{ containers_compose_cmd | default('docker compose') }} up -d --build"
       args:
         chdir: "{{ containers_root }}/monitor"

@@ -1,15 +1,15 @@
 ---
-- name: FRR configuration
+- name: FRR の設定
   when: frr_manage | default(false)
   block:
-    - name: Check for FRR binary
-      command: "{{ frr_binary_path }} --version"
+    - name: FRR バイナリを確認
+      ansible.builtin.command: "{{ frr_binary_path }} --version"
       register: frr_binary
       changed_when: false
       failed_when: false
 
-    - name: Install FRR packages when missing
-      apt:
+    - name: FRR パッケージが存在しない場合に導入
+      ansible.builtin.apt:
         name: "{{ frr_packages }}"
         state: present
         update_cache: "{{ frr_update_cache | default(true) }}"
@@ -20,26 +20,26 @@
       until: frr_install is succeeded
       when: frr_install_if_missing | default(true) and frr_binary.rc != 0
 
-    - name: Ensure /etc/frr exists
-      file:
+    - name: /etc/frr の存在を確認
+      ansible.builtin.file:
         path: /etc/frr
         state: directory
         owner: "{{ frr_owner_default }}"
         group: "{{ frr_group_default }}"
         mode: "0750"
 
-    - name: Read existing frr.conf metadata
-      stat:
+    - name: 既存の frr.conf のメタデータを取得
+      ansible.builtin.stat:
         path: "{{ frr_conf_path }}"
       register: frr_conf_stat
 
-    - name: Read existing daemons metadata
-      stat:
+    - name: 既存の daemons のメタデータを取得
+      ansible.builtin.stat:
         path: "{{ frr_daemons_path }}"
       register: frr_daemons_stat
 
-    - name: Build FRR config payloads
-      set_fact:
+    - name: FRR の設定内容を生成
+      ansible.builtin.set_fact:
         frr_config_final: >-
           {{ lookup('template', 'frr.conf.j2')
              if (frr_generate_config | default(false))
@@ -49,50 +49,50 @@
              if (frr_generate_config | default(false))
              else (frr_daemons_content | default('')) }}
 
-    - name: Determine FRR service readiness
-      set_fact:
+    - name: FRR サービスの準備状況を判定
+      ansible.builtin.set_fact:
         frr_config_ready: "{{ (frr_config_final | length > 0) or (frr_conf_stat.stat.exists | default(false)) }}"
         frr_daemons_ready: "{{ (frr_daemons_final | length > 0) or (frr_daemons_stat.stat.exists | default(false)) }}"
 
-    - name: Combine FRR readiness
-      set_fact:
+    - name: FRR の準備状況をまとめる
+      ansible.builtin.set_fact:
         frr_service_ready: "{{ (frr_config_ready | default(false)) and (frr_daemons_ready | default(false)) }}"
 
-    - name: Warn when FRR service is skipped due to missing config
-      debug:
-        msg: "FRR service skipped: frr.conf/daemons not ready (set frr_generate_config or frr_config_content/daemons)."
+    - name: 設定不足により FRR サービスをスキップする場合に警告
+      ansible.builtin.debug:
+        msg: "FRR サービスをスキップします: frr.conf/daemons が未準備です (frr_generate_config または frr_config_content/daemons を設定してください)。"
       when: (frr_manage_service | default(false)) and not (frr_service_ready | default(false))
 
-    - name: Select frr.conf owner/group
-      set_fact:
+    - name: frr.conf の所有者/グループを決定
+      ansible.builtin.set_fact:
         frr_conf_owner: "{{ frr_conf_stat.stat.pw_name | default(frr_owner_default) }}"
         frr_conf_group: "{{ frr_conf_stat.stat.gr_name | default(frr_group_default) }}"
 
-    - name: Select daemons owner/group
-      set_fact:
+    - name: daemons の所有者/グループを決定
+      ansible.builtin.set_fact:
         frr_daemons_owner: "{{ frr_daemons_stat.stat.pw_name | default(frr_daemons_owner_default) }}"
         frr_daemons_group: "{{ frr_daemons_stat.stat.gr_name | default(frr_daemons_group_default) }}"
 
-    - name: Warn when frr.conf exists and overwrite is disabled
-      debug:
-        msg: "Existing {{ frr_conf_path }} found; set frr_allow_overwrite: true to replace"
+    - name: frr.conf が存在し上書きが無効な場合に警告
+      ansible.builtin.debug:
+        msg: "{{ frr_conf_path }} が既に存在します。置き換えるには frr_allow_overwrite: true を指定してください"
       when: frr_conf_stat.stat.exists and not (frr_allow_overwrite | default(false))
 
-    - name: Warn when daemons exists and overwrite is disabled
-      debug:
-        msg: "Existing {{ frr_daemons_path }} found; set frr_allow_overwrite: true to replace"
+    - name: daemons が存在し上書きが無効な場合に警告
+      ansible.builtin.debug:
+        msg: "{{ frr_daemons_path }} が既に存在します。置き換えるには frr_allow_overwrite: true を指定してください"
       when: frr_daemons_stat.stat.exists and not (frr_allow_overwrite | default(false))
 
-    - name: Validate FRR config variables
-      assert:
+    - name: FRR の設定変数を検証
+      ansible.builtin.assert:
         that:
           - frr_config_final | length > 0
           - frr_daemons_final | length > 0
-        fail_msg: "frr_config_content/daemons or frr_generate_config must be set"
+        fail_msg: "frr_config_content/daemons または frr_generate_config を設定してください"
       when: frr_require_vars | default(false)
 
-    - name: Deploy frr.conf
-      copy:
+    - name: frr.conf を配置
+      ansible.builtin.copy:
         dest: "{{ frr_conf_path }}"
         content: "{{ frr_config_final }}"
         owner: "{{ frr_conf_owner }}"
@@ -103,8 +103,8 @@
       when: frr_config_final | length > 0
       notify: Restart frr
 
-    - name: Deploy daemons
-      copy:
+    - name: daemons を配置
+      ansible.builtin.copy:
         dest: "{{ frr_daemons_path }}"
         content: "{{ frr_daemons_final }}"
         owner: "{{ frr_daemons_owner }}"
@@ -115,8 +115,8 @@
       when: frr_daemons_final | length > 0
       notify: Restart frr
 
-    - name: Ensure FRR service state
-      systemd:
+    - name: FRR サービスの状態を適用
+      ansible.builtin.systemd_service:
         name: "{{ frr_service_name }}"
         enabled: "{{ frr_enable_service | default(true) }}"
         state: "{{ frr_service_state }}"
