@@ -1,0 +1,17 @@
+# このリポジトリの成果物はすべて Linux 上で実行される（シェルスクリプト、Ansible、
+# Dockerfile、systemd ユニット、PHP）。CRLF が混入すると shebang が
+# `#!/bin/bash\r` と解釈されて起動に失敗したり、行単位で解析している箇所
+# （例: docker_panel.php の free/df 出力の解析）が壊れる。
+# Windows で作業した場合でも LF を保つため、text=auto eol=lf を既定にする。
+* text=auto eol=lf
+
+# バイナリは変換対象外にする（自動判定に任せず明示する）
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.ico   binary
+*.gz    binary
+*.tar   binary
+*.zip   binary
+*.pdf   binary
