@@ -1,18 +1,18 @@
 ---
-- name: Check for existing resolv.conf nameserver
-  command: grep -qE '^nameserver[[:space:]]+' /etc/resolv.conf
+- name: resolv.conf の既存ネームサーバーを確認
+  ansible.builtin.command: grep -qE '^nameserver[[:space:]]+' /etc/resolv.conf
   register: resolvconf_has_nameserver
   changed_when: false
   failed_when: false
 
-- name: Select resolv.conf nameserver list
-  set_fact:
+- name: resolv.conf に設定するネームサーバー一覧を決定
+  ansible.builtin.set_fact:
     resolvconf_effective_nameservers: >-
       {{ (resolvconf_nameservers | default([]) | length > 0)
          | ternary(resolvconf_nameservers, resolvconf_fallback_nameservers | default([])) }}
 
-- name: Bootstrap resolv.conf (optional)
-  copy:
+- name: resolv.conf を初期生成 (任意)
+  ansible.builtin.copy:
     dest: /etc/resolv.conf
     owner: root
     group: root
@@ -25,8 +25,8 @@
   when: resolvconf_bootstrap | default(false) or
         ((resolvconf_bootstrap_auto | default(true)) and resolvconf_has_nameserver.rc != 0)
 
-- name: Ensure base packages are installed
-  apt:
+- name: 基本パッケージを導入
+  ansible.builtin.apt:
     name:
       - ca-certificates
       - curl
@@ -41,30 +41,32 @@
     update_cache: "{{ base_update_cache | default(true) }}"
     cache_valid_time: "{{ (base_update_cache | default(true)) | ternary(3600, omit) }}"
 
-- name: Set timezone
-  timezone:
+- name: タイムゾーンを設定
+  community.general.timezone:
     name: "{{ timezone }}"
 
-- name: Ensure /usr/sbin is in PATH for login shells
-  lineinfile:
+- name: ログインシェルの PATH に /usr/sbin を追加
+  ansible.builtin.lineinfile:
     path: /etc/profile
     line: export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
     insertafter: EOF
     create: false
 
-- name: Ensure journald keeps logs on disk
-  lineinfile:
+- name: journald のログをディスクに永続化
+  ansible.builtin.lineinfile:
     path: /etc/systemd/journald.conf
     regexp: ^Storage=
     line: Storage=persistent
+  register: base_journald_conf
 
-- name: Restart systemd-journald
-  service:
+- name: systemd-journald を再起動
+  ansible.builtin.systemd_service:
     name: systemd-journald
     state: restarted
+  when: base_journald_conf is changed
 
-- name: Ensure resolvconf is installed (optional)
-  apt:
+- name: resolvconf を導入 (任意)
+  ansible.builtin.apt:
     name:
       - resolvconf
     state: present
@@ -72,8 +74,8 @@
     cache_valid_time: "{{ (base_update_cache | default(true)) | ternary(3600, omit) }}"
   when: resolvconf_manage | default(false)
 
-- name: Configure resolvconf head (optional)
-  copy:
+- name: resolvconf の head を設定 (任意)
+  ansible.builtin.copy:
     dest: /etc/resolvconf/resolv.conf.d/head
     owner: root
     group: root
@@ -86,22 +88,22 @@
   register: resolvconf_head
   when: resolvconf_manage | default(false)
 
-- name: Check resolvconf original entry
-  stat:
+- name: resolvconf の original エントリを確認
+  ansible.builtin.stat:
     path: /etc/resolvconf/resolv.conf.d/original
   register: resolvconf_original
   when: resolvconf_manage | default(false)
 
-- name: Remove resolvconf original symlink
-  file:
+- name: resolvconf の original シンボリックリンクを削除
+  ansible.builtin.file:
     path: /etc/resolvconf/resolv.conf.d/original
     state: absent
   when:
     - resolvconf_manage | default(false)
     - resolvconf_original.stat.islnk | default(false)
 
-- name: Configure resolvconf original file
-  copy:
+- name: resolvconf の original ファイルを設定
+  ansible.builtin.copy:
     dest: /etc/resolvconf/resolv.conf.d/original
     owner: root
     group: root
@@ -114,23 +116,23 @@
   register: resolvconf_original_file
   when: resolvconf_manage | default(false)
 
-- name: Ensure /etc/resolv.conf points to resolvconf
-  file:
+- name: /etc/resolv.conf を resolvconf へリンク
+  ansible.builtin.file:
     src: /run/resolvconf/resolv.conf
     dest: /etc/resolv.conf
     state: link
     force: true
   when: resolvconf_manage | default(false)
 
-- name: Update resolvconf
-  command: resolvconf -u
+- name: resolvconf を更新
+  ansible.builtin.command: resolvconf -u
   when:
     - resolvconf_manage | default(false)
-    - (resolvconf_head is defined and resolvconf_head.changed) or
-      (resolvconf_original_file is defined and resolvconf_original_file.changed)
+    - (resolvconf_head is defined and resolvconf_head is changed) or
+      (resolvconf_original_file is defined and resolvconf_original_file is changed)
 
-- name: Enable IPv4 forwarding (optional)
-  sysctl:
+- name: IPv4 フォワーディングを有効化 (任意)
+  ansible.posix.sysctl:
     name: net.ipv4.ip_forward
     value: "{{ sysctl_forward_ipv4 | default('1') }}"
     sysctl_file: /etc/sysctl.d/99-forward.conf
@@ -138,8 +140,8 @@
     reload: true
   when: sysctl_forward_manage | default(false)
 
-- name: Enable IPv6 forwarding (optional)
-  sysctl:
+- name: IPv6 フォワーディングを有効化 (任意)
+  ansible.posix.sysctl:
     name: net.ipv6.conf.all.forwarding
     value: "{{ sysctl_forward_ipv6 }}"
     sysctl_file: /etc/sysctl.d/99-forward.conf
@@ -149,28 +151,28 @@
     - sysctl_forward_manage | default(false)
     - sysctl_forward_ipv6 is defined
 
-- name: Ensure ufw is installed (optional)
-  apt:
+- name: ufw を導入 (任意)
+  ansible.builtin.apt:
     name: ufw
     state: present
     update_cache: "{{ base_update_cache | default(true) }}"
     cache_valid_time: "{{ (base_update_cache | default(true)) | ternary(3600, omit) }}"
   when: base_ufw_before_rules_manage | default(false)
 
-- name: Ensure ufw service state (optional)
-  systemd:
+- name: ufw サービスの状態を設定 (任意)
+  ansible.builtin.systemd_service:
     name: ufw
     enabled: true
     state: started
   when: base_ufw_before_rules_manage | default(false)
 
-- name: Check ufw before.rules
-  stat:
+- name: ufw の before.rules を確認
+  ansible.builtin.stat:
     path: /etc/ufw/before.rules
   register: base_ufw_before_rules_stat
 
-- name: Deploy ufw before.rules when missing
-  template:
+- name: before.rules が無い場合に配置
+  ansible.builtin.template:
     src: ufw-before.rules.j2
     dest: /etc/ufw/before.rules
     owner: root
@@ -183,23 +185,23 @@
     - base_ufw_before_rules_manage | default(false)
     - (not base_ufw_before_rules_stat.stat.exists) or (base_ufw_before_rules_allow_overwrite | default(false))
 
-- name: Reload ufw after before.rules change
-  command: ufw reload
+- name: before.rules 変更後に ufw をリロード
+  ansible.builtin.command: ufw reload
   when:
     - base_ufw_before_rules is defined
-    - base_ufw_before_rules.changed
+    - base_ufw_before_rules is changed
   changed_when: true
   failed_when: false
 
-- name: Check apparmor unit
-  command: systemctl list-unit-files apparmor.service --no-pager --no-legend
+- name: apparmor ユニットの有無を確認
+  ansible.builtin.command: systemctl list-unit-files apparmor.service --no-pager --no-legend
   register: apparmor_unit
   changed_when: false
   failed_when: false
   when: base_disable_apparmor | default(false)
 
-- name: Disable apparmor service
-  systemd:
+- name: apparmor サービスを無効化
+  ansible.builtin.systemd_service:
     name: apparmor
     enabled: false
     state: stopped

@@ -4,13 +4,13 @@ require_once __DIR__ . '/../public/scripts/portal_config.php';
 
 if (!($_SESSION['admin_auth'] ?? false)) {
     http_response_code(403);
-    die("Forbidden");
+    die("アクセスが拒否されました。");
 }
 
 // POST以外禁止
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);
-    echo "Method Not Allowed";
+    echo "許可されていないメソッドです。";
     exit;
 }
 
@@ -22,34 +22,34 @@ $confirm   = trim($_POST['confirm'] ?? '');
 
 if (empty($_SESSION['csrf']) || !hash_equals($_SESSION['csrf'], $csrf)) {
     http_response_code(400);
-    $_SESSION['docker_result'] = "❌ CSRFトークンが無効です。";
+    $_SESSION['flash'] = "❌ CSRFトークンが無効です。";
     header("Location: /admin/docker_panel.php");
     exit;
 }
 
 // バリデーション
-$valid_actions = ['start', 'stop', 'build', 'delete'];
+$valid_actions = ['start', 'stop', 'build', 'delete', 'deploy', 'purge'];
 if (!in_array($action, $valid_actions, true)) {
-    $_SESSION['docker_result'] = "❌ 不正な操作が指定されました。";
+    $_SESSION['flash'] = "❌ 不正な操作が指定されました。";
     header("Location: /admin/docker_panel.php");
     exit;
 }
 
 $portalConfig = portal_load_config();
-if (in_array($action, ['build', 'delete'], true)) {
+if (in_array($action, ['build', 'delete', 'deploy', 'purge'], true)) {
     $allowed = portal_all_containers($portalConfig);
 } else {
     $allowed = portal_allowed_containers($portalConfig);
 }
 
 if (!in_array($container, $allowed, true)) {
-    $_SESSION['docker_result'] = "❌ 不正なコンテナが指定されました。";
+    $_SESSION['flash'] = "❌ 不正なコンテナが指定されました。";
     header("Location: /admin/docker_panel.php");
     exit;
 }
 
-if ($action === 'delete' && $confirm !== '削除') {
-    $_SESSION['docker_result'] = "❌ 削除を実行するには確認欄に『削除』と入力してください。";
+if (in_array($action, ['delete', 'purge'], true) && $confirm !== '削除') {
+    $_SESSION['flash'] = "❌ 削除を実行するには確認欄に『削除』と入力してください。";
     header("Location: /admin/docker_panel.php");
     exit;
 }
@@ -70,11 +70,11 @@ exec($cmd, $outputLines, $statusCode);
 
 // 結果を画面表示用にセット
 if ($statusCode === 0) {
-    $_SESSION['docker_result'] =
+    $_SESSION['flash'] =
         "✅ コンテナ [{$container}] に対して {$action} 実行しました。\n" .
         implode("\n", $outputLines);
 } else {
-    $_SESSION['docker_result'] =
+    $_SESSION['flash'] =
         "❌ 実行に失敗しました。\n" .
         "コンテナ: {$container}\n" .
         "操作: {$action}\n" .

@@ -47,7 +47,7 @@ $containers = $allowedContainers;
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<title>ログビューア - Admin Console</title>
+<title>ログビューア - 管理コンソール</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
 <style>
@@ -229,7 +229,7 @@ pre{
 </head>
 <body>
 
-<h1 class="page-title">📜 ログビューア / Container Logs</h1>
+<h1 class="page-title">📜 ログビューア / コンテナログ</h1>
 
 <div class="card">
 

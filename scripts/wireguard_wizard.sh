@@ -2,8 +2,8 @@
 set -euo pipefail
 
 if ! command -v wg >/dev/null 2>&1; then
-  echo "wireguard-tools (wg) is required." >&2
-  echo "Install: apt install wireguard-tools (Debian/Ubuntu)" >&2
+  echo "wireguard-tools（wg コマンド）が必要です。" >&2
+  echo "インストール: apt install wireguard-tools（Debian/Ubuntu）" >&2
   exit 1
 fi
 
@@ -20,28 +20,28 @@ prompt() {
   printf "%s" "$val"
 }
 
-iface_name="$(prompt "Interface name" "wg0")"
-iface_address="$(prompt "Interface address" "10.100.0.2/32")"
-listen_port="$(prompt "Listen port (optional)" "")"
-dns_value="$(prompt "DNS (optional)" "")"
-peer_public="$(prompt "Peer public key" "")"
-peer_allowed="$(prompt "Peer AllowedIPs" "0.0.0.0/0")"
-peer_endpoint="$(prompt "Peer endpoint host:port (optional)" "")"
-peer_keepalive="$(prompt "PersistentKeepalive (optional)" "25")"
+iface_name="$(prompt "インターフェース名" "wg0")"
+iface_address="$(prompt "インターフェースのアドレス" "10.100.0.2/32")"
+listen_port="$(prompt "待ち受けポート（任意）" "")"
+dns_value="$(prompt "DNS（任意）" "")"
+peer_public="$(prompt "ピアの公開鍵" "")"
+peer_allowed="$(prompt "ピアの AllowedIPs" "0.0.0.0/0")"
+peer_endpoint="$(prompt "ピアのエンドポイント host:port（任意）" "")"
+peer_keepalive="$(prompt "PersistentKeepalive（任意）" "25")"
 
 if [ -z "$peer_public" ]; then
   peer_public="REPLACE_ME"
-  echo "WARN: peer public key is empty; using REPLACE_ME." >&2
+  echo "WARN: ピアの公開鍵が空のため REPLACE_ME を使用します。" >&2
 fi
 
 private_key="$(wg genkey)"
 public_key="$(printf "%s" "$private_key" | wg pubkey)"
 
 echo ""
-echo "# Public key (share with peer)"
+echo "# 公開鍵（ピアに共有してください）"
 echo "$public_key"
 echo ""
-echo "# Vault snippet (paste into ~/.config/edge-stack/ansible/host_vars/<host>.yml)"
+echo "# Vault スニペット（~/.config/edge-stack/ansible/host_vars/<host>.yml に貼り付けてください）"
 echo "wireguard_raw_configs:"
 echo "  - name: \"${iface_name}\""
 echo "    content: |"

@@ -1,28 +1,30 @@
 ---
-- name: Cloudflared configuration
+- name: cloudflared の設定
   when: cloudflared_manage | default(false)
   block:
-    - name: Check for cloudflared binary
-      command: command -v cloudflared
+    # command は shell の組み込みコマンドで実体のバイナリが無いため、
+    # ansible.builtin.command では常に失敗し「未導入」と誤判定されていた。
+    - name: cloudflared バイナリを確認
+      ansible.builtin.shell: command -v cloudflared
       register: cloudflared_binary
       changed_when: false
       failed_when: false
 
-    - name: Set detected cloudflared binary path
-      set_fact:
+    - name: 検出した cloudflared バイナリのパスを設定
+      ansible.builtin.set_fact:
         cloudflared_binary_path: "{{ cloudflared_binary.stdout }}"
         cloudflared_binary_found: true
       when: cloudflared_binary.rc == 0 and (cloudflared_binary.stdout | default('')) | length > 0
 
-    - name: Check cloudflared binary candidates
-      stat:
+    - name: cloudflared バイナリの候補を確認
+      ansible.builtin.stat:
         path: "{{ item }}"
       loop: "{{ cloudflared_binary_candidates }}"
       register: cloudflared_binary_candidates_stat
       when: cloudflared_binary.rc != 0
 
-    - name: Set cloudflared binary path from candidates
-      set_fact:
+    - name: 候補から cloudflared バイナリのパスを設定
+      ansible.builtin.set_fact:
         cloudflared_binary_path: >-
           {{ (cloudflared_binary_candidates_stat.results
               | selectattr('stat.exists', 'equalto', true)
@@ -37,13 +39,13 @@
           | list
           | length) > 0
 
-    - name: Install cloudflared when missing
+    - name: cloudflared が存在しない場合に導入
       when:
         - cloudflared_install_if_missing | default(false)
         - not (cloudflared_binary_found | default(false))
       block:
-        - name: Install cloudflared package
-          apt:
+        - name: cloudflared パッケージを導入
+          ansible.builtin.apt:
             name: "{{ cloudflared_packages }}"
             state: present
             update_cache: "{{ cloudflared_update_cache | default(true) }}"
@@ -51,34 +53,34 @@
           register: cloudflared_apt_install
           failed_when: false
 
-        - name: Warn when cloudflared apt package is unavailable
-          debug:
-            msg: "cloudflared apt package is unavailable; falling back to direct download."
-          when: cloudflared_apt_install is defined and cloudflared_apt_install.failed | default(false)
+        - name: cloudflared の apt パッケージが利用できない場合に警告
+          ansible.builtin.debug:
+            msg: "cloudflared の apt パッケージが利用できないため、直接ダウンロードに切り替えます。"
+          when: cloudflared_apt_install is defined and cloudflared_apt_install is failed
 
-        - name: Re-check cloudflared binary after apt
-          command: command -v cloudflared
+        - name: apt 実行後に cloudflared バイナリを再確認
+          ansible.builtin.shell: command -v cloudflared
           register: cloudflared_binary_after
           changed_when: false
           failed_when: false
 
-        - name: Set cloudflared binary path from PATH after apt
-          set_fact:
+        - name: apt 実行後に PATH から cloudflared バイナリのパスを設定
+          ansible.builtin.set_fact:
             cloudflared_binary_path: "{{ cloudflared_binary_after.stdout }}"
             cloudflared_binary_found: true
           when:
             - cloudflared_binary_after.rc == 0
             - (cloudflared_binary_after.stdout | default('')) | length > 0
 
-        - name: Check cloudflared binary candidates after apt
-          stat:
+        - name: apt 実行後に cloudflared バイナリの候補を確認
+          ansible.builtin.stat:
             path: "{{ item }}"
           loop: "{{ cloudflared_binary_candidates }}"
           register: cloudflared_binary_candidates_after
           when: cloudflared_binary_after.rc != 0
 
-        - name: Set cloudflared binary path from candidates after apt
-          set_fact:
+        - name: apt 実行後に候補から cloudflared バイナリのパスを設定
+          ansible.builtin.set_fact:
             cloudflared_binary_path: >-
               {{ (cloudflared_binary_candidates_after.results
                   | selectattr('stat.exists', 'equalto', true)
@@ -94,7 +96,7 @@
               | list
               | length) > 0
 
-        - name: Download cloudflared deb when still missing
+        - name: まだ存在しない場合に cloudflared の deb をダウンロード
           when:
             - cloudflared_binary_after.rc != 0
             - cloudflared_binary_candidates_after is not defined or
@@ -103,57 +105,57 @@
                 | list
                 | length) == 0
           block:
-            - name: Set cloudflared download architecture
-              set_fact:
+            - name: cloudflared のダウンロード用アーキテクチャを設定
+              ansible.builtin.set_fact:
                 cloudflared_download_arch: "{{ 'arm64' if ansible_architecture in ['aarch64', 'arm64'] else 'amd64' if ansible_architecture in ['x86_64', 'amd64'] else '' }}"
 
-            - name: Fail on unsupported architecture
-              fail:
-                msg: "Unsupported architecture for cloudflared download: {{ ansible_architecture }}"
+            - name: 未対応アーキテクチャの場合は失敗させる
+              ansible.builtin.fail:
+                msg: "cloudflared のダウンロードに未対応のアーキテクチャです: {{ ansible_architecture }}"
               when: cloudflared_download_arch | length == 0
 
-            - name: Ensure curl is available
-              apt:
+            - name: curl が利用可能であることを確認
+              ansible.builtin.apt:
                 name: curl
                 state: present
                 update_cache: true
 
-            - name: Download cloudflared deb
-              command: >-
+            - name: cloudflared の deb をダウンロード
+              ansible.builtin.command: >-
                 curl -fL --retry 3 --retry-delay 2
                 --output /tmp/cloudflared-linux-{{ cloudflared_download_arch }}.deb
                 https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-{{ cloudflared_download_arch }}.deb
               args:
                 creates: "/tmp/cloudflared-linux-{{ cloudflared_download_arch }}.deb"
 
-            - name: Install cloudflared deb
-              apt:
+            - name: cloudflared の deb を導入
+              ansible.builtin.apt:
                 deb: "/tmp/cloudflared-linux-{{ cloudflared_download_arch }}.deb"
                 state: present
 
-        - name: Final check for cloudflared binary
-          command: command -v cloudflared
+        - name: cloudflared バイナリを最終確認
+          ansible.builtin.shell: command -v cloudflared
           register: cloudflared_binary_final
           changed_when: false
           failed_when: false
 
-        - name: Set cloudflared binary path from PATH after download
-          set_fact:
+        - name: ダウンロード後に PATH から cloudflared バイナリのパスを設定
+          ansible.builtin.set_fact:
             cloudflared_binary_path: "{{ cloudflared_binary_final.stdout }}"
             cloudflared_binary_found: true
           when:
             - cloudflared_binary_final.rc == 0
             - (cloudflared_binary_final.stdout | default('')) | length > 0
 
-        - name: Check cloudflared binary candidates after download
-          stat:
+        - name: ダウンロード後に cloudflared バイナリの候補を確認
+          ansible.builtin.stat:
             path: "{{ item }}"
           loop: "{{ cloudflared_binary_candidates }}"
           register: cloudflared_binary_candidates_final
           when: cloudflared_binary_final.rc != 0
 
-        - name: Set cloudflared binary path from candidates after download
-          set_fact:
+        - name: ダウンロード後に候補から cloudflared バイナリのパスを設定
+          ansible.builtin.set_fact:
             cloudflared_binary_path: >-
               {{ (cloudflared_binary_candidates_final.results
                   | selectattr('stat.exists', 'equalto', true)
@@ -169,9 +171,9 @@
               | list
               | length) > 0
 
-        - name: Fail when cloudflared binary is still missing
-          fail:
-            msg: "cloudflared binary not found after install. Check package repo or download step."
+        - name: cloudflared バイナリがまだ存在しない場合は失敗させる
+          ansible.builtin.fail:
+            msg: "導入後も cloudflared バイナリが見つかりません。パッケージリポジトリまたはダウンロード手順を確認してください。"
           when:
             - cloudflared_binary_final.rc != 0
             - cloudflared_binary_candidates_final is not defined or
@@ -180,57 +182,57 @@
                 | list
                 | length) == 0
 
-    - name: Ensure /etc/cloudflared exists
-      file:
+    - name: /etc/cloudflared の存在を確認
+      ansible.builtin.file:
         path: /etc/cloudflared
         state: directory
         owner: root
         group: root
         mode: "0755"
 
-    - name: Read existing config metadata
-      stat:
+    - name: 既存の設定ファイルのメタデータを取得
+      ansible.builtin.stat:
         path: "{{ cloudflared_config_path }}"
       register: cloudflared_config_stat
 
-    - name: Read existing credentials metadata
-      stat:
+    - name: 既存の認証情報ファイルのメタデータを取得
+      ansible.builtin.stat:
         path: "{{ cloudflared_credentials_path }}"
       register: cloudflared_credentials_stat
       when: cloudflared_credentials_path | length > 0
 
-    - name: Read existing cert metadata
-      stat:
+    - name: 既存の証明書ファイルのメタデータを取得
+      ansible.builtin.stat:
         path: "{{ cloudflared_cert_path }}"
       register: cloudflared_cert_stat
       when: cloudflared_cert_path | length > 0
 
-    - name: Warn when config exists and overwrite is disabled
-      debug:
-        msg: "Existing {{ cloudflared_config_path }} found; set cloudflared_allow_overwrite: true to replace"
+    - name: 設定ファイルが存在し上書きが無効な場合に警告
+      ansible.builtin.debug:
+        msg: "{{ cloudflared_config_path }} が既に存在します。置き換えるには cloudflared_allow_overwrite: true を指定してください"
       when: cloudflared_config_stat.stat.exists and not (cloudflared_allow_overwrite | default(false))
 
-    - name: Warn when credentials exists and overwrite is disabled
-      debug:
-        msg: "Existing {{ cloudflared_credentials_path }} found; set cloudflared_allow_overwrite: true to replace"
+    - name: 認証情報ファイルが存在し上書きが無効な場合に警告
+      ansible.builtin.debug:
+        msg: "{{ cloudflared_credentials_path }} が既に存在します。置き換えるには cloudflared_allow_overwrite: true を指定してください"
       when: cloudflared_credentials_path | length > 0 and cloudflared_credentials_stat.stat.exists and not (cloudflared_allow_overwrite | default(false))
 
-    - name: Warn when cert exists and overwrite is disabled
-      debug:
-        msg: "Existing {{ cloudflared_cert_path }} found; set cloudflared_allow_overwrite: true to replace"
+    - name: 証明書ファイルが存在し上書きが無効な場合に警告
+      ansible.builtin.debug:
+        msg: "{{ cloudflared_cert_path }} が既に存在します。置き換えるには cloudflared_allow_overwrite: true を指定してください"
       when: cloudflared_cert_path | length > 0 and cloudflared_cert_stat.stat.exists and not (cloudflared_allow_overwrite | default(false))
 
-    - name: Validate cloudflared variables
-      assert:
+    - name: cloudflared の変数を検証
+      ansible.builtin.assert:
         that:
           - cloudflared_config_content | length > 0
           - cloudflared_credentials_path | length > 0
           - cloudflared_credentials_content | length > 0
-        fail_msg: "cloudflared_config_content/credentials_path/credentials_content must be set"
+        fail_msg: "cloudflared_config_content/credentials_path/credentials_content を設定してください"
       when: cloudflared_require_vars | default(false)
 
-    - name: Deploy cloudflared config
-      copy:
+    - name: cloudflared の設定ファイルを配置
+      ansible.builtin.copy:
         dest: "{{ cloudflared_config_path }}"
         content: "{{ cloudflared_config_content }}"
         owner: root
@@ -241,8 +243,8 @@
       when: cloudflared_config_content | length > 0
       notify: Restart cloudflared
 
-    - name: Ensure cloudflared credentials directory
-      file:
+    - name: cloudflared の認証情報ディレクトリを作成
+      ansible.builtin.file:
         path: "{{ cloudflared_credentials_path | dirname }}"
         state: directory
         owner: root
@@ -250,8 +252,8 @@
         mode: "0755"
       when: cloudflared_credentials_path | length > 0
 
-    - name: Deploy cloudflared credentials
-      copy:
+    - name: cloudflared の認証情報を配置
+      ansible.builtin.copy:
         dest: "{{ cloudflared_credentials_path }}"
         content: "{{ cloudflared_credentials_content }}"
         owner: root
@@ -262,8 +264,8 @@
       when: cloudflared_credentials_path | length > 0 and (cloudflared_credentials_content | length > 0)
       notify: Restart cloudflared
 
-    - name: Ensure cloudflared cert directory
-      file:
+    - name: cloudflared の証明書ディレクトリを作成
+      ansible.builtin.file:
         path: "{{ cloudflared_cert_path | dirname }}"
         state: directory
         owner: root
@@ -271,8 +273,8 @@
         mode: "0755"
       when: cloudflared_cert_path | length > 0
 
-    - name: Deploy cloudflared cert
-      copy:
+    - name: cloudflared の証明書を配置
+      ansible.builtin.copy:
         dest: "{{ cloudflared_cert_path }}"
         content: "{{ cloudflared_cert_content }}"
         owner: root
@@ -283,18 +285,18 @@
       when: cloudflared_cert_path | length > 0 and (cloudflared_cert_content | length > 0)
       notify: Restart cloudflared
 
-    - name: Check cloudflared unit override
-      stat:
+    - name: cloudflared の unit オーバーライドを確認
+      ansible.builtin.stat:
         path: "/etc/systemd/system/{{ cloudflared_service_name }}.service"
       register: cloudflared_unit_override
 
-    - name: Check cloudflared system unit
-      stat:
+    - name: cloudflared のシステム unit を確認
+      ansible.builtin.stat:
         path: "/lib/systemd/system/{{ cloudflared_service_name }}.service"
       register: cloudflared_unit_system
 
-    - name: Create cloudflared systemd unit when missing
-      copy:
+    - name: cloudflared の systemd unit が存在しない場合に作成
+      ansible.builtin.copy:
         dest: "/etc/systemd/system/{{ cloudflared_service_name }}.service"
         content: |
           [Unit]
@@ -316,13 +318,13 @@
       when: not cloudflared_unit_override.stat.exists and not cloudflared_unit_system.stat.exists
       register: cloudflared_unit_created
 
-    - name: Reload systemd after unit change
-      systemd:
+    - name: unit 変更後に systemd をリロード
+      ansible.builtin.systemd_service:
         daemon_reload: true
-      when: cloudflared_unit_created is defined and cloudflared_unit_created.changed
+      when: cloudflared_unit_created is defined and cloudflared_unit_created is changed
 
-    - name: Ensure cloudflared service state
-      systemd:
+    - name: cloudflared サービスの状態を適用
+      ansible.builtin.systemd_service:
         name: "{{ cloudflared_service_name }}"
         enabled: "{{ cloudflared_enable_service | default(true) }}"
         state: "{{ cloudflared_service_state }}"

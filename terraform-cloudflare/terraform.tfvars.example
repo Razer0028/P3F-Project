@@ -1,22 +1,32 @@
-# Cloudflare account/zone
+# Cloudflare アカウント / ゾーン
+# API トークンはここに書かず、環境変数 CLOUDFLARE_API_TOKEN で渡すこと。
 cf_account_id = "YOUR_ACCOUNT_ID"
 cf_zone_name  = "YOUR_DOMAIN"
-cf_zone_mode  = "create" # create or existing
-cf_zone_plan  = "free"
+cf_zone_mode  = "create" # create=新規作成 / existing=既存ゾーンを参照
 cf_zone_type  = "full"
 
-# Failover DNS record (A)
-cf_manage_failover_record = true
-cf_failover_record_name   = "game.YOUR_DOMAIN"
-cf_failover_record_value  = "YOUR_FAILOVER_IP"
+# プロバイダ v5 ではゾーンのプランを Terraform で設定できない。
+# 変更が必要な場合は Cloudflare ダッシュボードで行う。
+# cf_zone_plan = "free"   # 未使用（互換のため受け付けるだけ）
+
+# フェイルオーバー用 DNS レコード（A）
+cf_manage_failover_record  = true
+cf_failover_record_name    = "game.YOUR_DOMAIN"
+cf_failover_record_value   = "YOUR_FAILOVER_IP"
 cf_failover_record_proxied = false
 cf_failover_record_ttl     = 1
 
-# Tunnel records (CNAME -> cfargotunnel)
-cf_manage_tunnels = true
+# トンネル用レコード（CNAME -> cfargotunnel）
+cf_manage_tunnels  = true
 cf_vps_tunnel_name = "YOUR_VPS_TUNNEL"
 cf_vps_hostname    = "www.YOUR_DOMAIN"
 cf_ec2_tunnel_name = "YOUR_EC2_TUNNEL"
 cf_ec2_hostname    = "sub.YOUR_DOMAIN"
 cf_tunnel_proxied  = true
 cf_tunnel_ttl      = 1
+
+# 補足:
+# - プロバイダ v4 系から移行した場合、state 内の cloudflare_record は
+#   cloudflare_dns_record へ移行する必要がある（terraform state mv）。
+# - v5 では allow_overwrite が廃止されたため、既存レコードを引き継ぐ場合は
+#   terraform import で state に取り込むこと。

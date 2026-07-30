@@ -6,7 +6,7 @@
 IaC で再現可能にすることが目的です。
 
 ## トポロジー（標準構成）
-- オンプレ（Debian 12）
+- オンプレ（Debian 13 / trixie）
   - ゲームサーバー（Minecraft/Valheim/7DTD 等）
   - Webサイト（Apache または Webコンテナ）
   - 監視・管理ポータル
@@ -46,9 +46,20 @@ IaC で再現可能にすることが目的です。
 - Ansible
   - on-prem/vps/ec2 それぞれの役割をロール化
   - 秘密情報は Ansible Vault で管理
+  - ansible-core 2.17 以上が必要（2.14/2.15/2.16 は EOL）
+  - 必要なコレクションは `ansible/requirements.yml` で管理（`make deps` で導入）
+  - 正式なプレイブックは `ansible/site.yml`。ルートの `site.yml` は互換用のラッパー
 - Terraform
-  - EC2/VPC/SG/KeyPair/EIP を作成
+  - Terraform 1.9 以上が必要
+  - `terraform/`: EC2/VPC/SG/KeyPair/EIP を作成（aws `~> 6.0`）
   - カスタム VPC か自動 VPC を選択可能
+  - `terraform-cloudflare/`: ゾーン/DNS/トンネルを作成（cloudflare `~> 5.22`）
+
+## コンテナ構成
+- Web ポータルのコンテナは `debian:trixie-slim` ベース
+- プレイヤー監視（player-monitor）のコンテナは `python:3.13-slim` ベース
+- `docker-compose`（v1, Python 版）は Debian 13 で削除されたため `docker-compose-v2` を使用
+  - `docker_packages` の既定は `docker.io` / `docker-compose-v2` / `docker-buildx`
 
 ## 構成モード
 - 1台構成（オンプレのみ）
@@ -64,3 +75,7 @@ IaC で再現可能にすることが目的です。
 - AllowedIPs を 0.0.0.0/0 にするとフルトンネルになるため、用途に応じて設計してください。
 - WireGuard のサンプル IP は `10.100.0.0/24` を想定しています。環境に合わせて置換してください。
 - 管理者画面は必須で、許可CIDRが空の場合はアクセス不可です。
+- `host_key_checking = True` のため、初回接続前に `ssh-keyscan` で `~/.ssh/known_hosts` へ
+  登録する手順が必須です（詳細は `README.md` / `docs/quickstart.md`）。
+- 各ポータル（セットアップポータル、管理画面、公開ポータル、portctl の Web UI）は
+  既定言語が日本語です。セットアップポータルは英語にも切り替えできます。

@@ -122,7 +122,7 @@ $default_dest_ip = $config['default_dest_ip'] ?? '';
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Port Forward Manager</title>
+    <title>ポート転送マネージャー</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { 
@@ -213,31 +213,31 @@ $default_dest_ip = $config['default_dest_ip'] ?? '';
 </head>
 <body>
 <div class="container">
-    <h1>Port Forward Manager</h1>
+    <h1>ポート転送マネージャー</h1>
     
     <?php if ($message): ?>
     <div class="message <?= htmlspecialchars($message_type) ?>"><?= htmlspecialchars($message) ?></div>
     <?php endif; ?>
     
     <div class="tabs">
-        <a href="?tab=forward" class="tab <?= $tab === 'forward' ? 'active' : '' ?>">Port Forwarding</a>
-        <a href="?tab=ufw" class="tab <?= $tab === 'ufw' ? 'active' : '' ?>">UFW Rules</a>
+        <a href="?tab=forward" class="tab <?= $tab === 'forward' ? 'active' : '' ?>">ポート転送</a>
+        <a href="?tab=ufw" class="tab <?= $tab === 'ufw' ? 'active' : '' ?>">UFW ルール</a>
     </div>
     
     <?php if ($tab === 'forward'): ?>
     <div class="card">
-        <h2>Add Forwarding Rule</h2>
+        <h2>転送ルールを追加</h2>
         <form method="POST">
             <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf_token) ?>">
             <input type="hidden" name="action" value="add_forward">
             <input type="hidden" name="current_tab" value="forward">
             <div class="form-row">
                 <div class="form-group">
-                    <label>External Port</label>
-                    <input type="text" name="ext_port" placeholder="8080 or 8080:8090" required>
+                    <label>外部ポート</label>
+                    <input type="text" name="ext_port" placeholder="例: 8080 または 8080:8090" required>
                 </div>
                 <div class="form-group">
-                    <label>Protocol</label>
+                    <label>プロトコル</label>
                     <select name="protocol">
                         <option value="tcp">TCP</option>
                         <option value="udp">UDP</option>
@@ -245,21 +245,21 @@ $default_dest_ip = $config['default_dest_ip'] ?? '';
                     </select>
                 </div>
                 <div class="form-group">
-                    <label>Destination IP</label>
-                    <input type="text" name="dest_ip" value="<?= htmlspecialchars($default_dest_ip) ?>" placeholder="e.g. 10.100.0.2">
+                    <label>転送先 IP</label>
+                    <input type="text" name="dest_ip" value="<?= htmlspecialchars($default_dest_ip) ?>" placeholder="例: 10.100.0.2">
                 </div>
                 <div class="form-group">
-                    <label>Destination Port</label>
-                    <input type="text" name="dest_port" placeholder="8080" required>
+                    <label>転送先ポート</label>
+                    <input type="text" name="dest_port" placeholder="例: 8080" required>
                 </div>
             </div>
-            <button type="submit" class="btn btn-primary">Add Rule</button>
+            <button type="submit" class="btn btn-primary">ルールを追加</button>
         </form>
-        
-        <h2 style="margin-top: 28px;">Current Rules</h2>
+
+        <h2 style="margin-top: 28px;">現在のルール</h2>
         <?php if (!empty($forward_rules['rules'])): ?>
         <table>
-            <tr><th>External Port</th><th>Protocol</th><th>Destination</th><th></th></tr>
+            <tr><th>外部ポート</th><th>プロトコル</th><th>転送先</th><th></th></tr>
             <?php foreach ($forward_rules['rules'] as $rule): ?>
             <tr>
                 <td><?= htmlspecialchars($rule['ext_port']) ?></td>
@@ -271,42 +271,42 @@ $default_dest_ip = $config['default_dest_ip'] ?? '';
                         <input type="hidden" name="action" value="delete_forward">
                         <input type="hidden" name="current_tab" value="forward">
                         <input type="hidden" name="id" value="<?= htmlspecialchars($rule['id']) ?>">
-                        <button type="submit" class="btn btn-danger" onclick="return confirm('Delete this rule?')">Delete</button>
+                        <button type="submit" class="btn btn-danger" onclick="return confirm('このルールを削除しますか？')">削除</button>
                     </form>
                 </td>
             </tr>
             <?php endforeach; ?>
         </table>
         <?php else: ?>
-        <div class="empty">No rules configured</div>
+        <div class="empty">ルールが未設定です</div>
         <?php endif; ?>
     </div>
-    
+
     <?php else: ?>
     <div class="card">
         <div class="section">
-            <h2>Quick Add</h2>
+            <h2>クイック追加</h2>
             <form method="POST">
                 <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf_token) ?>">
                 <input type="hidden" name="action" value="add_ufw">
                 <input type="hidden" name="current_tab" value="ufw">
                 <div class="form-row">
                     <div class="form-group">
-                        <label>Rule Type</label>
+                        <label>ルール種別</label>
                         <select name="rule_type">
-                            <option value="allow">Allow</option>
-                            <option value="deny">Deny</option>
-                            <option value="limit">Limit</option>
+                            <option value="allow">許可 (allow)</option>
+                            <option value="deny">拒否 (deny)</option>
+                            <option value="limit">制限 (limit)</option>
                         </select>
                     </div>
                     <div class="form-group">
-                        <label>Port</label>
-                        <input type="text" name="port" placeholder="22 or 8080:8090">
+                        <label>ポート</label>
+                        <input type="text" name="port" placeholder="例: 22 または 8080:8090">
                     </div>
                     <div class="form-group">
-                        <label>Protocol</label>
+                        <label>プロトコル</label>
                         <select name="proto">
-                            <option value="">Any</option>
+                            <option value="">指定なし</option>
                             <option value="tcp">TCP</option>
                             <option value="udp">UDP</option>
                         </select>
@@ -314,34 +314,34 @@ $default_dest_ip = $config['default_dest_ip'] ?? '';
                 </div>
                 <div class="form-row">
                     <div class="form-group">
-                        <label>From IP (optional)</label>
-                        <input type="text" name="from_ip" placeholder="YOUR_ADMIN_CIDR">
+                        <label>送信元 IP (任意)</label>
+                        <input type="text" name="from_ip" placeholder="例: YOUR_ADMIN_CIDR">
                     </div>
                     <div class="form-group">
-                        <label>To IP (optional)</label>
-                        <input type="text" name="to_ip" placeholder="DEST_IP">
+                        <label>宛先 IP (任意)</label>
+                        <input type="text" name="to_ip" placeholder="例: DEST_IP">
                     </div>
                 </div>
-                <button type="submit" class="btn btn-primary">Add Rule</button>
+                <button type="submit" class="btn btn-primary">ルールを追加</button>
             </form>
         </div>
         
         <div class="section">
-            <h2>Advanced Rule</h2>
+            <h2>詳細ルール</h2>
             <form method="POST">
                 <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf_token) ?>">
                 <input type="hidden" name="action" value="add_ufw_raw">
                 <input type="hidden" name="current_tab" value="ufw">
                 <div class="form-row">
                     <div class="form-group" style="flex: 3;">
-                        <label>UFW Command</label>
-                        <input type="text" name="raw_rule" placeholder="allow from YOUR_ADMIN_CIDR to any port 22 proto tcp">
-                        <div class="hint">Enter arguments after 'ufw'</div>
+                        <label>UFW コマンド</label>
+                        <input type="text" name="raw_rule" placeholder="例: allow from YOUR_ADMIN_CIDR to any port 22 proto tcp">
+                        <div class="hint">ufw に続く引数を入力してください</div>
                     </div>
                 </div>
-                <button type="submit" class="btn btn-primary">Add Rule</button>
+                <button type="submit" class="btn btn-primary">ルールを追加</button>
                 <div class="example">
-                    Examples:<br>
+                    記述例:<br>
                     <code>allow 22/tcp</code><br>
                     <code>allow from YOUR_ADMIN_CIDR</code><br>
                     <code>deny from YOUR_HOST_IP to any port 22</code>
@@ -349,10 +349,10 @@ $default_dest_ip = $config['default_dest_ip'] ?? '';
             </form>
         </div>
         
-        <h2>Current UFW Rules</h2>
+        <h2>現在の UFW ルール</h2>
         <?php if (!empty($ufw_rules['rules'])): ?>
         <table>
-            <tr><th>#</th><th>Rule</th><th></th></tr>
+            <tr><th>#</th><th>ルール</th><th></th></tr>
             <?php foreach ($ufw_rules['rules'] as $rule): ?>
             <tr>
                 <td><?= htmlspecialchars($rule['num']) ?></td>
@@ -363,14 +363,14 @@ $default_dest_ip = $config['default_dest_ip'] ?? '';
                         <input type="hidden" name="action" value="delete_ufw">
                         <input type="hidden" name="current_tab" value="ufw">
                         <input type="hidden" name="num" value="<?= htmlspecialchars($rule['num']) ?>">
-                        <button type="submit" class="btn btn-danger" onclick="return confirm('Delete this rule?')">Delete</button>
+                        <button type="submit" class="btn btn-danger" onclick="return confirm('このルールを削除しますか？')">削除</button>
                     </form>
                 </td>
             </tr>
             <?php endforeach; ?>
         </table>
         <?php else: ?>
-        <div class="empty">No rules configured</div>
+        <div class="empty">ルールが未設定です</div>
         <?php endif; ?>
     </div>
     <?php endif; ?>

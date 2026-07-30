@@ -210,6 +210,7 @@ const statusLabels = {
   en: {
     ok: "OK",
     missing: "Missing",
+    bytes: "bytes",
     inventory: "Inventory file",
     groupvars: "Group vars",
     tfvars: "Terraform tfvars",
@@ -235,6 +236,7 @@ const statusLabels = {
   ja: {
     ok: "OK",
     missing: "不足",
+    bytes: "バイト",
     inventory: "Inventoryファイル",
     groupvars: "Group vars",
     tfvars: "Terraform tfvars",
@@ -288,9 +290,13 @@ const defaultDdosSignatures = [
   "DDoS TCP SYN Flood (aggregate)",
 ];
 
-let currentLang = "en";
+let currentLang = "ja";
 let lastStatusPayload = null;
 const DEFAULT_CONFIG_DIR = "~/.config/edge-stack";
+
+function unknownErrorText() {
+  return currentLang === "ja" ? "不明なエラー" : "Unknown error";
+}
 
 function getOutputRoot(payload) {
   if (payload && payload.output_root) {
@@ -842,14 +848,41 @@ function renderGroupVars() {
   const adminDenyBlock = adminDeny.length
     ? `web_portal_admin_deny_cidrs:\n${adminDeny.map((item) => "  - \"" + item + "\"").join("\n")}`
     : "web_portal_admin_deny_cidrs: []";
+  const c = currentLang === "ja"
+    ? {
+      docker: "Docker",
+      containers: "コンテナ",
+      webPortalAdmin: "Web ポータル管理者",
+      sysctl: "Sysctl (カーネルパラメータ)",
+      wireguard: "WireGuard",
+      failoverCore: "フェイルオーバー本体",
+      frr: "FRR (ルーティング)",
+      suricata: "Suricata (IDS/IPS)",
+      cloudflared: "Cloudflared",
+      portctl: "Portctl (ポート転送)",
+      backup: "バックアップ",
+    }
+    : {
+      docker: "Docker",
+      containers: "Containers",
+      webPortalAdmin: "Web portal admin",
+      sysctl: "Sysctl",
+      wireguard: "WireGuard",
+      failoverCore: "Failover core",
+      frr: "FRR",
+      suricata: "Suricata",
+      cloudflared: "Cloudflared",
+      portctl: "Portctl",
+      backup: "Backup",
+    };
   return `---
 project_name: "${value(fields.projectName)}"
 timezone: "${value(fields.timezone)}"
 
-# Docker
+# ${c.docker}
 docker_manage: ${dockerManage}
 
-# Containers
+# ${c.containers}
 containers_manage: ${containersManage}
 containers_root: "${containersRoot}"
 containers_owner: "${containersOwner}"
@@ -858,7 +891,7 @@ containers_manage_user: ${containersManageUser}
 containers_start: ${containersStart}
 ${containersBlock}
 
-# Web portal admin
+# ${c.webPortalAdmin}
 web_portal_admin_enable: ${adminEnable}
 web_portal_admin_user: "${escapeYamlString(adminUser)}"
 web_portal_admin_password: "${escapeYamlString(adminPassword)}"
@@ -866,10 +899,10 @@ ${adminAllowBlock}
 ${adminDenyBlock}
 web_portal_discord_webhook: "${escapeYamlString(discordWebhook)}"
 
-# Sysctl
+# ${c.sysctl}
 sysctl_forward_manage: ${sysctlForwardManage}
 
-# WireGuard
+# ${c.wireguard}
 wireguard_manage: ${wireguardManage}
 wireguard_enable_on_boot: ${simpleMode ? "true" : "false"}
 wireguard_restart_on_change: ${simpleMode ? "true" : "false"}
@@ -877,25 +910,25 @@ wireguard_allow_overwrite: true
 ${wireguardUfwRulesBlock}
 ${wireguardForwardRulesBlock}
 
-# Failover core
+# ${c.failoverCore}
 failover_core_manage: ${failoverManage}
 failover_core_enable: ${failoverManage}
 failover_core_state: ${failoverState}
 
-# FRR
+# ${c.frr}
 frr_manage: ${frrManage}
 frr_manage_service: ${frrManage}
 frr_restart_on_change: ${frrManage}
 
-# Suricata
+# ${c.suricata}
 suricata_manage: ${suricataManage}
 suricata_manage_service: ${suricataManage}
 suricata_restart_on_change: ${suricataManage}
 
-# Cloudflared
+# ${c.cloudflared}
 cloudflared_manage: ${cloudflaredManage}
 
-# Portctl
+# ${c.portctl}
 portctl_manage: ${portctlManage}
 portctl_default_dest_ip: "${escapeYamlString(portctlDefaultDestIp)}"
 portctl_apply_rules: false
@@ -904,7 +937,7 @@ portctl_enable_web_local: true
 ${portctlUfwRulesBlock}
 ${portctlForwardRulesBlock}
 
-# Backup
+# ${c.backup}
 backups_manage: ${backupsManage}
 backup_full_enabled: ${backupFull}
 backup_games_enabled: ${backupGames}
@@ -1137,9 +1170,28 @@ function renderChecklist() {
     sections.push([title, ...items].join("\n"));
   };
 
+  const isJa = currentLang === "ja";
+  // Annotated entries: variable names stay verbatim, only the connector /
+  // annotation words are localized.
+  const wgConfigsItem = isJa
+    ? "- wireguard_raw_configs または wireguard_configs"
+    : "- wireguard_raw_configs or wireguard_configs";
+  const autoFailbackItem = isJa
+    ? "- failover_auto_failback（\"yes\" または \"no\"）"
+    : "- failover_auto_failback (\"yes\" or \"no\")";
+  const awsProfileItem = isJa
+    ? "- failover_aws_profile（省略可・既定値=failover）"
+    : "- failover_aws_profile (optional, default=failover)";
+  const ddosWebhookItem = isJa
+    ? "- ddos_notify_discord_webhook（共有の Discord Webhook）"
+    : "- ddos_notify_discord_webhook (shared Discord webhook)";
+  const ddosSignaturesItem = isJa
+    ? "- ddos_notify_signatures（省略可）"
+    : "- ddos_notify_signatures (optional)";
+
   const onpremItems = [];
   if (features.wireguard) {
-    onpremItems.push("- wireguard_raw_configs or wireguard_configs");
+    onpremItems.push(wgConfigsItem);
   }
   if (features.failover) {
     onpremItems.push(
@@ -1151,13 +1203,13 @@ function renderChecklist() {
       "- failover_cf_record_id",
       "- failover_dns_record_name",
       "- failover_vps_ip",
-      "- failover_auto_failback (\"yes\" or \"no\")",
+      autoFailbackItem,
       "- failover_failback_request_file",
       "- failover_core_state",
       "- failover_core_enable",
       "- failover_aws_access_key_id",
       "- failover_aws_secret_access_key",
-      "- failover_aws_profile (optional, default=failover)",
+      awsProfileItem,
     );
   }
   onpremItems.push("- web_portal_admin_user", "- web_portal_admin_password");
@@ -1167,7 +1219,7 @@ function renderChecklist() {
 
   const vpsItems = [];
   if (features.wireguard) {
-    vpsItems.push("- wireguard_raw_configs or wireguard_configs");
+    vpsItems.push(wgConfigsItem);
   }
   if (features.frr) {
     vpsItems.push("- frr_config_content", "- frr_daemons_content");
@@ -1178,8 +1230,8 @@ function renderChecklist() {
   if (value(fields.ddosNotifyEnable)) {
     vpsItems.push(
       "- ddos_notify_primary_ip",
-      "- ddos_notify_discord_webhook (shared Discord webhook)",
-      "- ddos_notify_signatures (optional)",
+      ddosWebhookItem,
+      ddosSignaturesItem,
     );
   }
   if (features.cloudflared) {
@@ -1202,7 +1254,7 @@ function renderChecklist() {
 
   const ec2Items = [];
   if (features.wireguard) {
-    ec2Items.push("- wireguard_raw_configs or wireguard_configs");
+    ec2Items.push(wgConfigsItem);
   }
   if (features.suricata) {
     ec2Items.push("- suricata_custom_rules_content", "- suricata_custom_rules_path");
@@ -1441,7 +1493,11 @@ function renderNextSteps() {
   ].join("\n");
 
   const setupMode = document.body && document.body.dataset.setupMode;
-  if (setupMode === "beginner" && currentLang === "ja") {
+  if (setupMode === "beginner") {
+    const beginnerJa = currentLang === "ja";
+    const pasteInto = (snippet, path) => (beginnerJa
+      ? `${snippet} を ${path} に貼り付け`
+      : `Paste ${snippet} into ${path}`);
     const steps = [];
     let step = 0;
     const addStep = (label, body = "") => {
@@ -1449,7 +1505,9 @@ function renderNextSteps() {
       steps.push(`${step}) ${label}${body ? "\n" + body : ""}`);
     };
 
-    addStep("（ポータル）入力 → ファイル生成 → サーバーに保存");
+    addStep(beginnerJa
+      ? "（ポータル）入力 → ファイル生成 → サーバーに保存"
+      : "(Portal) Fill in values → generate files → save to server");
 
     const vaultEdits = [];
     if (plan.onprem) vaultEdits.push(`ansible-vault edit ${hostVarsPath("onprem-1.yml")}`);
@@ -1458,48 +1516,61 @@ function renderNextSteps() {
 
     const vaultSnippets = [];
     if (plan.onprem) {
-      vaultSnippets.push(`${adminVaultSnippet} を ${hostVarsPath("onprem-1.yml")} に貼り付け`);
+      vaultSnippets.push(pasteInto(adminVaultSnippet, hostVarsPath("onprem-1.yml")));
     }
     if (value(fields.enableCloudflared) && plan.vps) {
-      vaultSnippets.push(`${cloudflaredVpsSnippet} を ${hostVarsPath("vps-1.yml")} に貼り付け`);
+      vaultSnippets.push(pasteInto(cloudflaredVpsSnippet, hostVarsPath("vps-1.yml")));
     }
     if (value(fields.enableCloudflared) && plan.ec2) {
-      vaultSnippets.push(`${cloudflaredEc2Snippet} を ${hostVarsPath("ec2-1.yml")} に貼り付け`);
+      vaultSnippets.push(pasteInto(cloudflaredEc2Snippet, hostVarsPath("ec2-1.yml")));
     }
     if (value(fields.ddosNotifyEnable) && plan.vps && ddosPrimary) {
-      vaultSnippets.push(`${ddosVaultSnippet} を ${hostVarsPath("vps-1.yml")} に貼り付け`);
+      vaultSnippets.push(pasteInto(ddosVaultSnippet, hostVarsPath("vps-1.yml")));
     }
     if (vaultEdits.length || vaultSnippets.length) {
-      addStep("Vaultを編集してスニペット貼り付け", [...vaultEdits, ...vaultSnippets].join("\n"));
+      addStep(
+        beginnerJa ? "Vaultを編集してスニペット貼り付け" : "Edit vault files and paste snippets",
+        [...vaultEdits, ...vaultSnippets].join("\n"),
+      );
     }
 
     if (plan.cloudflare) {
       addStep(
-        "Terraform（Cloudflare）",
-        "ポータルで tf-cf init → plan → apply を実行\n" +
-          `CLOUDFLARE_API_TOKEN を環境変数で指定（${tfvarsCfFile} も確認）`,
+        beginnerJa ? "Terraform（Cloudflare）" : "Terraform (Cloudflare)",
+        beginnerJa
+          ? "ポータルで tf-cf init → plan → apply を実行\n" +
+            `CLOUDFLARE_API_TOKEN を環境変数で指定（${tfvarsCfFile} も確認）`
+          : "Run tf-cf init → plan → apply from the portal\n" +
+            `Set CLOUDFLARE_API_TOKEN in the shell (also review ${tfvarsCfFile})`,
       );
     }
     if (plan.terraform) {
       addStep(
-        "Terraform（EC2）",
-        "ポータルで tf init → plan → apply を実行\n" +
-          `${tfvarsFile} を確認`,
+        beginnerJa ? "Terraform（EC2）" : "Terraform (EC2)",
+        beginnerJa
+          ? "ポータルで tf init → plan → apply を実行\n" +
+            `${tfvarsFile} を確認`
+          : "Run tf init → plan → apply from the portal\n" +
+            `Review ${tfvarsFile}`,
       );
     }
     if (value(fields.enableFailover) && plan.onprem) {
       addStep(
-        "Failover AWS を Vault に反映（Terraform 後）",
-        `terraform output -raw failover_access_key_id\nterraform output -raw failover_secret_access_key\n${failoverVaultSnippet} を ${hostVarsPath("onprem-1.yml")} に貼り付け`,
+        beginnerJa
+          ? "Failover AWS を Vault に反映（Terraform 後）"
+          : "Copy failover AWS credentials into vault (after Terraform)",
+        `terraform output -raw failover_access_key_id\nterraform output -raw failover_secret_access_key\n${pasteInto(failoverVaultSnippet, hostVarsPath("onprem-1.yml"))}`,
       );
     }
 
     addStep(
-      "Ansible 実行（順番固定）",
-      "ポータルで base → vps → ec2 → onprem の順に実行",
+      beginnerJa ? "Ansible 実行（順番固定）" : "Run Ansible (fixed order)",
+      beginnerJa
+        ? "ポータルで base → vps → ec2 → onprem の順に実行"
+        : "Run base → vps → ec2 → onprem in that order from the portal",
     );
-    addStep("検証", "make validate");
-    return ["推奨設定", ...steps].join("\n\n") + "\n";
+    addStep(beginnerJa ? "検証" : "Validate", "make validate");
+    return [beginnerJa ? "推奨設定" : "Recommended setup", ...steps].join("\n\n") + "\n";
   }
 
   const steps = [];
@@ -2121,7 +2192,7 @@ async function saveAll() {
     });
     const result = await response.json().catch(() => ({}));
     if (!response.ok || !result.ok) {
-      const detail = result.error || response.statusText || "Unknown error";
+      const detail = result.error || response.statusText || unknownErrorText();
       setSaveStatus(messages.error(detail), "error");
       return;
     }
@@ -2236,7 +2307,7 @@ function renderStatus(payload) {
     list,
     `${labels.inventory} (${inventoryLabel})`,
     inventory && inventory.exists,
-    inventory && inventory.exists ? `${inventory.bytes} bytes` : labels.missing,
+    inventory && inventory.exists ? `${inventory.bytes} ${labels.bytes}` : labels.missing,
   );
 
   const groupvars = files["ansible/group_vars/all.yml"];
@@ -2245,7 +2316,7 @@ function renderStatus(payload) {
     list,
     `${labels.groupvars} (${groupvarsLabel})`,
     groupvars && groupvars.exists,
-    groupvars && groupvars.exists ? `${groupvars.bytes} bytes` : labels.missing,
+    groupvars && groupvars.exists ? `${groupvars.bytes} ${labels.bytes}` : labels.missing,
   );
 
   if (plan.terraform) {
@@ -2255,7 +2326,7 @@ function renderStatus(payload) {
       list,
       `${labels.tfvars} (${tfvarsLabel})`,
       tfvars && tfvars.exists,
-      tfvars && tfvars.exists ? `${tfvars.bytes} bytes` : labels.missing,
+      tfvars && tfvars.exists ? `${tfvars.bytes} ${labels.bytes}` : labels.missing,
     );
   }
   if (plan.cloudflare) {
@@ -2265,7 +2336,7 @@ function renderStatus(payload) {
       list,
       `${labels.tfvarsCloudflare} (${tfvarsCfLabel})`,
       tfvarsCf && tfvarsCf.exists,
-      tfvarsCf && tfvarsCf.exists ? `${tfvarsCf.bytes} bytes` : labels.missing,
+      tfvarsCf && tfvarsCf.exists ? `${tfvarsCf.bytes} ${labels.bytes}` : labels.missing,
     );
   }
 
@@ -2600,17 +2671,20 @@ function syncUploadTargetLabels() {
     vps: keyNameValue(fields.vpsKeyName, "vps_ed25519"),
     ec2: keyNameValue(fields.ec2KeyName, "ec2_key.pem"),
   };
+  const roleLabels = currentLang === "ja"
+    ? { onprem: "オンプレミス", vps: "VPS", ec2: "EC2" }
+    : { onprem: "On-prem", vps: "VPS", ec2: "EC2" };
   const onpremOption = targetSelect.querySelector('option[value="onprem"]');
   if (onpremOption) {
-    onpremOption.textContent = `On-prem (${options.onprem})`;
+    onpremOption.textContent = `${roleLabels.onprem} (${options.onprem})`;
   }
   const vpsOption = targetSelect.querySelector('option[value="vps"]');
   if (vpsOption) {
-    vpsOption.textContent = `VPS (${options.vps})`;
+    vpsOption.textContent = `${roleLabels.vps} (${options.vps})`;
   }
   const ec2Option = targetSelect.querySelector('option[value="ec2"]');
   if (ec2Option) {
-    ec2Option.textContent = `EC2 (${options.ec2})`;
+    ec2Option.textContent = `${roleLabels.ec2} (${options.ec2})`;
   }
 }
 
@@ -2804,7 +2878,8 @@ function applyTemplate(name) {
     dual: { en: "Template applied: On-prem + VPS", ja: "テンプレ適用: オンプレ + VPS" },
     full: { en: "Template applied: On-prem + VPS + EC2", ja: "テンプレ適用: オンプレ + VPS + EC2" },
   };
-  const message = messages[name] ? (messages[name][currentLang] || messages[name].en) : "Template applied";
+  const fallbackMessage = currentLang === "ja" ? "テンプレートを適用しました" : "Template applied";
+  const message = messages[name] ? (messages[name][currentLang] || messages[name].en) : fallbackMessage;
   setTemplateStatus(message, "ok");
 }
 
@@ -3070,7 +3145,12 @@ function updateGuidedSteps() {
 async function startJob(action, token, confirmValue, cleanup) {
   const confirmWord = confirmWordFor(action);
   if (confirmWord && confirmValue !== confirmWord) {
-    return { ok: false, error: `Confirm word required: ${confirmWord}` };
+    return {
+      ok: false,
+      error: currentLang === "ja"
+        ? `確認ワードの入力が必要です: ${confirmWord}`
+        : `Confirm word required: ${confirmWord}`,
+    };
   }
 
   const response = await fetch("/api/run", {
@@ -3083,7 +3163,7 @@ async function startJob(action, token, confirmValue, cleanup) {
   });
   const payload = await response.json().catch(() => ({}));
   if (!response.ok || !payload.ok) {
-    return { ok: false, error: payload.error || response.statusText || "Unknown error" };
+    return { ok: false, error: payload.error || response.statusText || unknownErrorText() };
   }
   return { ok: true, jobId: payload.job_id };
 }
@@ -3126,7 +3206,11 @@ async function runActionSequence(actions, token, confirmValue, onUpdate) {
     const cleanup = autoCleanup && i === actions.length - 1;
     const start = await startJob(action, token, confirmValue, cleanup);
     if (!start.ok) {
-      return { ok: false, error: start.error || "Failed to start job" };
+      return {
+        ok: false,
+        error: start.error
+          || (currentLang === "ja" ? "ジョブの開始に失敗しました" : "Failed to start job"),
+      };
     }
     setActionNotice(
       currentLang === "ja" ? `ジョブ開始: ${action}` : `Started: ${action}`,
@@ -3134,7 +3218,13 @@ async function runActionSequence(actions, token, confirmValue, onUpdate) {
     );
     const result = await waitForJob(start.jobId, token, onUpdate);
     if (result.status !== "success") {
-      return { ok: false, error: `Action failed: ${action}`, log: result.log };
+      return {
+        ok: false,
+        error: currentLang === "ja"
+          ? `処理に失敗しました: ${action}`
+          : `Action failed: ${action}`,
+        log: result.log,
+      };
     }
   }
   return { ok: true };
@@ -3765,7 +3855,7 @@ async function runCleanup() {
     });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok || !payload.ok) {
-      const detail = payload.error || response.statusText || "Unknown error";
+      const detail = payload.error || response.statusText || unknownErrorText();
       setCleanupStatus(detail, "error");
       return;
     }
@@ -3820,13 +3910,16 @@ async function runAction(action) {
     });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok || !payload.ok) {
-      const detail = payload.error || response.statusText || "Unknown error";
+      const detail = payload.error || response.statusText || unknownErrorText();
       setRunStatus(detail, "error");
       return;
     }
 
     const jobId = payload.job_id;
-    setRunStatus(`Job started: ${jobId}`, "info");
+    setRunStatus(
+      currentLang === "ja" ? `ジョブを開始しました: ${jobId}` : `Job started: ${jobId}`,
+      "info",
+    );
     setActionNotice(
       currentLang === "ja" ? `ジョブ開始: ${action}` : `Started: ${action}`,
       "info",
@@ -3847,7 +3940,11 @@ async function pollJob(jobId, token) {
     });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok || !payload.ok) {
-      setRunStatus(payload.error || "Failed to read job.", "error");
+      setRunStatus(
+        payload.error
+          || (currentLang === "ja" ? "ジョブ情報の取得に失敗しました。" : "Failed to read job."),
+        "error",
+      );
       return;
     }
     const job = payload.job;
@@ -3940,7 +4037,7 @@ async function runCustomPlan() {
   });
 
   if (!result.ok) {
-    setCustomStatus(result.error || "Failed", "error");
+    setCustomStatus(result.error || (currentLang === "ja" ? "失敗" : "Failed"), "error");
     return;
   }
 
@@ -4225,6 +4322,7 @@ function setLanguage(lang) {
   }
   updatePlaceholders(lang);
   updateTitle(lang);
+  syncUploadTargetLabels();
   generateAll();
   updateGuidedSteps();
   if (window.localStorage) {
@@ -4338,7 +4436,7 @@ async function handleUpload() {
 
     const payload = await response.json().catch(() => ({}));
     if (!response.ok || !payload.ok) {
-      const detail = payload.error || response.statusText || "Unknown error";
+      const detail = payload.error || response.statusText || unknownErrorText();
       setUploadStatus(messages.error(detail), "error");
       return;
     }
@@ -4402,7 +4500,7 @@ async function handleAwsCredentialsUpload() {
 
     const payload = await response.json().catch(() => ({}));
     if (!response.ok || !payload.ok) {
-      const detail = payload.error || response.statusText || "Unknown error";
+      const detail = payload.error || response.statusText || unknownErrorText();
       setAwsCredentialsStatus(messages.error(detail), "error");
       return;
     }
@@ -4459,7 +4557,7 @@ async function handleCloudflareTokenSave() {
     });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok || !payload.ok) {
-      const detail = payload.error || response.statusText || "Unknown error";
+      const detail = payload.error || response.statusText || unknownErrorText();
       setCloudflareTokenStatus(messages.error(detail), "error");
       return;
     }
@@ -4504,7 +4602,7 @@ async function handleEc2Keygen() {
     });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok || !payload.ok) {
-      const detail = payload.error || response.statusText || "Unknown error";
+      const detail = payload.error || response.statusText || unknownErrorText();
       setEc2KeyStatus(detail, "error");
       return false;
     }
@@ -5248,9 +5346,10 @@ if (onpremIpInput) {
 }
 
 const storedLang = window.localStorage ? localStorage.getItem("portalLang") : null;
-const browserLang = (navigator.language || "").toLowerCase().startsWith("ja")
-  ? "ja"
-  : "en";
+// Japanese is the default language for this portal. Only an explicit saved
+// choice ("en" or "ja") overrides it.
+const DEFAULT_LANG = "ja";
+const initialLang = storedLang === "en" || storedLang === "ja" ? storedLang : DEFAULT_LANG;
 const storedPage = window.localStorage ? localStorage.getItem("portalPage") : null;
 const storedSection = window.localStorage ? localStorage.getItem("portalFormSection") : null;
 const storedSetupMode = window.localStorage ? localStorage.getItem("portalSetupMode") : null;
@@ -5272,5 +5371,5 @@ syncUploadKeyName();
 applySetupMode(storedSetupMode || "beginner");
 setPage(defaultPage);
 setFormSection(defaultSection);
-setLanguage(storedLang || browserLang);
+setLanguage(initialLang);
 setActionNotice(currentLang === "ja" ? "準備完了" : "Ready.", "info");

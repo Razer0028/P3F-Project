@@ -24,20 +24,20 @@ prompt() {
   printf "%s" "$val"
 }
 
-onprem_ip="$(prompt onprem_ip "On-prem IP (example: 192.0.2.10)" "")"
-vps_ip="$(prompt vps_ip "VPS public IP (example: 198.51.100.10)" "")"
-ec2_ip="$(prompt ec2_ip "EC2 public IP (example: 203.0.113.10)" "")"
+onprem_ip="$(prompt onprem_ip "オンプレミスの IP（例: 192.0.2.10）" "")"
+vps_ip="$(prompt vps_ip "VPS のパブリック IP（例: 198.51.100.10）" "")"
+ec2_ip="$(prompt ec2_ip "EC2 のパブリック IP（例: 203.0.113.10）" "")"
 
-onprem_user="$(prompt onprem_user "On-prem SSH user" root)"
-vps_user="$(prompt vps_user "VPS SSH user" root)"
-ec2_user="$(prompt ec2_user "EC2 SSH user" admin)"
-project_name="$(prompt project_name "Project name" edge-stack)"
+onprem_user="$(prompt onprem_user "オンプレミスの SSH ユーザー" root)"
+vps_user="$(prompt vps_user "VPS の SSH ユーザー" root)"
+ec2_user="$(prompt ec2_user "EC2 の SSH ユーザー" admin)"
+project_name="$(prompt project_name "プロジェクト名" edge-stack)"
 
-onprem_key_name="$(prompt onprem_key_name "On-prem SSH key name" onprem_ed25519)"
-vps_key_name="$(prompt vps_key_name "VPS SSH key name" vps_ed25519)"
-ec2_key_name="$(prompt ec2_key_name "EC2 SSH key name" ec2_key.pem)"
+onprem_key_name="$(prompt onprem_key_name "オンプレミスの SSH 鍵ファイル名" onprem_ed25519)"
+vps_key_name="$(prompt vps_key_name "VPS の SSH 鍵ファイル名" vps_ed25519)"
+ec2_key_name="$(prompt ec2_key_name "EC2 の SSH 鍵ファイル名" ec2_key.pem)"
 
-timezone="$(prompt timezone 'Timezone (example: Asia/Tokyo)' 'Asia/Tokyo')"
+timezone="$(prompt timezone 'タイムゾーン（例: Asia/Tokyo）' 'Asia/Tokyo')"
 
 cat > "$INVENTORY" <<EOT2
 [onprem]
@@ -50,7 +50,8 @@ vps-1 ansible_host=$vps_ip ansible_user=$vps_user ansible_ssh_private_key_file=~
 ec2-1 ansible_host=$ec2_ip ansible_user=$ec2_user ansible_ssh_private_key_file=~/.ssh/$ec2_key_name
 
 [all:vars]
-ansible_python_interpreter=/usr/bin/python3
+# Python インタプリタは ansible.cfg の interpreter_python = auto_silent で自動検出する。
+# Debian 側の Python バージョン変更に追従できるよう、ここではパスを固定しない。
 EOT2
 
 cat > "$CONFIG" <<EOT2
@@ -86,7 +87,7 @@ EOT2
 
 cat <<EOF
 
-setup complete:
+セットアップが完了しました:
 - $INVENTORY
 - $CONFIG
 EOF

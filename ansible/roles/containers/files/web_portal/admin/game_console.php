@@ -61,9 +61,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['mode'] ?? '') === 'send_cm
             if ($exit === 0) {
                 $_SESSION['flash'] = "✅ コマンドを送信しました";
             } else {
-                $_SESSION['flash'] = "❌ 実行に失敗しました (code={$exit})";
+                $_SESSION['flash'] = "❌ 実行に失敗しました (終了コード={$exit})";
             }
-            $_SESSION['cmd_output'] = $outText !== '' ? $outText : '(no output)';
+            $_SESSION['cmd_output'] = $outText !== '' ? $outText : '(出力なし)';
         }
     }
 
@@ -76,7 +76,7 @@ $cmdOutput = $_SESSION['cmd_output'] ?? '';
 unset($_SESSION['flash'], $_SESSION['cmd_output']);
 
 $gameMeta = $games[$selectedGame] ?? null;
-$status = $gameMeta ? ($containers[$gameMeta['container']]['state'] ?? 'unknown') : 'unknown';
+$status = $gameMeta ? ($containers[$gameMeta['container']]['state'] ?? '不明') : '不明';
 $detail = $gameMeta ? ($containers[$gameMeta['container']]['detail'] ?? '') : '';
 ?>
 <!DOCTYPE html>
@@ -294,7 +294,7 @@ pre{
         <div class="card">
           <div class="status-pill">
             <span class="status-dot <?= $status === 'running' ? 'running' : '' ?>"></span>
-            <span><?=h($gameMeta['label'] ?? 'unknown')?>: <?=h($status)?></span>
+            <span><?=h($gameMeta['label'] ?? '不明')?>: <?=h($status)?></span>
           </div>
           <?php if ($detail): ?>
             <div class="muted" style="margin-top:8px;"><?=h($detail)?></div>
@@ -309,7 +309,7 @@ pre{
                 <input type="hidden" name="csrf" value="<?=h($csrf)?>">
                 <input type="hidden" name="game" value="<?=h($selectedGame)?>">
                 <label>コマンド入力</label>
-                <textarea name="command" placeholder="例: <?=h($gameMeta['tips'][0] ?? 'command')?>"></textarea>
+                <textarea name="command" placeholder="例: <?=h($gameMeta['tips'][0] ?? 'help（コマンド一覧を表示）')?>"></textarea>
                 <div class="btn-row">
                   <button type="submit">送信</button>
                 </div>
@@ -334,7 +334,7 @@ pre{
 
         <div class="card">
           <label>実行結果</label>
-          <pre><?=h($cmdOutput ?: '(no output)')?></pre>
+          <pre><?=h($cmdOutput ?: '(出力なし)')?></pre>
         </div>
       </div>
     <?php endif; ?>

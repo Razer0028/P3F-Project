@@ -64,3 +64,9 @@ aws configure
 - トークン/アクセスキーは漏洩させないでください。
 - DNS の反映には数分〜数時間かかる場合があります。
 - Terraform で Zone を作成した場合は、必ずネームサーバー変更を行ってください。
+- `terraform-cloudflare/` は cloudflare プロバイダ `~> 5.22` を前提としています。
+  v5 では `cloudflare_zone` の `plan` 属性が削除されたため、**ゾーンのプランは Terraform で
+  設定できません**。ダッシュボード、または `cloudflare_zone_subscription` で設定してください。
+  （`cf_zone_plan` 変数は既存 tfvars との互換のため残していますが未使用です。）
+- Cloudflare API トークンは tfvars に書かず、環境変数 `CLOUDFLARE_API_TOKEN` で渡してください。
+- プロバイダ v4 から移行する場合の state 移行手順は `docs/operations.md` を参照してください。

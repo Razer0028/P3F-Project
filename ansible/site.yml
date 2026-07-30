@@ -1,24 +1,24 @@
 ---
-- name: "Base configuration"
+- name: "基本設定"
   hosts: all
   become: true
   gather_facts: false
   pre_tasks:
-    - name: Wait for VPS SSH to stabilize
-      wait_for_connection:
+    - name: VPS の SSH 接続が安定するまで待機
+      ansible.builtin.wait_for_connection:
         timeout: 60
         connect_timeout: 5
         sleep: 2
       when: "'vps' in group_names"
 
-    - name: Gather facts
-      setup:
+    - name: ファクトを収集
+      ansible.builtin.setup:
   roles:
     - role: base
       tags:
         - base
 
-- name: "On-prem services"
+- name: "オンプレミス サービス"
   hosts: onprem
   become: true
   roles:
@@ -33,7 +33,7 @@
         - failover_core
     - backups
 
-- name: "VPS edge services"
+- name: "VPS エッジ サービス"
   hosts: vps
   become: true
   roles:
@@ -50,7 +50,7 @@
       tags:
         - portctl
 
-- name: "EC2 edge services"
+- name: "EC2 エッジ サービス"
   hosts: ec2
   become: true
   roles:

@@ -1,50 +1,6 @@
 ---
-- name: "Base configuration"
-  hosts: all
-  become: true
-  roles:
-    - role: base
-      tags:
-        - base
-
-- name: "On-prem services"
-  hosts: onprem
-  become: true
-  roles:
-    - wireguard
-    - role: frr
-      tags:
-        - frr
-    - docker
-    - containers
-    - role: failover_core
-      tags:
-        - failover_core
-    - backups
-
-- name: "VPS edge services"
-  hosts: vps
-  become: true
-  roles:
-    - wireguard
-    - role: frr
-      tags:
-        - frr
-    - suricata
-    - ddos_notify
-    - role: cloudflared
-      tags:
-        - cloudflared
-    - role: portctl
-      tags:
-        - portctl
-
-- name: "EC2 edge services"
-  hosts: ec2
-  become: true
-  roles:
-    - wireguard
-    - role: cloudflared
-      tags:
-        - cloudflared
-    - suricata
+# 互換用のラッパー。
+# 正式なプレイブックは ansible/site.yml（接続待ちの pre_tasks を含む）。
+# 以前はここに同じ内容が二重管理されており、片方だけ更新される事故の原因だったため
+# import_playbook に置き換えた。
+- import_playbook: ansible/site.yml

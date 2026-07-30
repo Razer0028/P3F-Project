@@ -40,6 +40,12 @@ foreach ($SERVERS as $srv) {
 /* ===== Utility ===== */
 function h($s){ return htmlspecialchars($s ?? '', ENT_QUOTES, 'UTF-8'); }
 
+/* CSRF */
+if (empty($_SESSION['csrf'])) {
+    $_SESSION['csrf'] = bin2hex(random_bytes(16));
+}
+$csrf = $_SESSION['csrf'];
+
 function redirect_self_303(){
     header('Location: '.basename(__FILE__), true, 303);
     exit;
@@ -208,6 +214,10 @@ if(($_GET['action'] ?? '') === 'status'){
 if($_SERVER['REQUEST_METHOD']==='POST'){
     $type = $_POST['type'] ?? '';
     if($type==='whitelist'){
+        if (!hash_equals($_SESSION['csrf'] ?? '', $_POST['csrf'] ?? '')) {
+            $_SESSION['flash'] = ['❌ CSRFトークンが無効です。ページを再読み込みしてやり直してください。', 'error'];
+            redirect_self_303();
+        }
         if (!$minecraftEnabled) {
             $_SESSION['flash'] = ['❌ Minecraft が公開されていません。', 'error'];
             redirect_self_303();
@@ -233,6 +243,10 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
     }
 
     if($type==='feedback'){
+        if (!hash_equals($_SESSION['csrf'] ?? '', $_POST['csrf'] ?? '')) {
+            $_SESSION['flash'] = ['❌ CSRFトークンが無効です。ページを再読み込みしてやり直してください。', 'error'];
+            redirect_self_303();
+        }
         $text=trim($_POST['feedback'] ?? '');
         if($text===''){
             $_SESSION['flash']=['❌ 空のメッセージは送信できません。','error'];
@@ -498,7 +512,7 @@ textarea{min-height:110px;resize:vertical;font-family:"Space Grotesk",ui-monospa
               <?php if($srv['hostport']): ?>
               <div class="server-addr">
                 <span><?=h($srv['hostport'])?></span>
-                <button class="copy-btn" onclick="copyText('<?=h($srv['hostport'])?>')">コピー</button>
+                <button class="copy-btn" onclick="copyText(<?=h(json_encode($srv['hostport'], JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_TAG | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE))?>)">コピー</button>
               </div>
               <?php endif; ?>
               <div class="server-players" data-players>
@@ -603,6 +617,7 @@ textarea{min-height:110px;resize:vertical;font-family:"Space Grotesk",ui-monospa
 
         <form method="post" onsubmit="return lockSubmit(this)">
           <input type="hidden" name="type" value="whitelist">
+          <input type="hidden" name="csrf" value="<?=h($csrf)?>">
           <div class="form-group">
             <label>プレイヤー名（Java版）</label>
             <input type="text" name="mc_name" required placeholder="例: Notch">
@@ -650,6 +665,7 @@ textarea{min-height:110px;resize:vertical;font-family:"Space Grotesk",ui-monospa
 
         <form method="post" onsubmit="return lockSubmit(this)">
           <input type="hidden" name="type" value="feedback">
+          <input type="hidden" name="csrf" value="<?=h($csrf)?>">
           <div class="form-group">
             <label>メッセージ</label>
             <textarea name="feedback" ></textarea>

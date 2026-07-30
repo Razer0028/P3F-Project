@@ -1,0 +1,20 @@
+---
+# このプロジェクトが必要とする Ansible コレクション。
+#   ansible-galaxy collection install -r ansible/requirements.yml
+#
+# ansible（バンドル版）を入れている場合は同梱されているため気づきにくいが、
+# ansible-core だけを入れた環境では下記が無いと base / failover_core ロールが失敗する。
+collections:
+  # ansible.posix.sysctl … roles/base（IP転送・sysctl 設定）
+  - name: ansible.posix
+    version: ">=1.5.0"
+
+  # community.general.timezone … roles/base
+  # community.general.ini_file  … roles/failover_core（AWS 認証情報の書き込み）
+  # community.general.ufw       … ufw のコマンド直叩きを置き換える場合
+  - name: community.general
+    version: ">=8.0.0"
+
+  # community.docker.docker_compose_v2 … roles/containers（compose の冪等な適用）
+  - name: community.docker
+    version: ">=3.4.0"

@@ -11,12 +11,12 @@ fi
 export ANSIBLE_CONFIG="$ROOT_DIR/ansible.cfg"
 
 if ! command -v ansible >/dev/null 2>&1; then
-  echo "ansible not found"
+  echo "ansible が見つかりません"
   exit 1
 fi
 
 if ! grep -qE "^[^#].*ansible_host=" "$INV"; then
-  echo "No hosts found in inventory."
+  echo "インベントリにホストが登録されていません。"
   exit 0
 fi
 
@@ -34,32 +34,32 @@ has_group() {
 run() {
   local host="$1"
   local cmd="$2"
-  ansible "$host" -i "$INV" -m shell -a "$cmd"
+  ansible "$host" -i "$INV" -m ansible.builtin.shell -a "$cmd"
 }
 
 run_group() {
   local group="$1"
   local cmd="$2"
   if ! has_group "$group"; then
-    echo "skip: group $group not in inventory"
+    echo "スキップ: グループ $group はインベントリにありません"
     return 0
   fi
   run "$group" "$cmd"
 }
 
-# Basic connectivity
+# 疎通確認
 run all "uname -a"
 
-# WireGuard status
+# WireGuard の稼働状態
 run_group onprem "systemctl is-active wg-quick@wg0 || true"
 run_group onprem "systemctl is-active wg-quick@wg1 || true"
 run_group vps "systemctl is-active wg-quick@wg0 || true"
 run_group ec2 "systemctl is-active wg-quick@wg1 || true"
 
-# WireGuard sanity (no double active)
+# WireGuard の整合性確認（wg0 と wg1 が同時に active でないこと）
 run_group onprem "bash -lc 'a=$(systemctl is-active wg-quick@wg0 2>/dev/null || true); b=$(systemctl is-active wg-quick@wg1 2>/dev/null || true); echo wg0=\$a wg1=\$b; if [ \"\$a\" = active ] && [ \"\$b\" = active ]; then echo WARN: both wg0 and wg1 active; fi'"
 
-# Service checks
+# サービスの稼働確認
 run_group onprem "systemctl is-active failover_core.service || true"
 run_group onprem "systemctl is-active docker.service apache2.service || true"
 run_group onprem "test -f /opt/serveradmin/config/portal_services.json && echo portal_services.json: ok || echo portal_services.json: missing"
@@ -69,14 +69,14 @@ run_group vps "systemctl is-active frr.service || true"
 run_group ec2 "systemctl is-active suricata.service || true"
 run_group ec2 "systemctl is-active ssh.service || true"
 
-# DNS checks
+# DNS の確認
 run_group vps "grep -E '^nameserver' /etc/resolv.conf || true"
 run_group vps "getent hosts cloudflare.com | head -n 1 || true"
 run_group ec2 "getent hosts deb.debian.org | head -n 1 || true"
 
-# Ports (sample)
+# 待ち受けポート（抜粋）
 run_group onprem "ss -tulpn | head -n 30"
 run_group vps "ss -tulpn | head -n 30"
 run_group ec2 "ss -tulpn | head -n 30"
 
-echo "validate done"
+echo "検証が完了しました"

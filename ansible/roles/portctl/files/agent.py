@@ -4,6 +4,7 @@ import os
 import json
 import subprocess
 import re
+import shlex
 import ipaddress
 
 SOCK_PATH = "/run/portctl.sock"
@@ -40,9 +41,34 @@ def load_config():
         return {}
 
 
-def run_cmd(cmd):
+def run_cmd(cmd, input_text=None):
+    """外部コマンドをシェルを介さずに実行する。
+
+    このデーモンは root で動作し、Web UI から受け取った値を含むコマンドを
+    実行する。shell=True を使うと `&` などのメタ文字で任意コマンドを
+    実行できてしまうため、必ず shell=False（配列渡し）で実行する。
+    cmd に文字列を渡した場合は shlex で分割するだけで、シェルは介さない。
+    """
+    if isinstance(cmd, str):
+        try:
+            argv = shlex.split(cmd)
+        except ValueError as exc:
+            return False, f"コマンドの解析に失敗しました: {exc}"
+    else:
+        argv = list(cmd)
+
+    if not argv:
+        return False, "コマンドが空です"
+
     try:
-        result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=30)
+        result = subprocess.run(
+            argv,
+            shell=False,
+            capture_output=True,
+            text=True,
+            timeout=30,
+            input=input_text,
+        )
         return result.returncode == 0, result.stdout + result.stderr
     except Exception as e:
         return False, str(e)
@@ -310,15 +336,22 @@ def list_ufw():
 
 
 def add_ufw(rule):
-    dangerous = [";", "&&", "||", "|", "`", "$", ">", "<", "\n", "\r"]
-    for d in dangerous:
-        if d in rule:
-            return {"status": "error", "message": "無効な文字が含まれています"}
+    # 実行は shell を介さない（run_cmd 参照）ので注入は成立しないが、
+    # 想定外の値を root コマンドへ渡さないよう許可文字を明示する。
+    if not isinstance(rule, str):
+        return {"status": "error", "message": "無効なルールです"}
 
-    if not rule or rule.strip() in ["allow", "deny", "reject", "limit"]:
+    rule = rule.strip()
+    if not rule:
         return {"status": "error", "message": "ポートまたはIPを指定してください"}
 
-    ok, out = run_cmd(f"ufw {rule}")
+    if not re.fullmatch(r"[A-Za-z0-9 ._:/,=-]+", rule):
+        return {"status": "error", "message": "使用できない文字が含まれています"}
+
+    if rule in ["allow", "deny", "reject", "limit"]:
+        return {"status": "error", "message": "ポートまたはIPを指定してください"}
+
+    ok, out = run_cmd(["ufw"] + rule.split())
     if ok:
         return {"status": "ok", "message": "ルールを追加しました"}
     return {"status": "error", "message": out}
@@ -330,7 +363,9 @@ def delete_ufw(num):
     except Exception:
         return {"status": "error", "message": "無効なルール番号"}
 
-    ok, out = run_cmd(f"yes | ufw delete {num}")
+    # 以前は `yes | ufw delete N` をシェル経由で実行していた。
+    # シェルを使わず、確認プロンプトへは stdin で応答する。
+    ok, out = run_cmd(["ufw", "delete", str(num)], input_text="y\n" * 5)
     if ok:
         return {"status": "ok", "message": "ルールを削除しました"}
     return {"status": "error", "message": out}

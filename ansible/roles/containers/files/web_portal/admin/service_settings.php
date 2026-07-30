@@ -120,6 +120,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 function is_checked($value, array $list) {
     return in_array($value, $list, true) ? 'checked' : '';
 }
+
+// 種類の表示名（表示専用。未定義の種類はそのまま表示する）
+function type_label($type) {
+    $labels = [
+        'game'    => 'ゲーム',
+        'portal'  => 'ポータル',
+        'monitor' => '監視',
+    ];
+    if (is_string($type) && isset($labels[$type])) {
+        return $labels[$type];
+    }
+    return $type;
+}
 ?>
 <!DOCTYPE html>
 <html lang="ja">
@@ -354,7 +367,7 @@ pre{
               <input class="checkbox" type="checkbox" name="monitor[]" value="<?= h($container) ?>" <?= is_checked($container, $monitorSelected) ?>>
             <?php endif; ?>
           </td>
-          <td><span class="badge"><?= h($type) ?></span></td>
+          <td><span class="badge"><?= h(type_label($type)) ?></span></td>
           <td><?= h($label) ?></td>
           <td><?= h($container ?: '-') ?></td>
           <td><?= h($hostport) ?></td>

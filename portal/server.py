@@ -322,7 +322,7 @@ def ensure_key_loaded(key_path, passphrase):
 
 def run_ssh_command(host, user, key_path, command, sudo_password="", timeout=12):
     if not host or not user:
-        return "", "Missing host/user"
+        return "", "ホスト/ユーザーが指定されていません"
     target = f"{user}@{host}"
     cmd = ["ssh", "-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=accept-new", "-o", "ConnectTimeout=8"]
     if key_path:
@@ -341,14 +341,14 @@ def run_ssh_command(host, user, key_path, command, sudo_password="", timeout=12)
     except Exception as exc:
         return "", str(exc)
     if result.returncode != 0:
-        detail = (result.stderr or result.stdout or "ssh failed").strip()
+        detail = (result.stderr or result.stdout or "ssh の実行に失敗しました").strip()
         return "", detail
     return result.stdout, ""
 
 
 def read_remote_file(host, user, key_path, path, sudo_password="", timeout=12):
     if not path:
-        return "", "Missing path"
+        return "", "パスが指定されていません"
     if user == "root":
         cmd = f"cat {path}"
         return run_ssh_command(host, user, key_path, cmd, "", timeout)
@@ -368,12 +368,12 @@ def sanitize_wg_content(content):
 
 def generate_wg_keypair():
     if shutil.which("wg") is None:
-        return "", "", "wg command not found"
+        return "", "", "wg コマンドが見つかりません"
     try:
         private_key = subprocess.check_output(["wg", "genkey"], text=True).strip()
         public_key = subprocess.check_output(["wg", "pubkey"], input=private_key + "\n", text=True).strip()
         if not private_key or not public_key:
-            return "", "", "wg returned empty key"
+            return "", "", "wg が空の鍵を返しました"
         return private_key, public_key, ""
     except Exception as exc:
         return "", "", str(exc)
@@ -399,7 +399,7 @@ def build_wg_config_item(name, address, private_key, peer, enable_nat=False, dns
 def normalize_client_allowed_ip(raw):
     value = (raw or "").strip()
     if not value:
-        return "", "portctl_default_dest_ip is empty"
+        return "", "portctl_default_dest_ip が空です"
     try:
         if "/" in value:
             iface = ipaddress.ip_interface(value)
@@ -407,7 +407,7 @@ def normalize_client_allowed_ip(raw):
         ip = ipaddress.ip_address(value)
         return f"{ip}/32", ""
     except ValueError:
-        return "", f"Invalid client IP: {value}"
+        return "", f"クライアント IP が不正です: {value}"
 
 def build_simple_wireguard_configs(output_root, inventory_text, client_allowed_ip):
     errors = {}
@@ -1333,18 +1333,18 @@ def cloudflared_host_vars_missing(output_root, groups):
         rel_path = f"ansible/host_vars/{group}-1.yml"
         abs_path = resolve_output_path(output_root, rel_path)
         if not abs_path or not abs_path.exists():
-            missing[group] = "host_vars missing"
+            missing[group] = "host_vars がありません"
             continue
         try:
             text = abs_path.read_text(encoding="utf-8", errors="replace")
         except OSError:
-            missing[group] = "host_vars unreadable"
+            missing[group] = "host_vars を読み取れません"
             continue
         if CLOUDFLARED_RULES_MARKER not in text:
-            missing[group] = "cloudflared block missing"
+            missing[group] = "cloudflared ブロックがありません"
             continue
         if "cloudflared_config_content:" not in text or "cloudflared_credentials_content:" not in text:
-            missing[group] = "cloudflared fields missing"
+            missing[group] = "cloudflared の設定項目が不足しています"
     return missing
 
 
@@ -1464,11 +1464,11 @@ def parse_aws_credentials_csv(data):
     try:
         text = data.decode("utf-8-sig")
     except UnicodeDecodeError:
-        return None, "Invalid CSV encoding"
+        return None, "CSV の文字コードが不正です"
     reader = csv.DictReader(io.StringIO(text))
     rows = [row for row in reader if row and any(row.values())]
     if not rows:
-        return None, "CSV has no credential rows"
+        return None, "CSV に認証情報の行がありません"
     row = rows[0]
     normalized = {}
     for key, value in row.items():
@@ -1478,7 +1478,7 @@ def parse_aws_credentials_csv(data):
     key_id = normalized.get("access key id") or normalized.get("access key")
     secret = normalized.get("secret access key") or normalized.get("secret key")
     if not key_id or not secret:
-        return None, "Access key ID / Secret access key not found"
+        return None, "アクセスキー ID / シークレットアクセスキーが見つかりません"
     return {
         "access_key_id": key_id,
         "secret_access_key": secret,
@@ -1549,7 +1549,7 @@ def ensure_ssh_agent():
     sock_match = re.search(r"SSH_AUTH_SOCK=([^;]+);", output)
     pid_match = re.search(r"SSH_AGENT_PID=([0-9]+);", output)
     if not sock_match or not pid_match:
-        return False, "Failed to start ssh-agent"
+        return False, "ssh-agent の起動に失敗しました"
     os.environ["SSH_AUTH_SOCK"] = sock_match.group(1)
     os.environ["SSH_AGENT_PID"] = pid_match.group(1)
     return True, ""
@@ -1589,7 +1589,7 @@ def add_key_to_agent(key_path, passphrase):
             text=True,
         )
         if result.returncode != 0:
-            detail = (result.stderr or result.stdout or "ssh-add failed").strip()
+            detail = (result.stderr or result.stdout or "ssh-add が失敗しました").strip()
             return False, detail
         return True, ""
     finally:
@@ -1961,9 +1961,9 @@ class PortalState:
             combined_env = os.environ.copy()
             combined_env.update(env or {})
             with log_path.open("w", encoding="utf-8") as log:
-                log.write(f"Action: {action}\n")
-                log.write(f"Command: {' '.join(command)}\n")
-                log.write(f"Working dir: {cwd}\n\n")
+                log.write(f"アクション: {action}\n")
+                log.write(f"コマンド: {' '.join(command)}\n")
+                log.write(f"作業ディレクトリ: {cwd}\n\n")
                 log.flush()
                 attempts = 1
                 retry_enabled = bool(retry and retry.get("enabled"))
@@ -1975,7 +1975,7 @@ class PortalState:
                 attempt = 1
                 while attempt <= attempts:
                     if attempt > 1:
-                        log.write(f"\nRetrying ({attempt}/{attempts}) after {delay}s...\n")
+                        log.write(f"\n再試行します（{attempt}/{attempts}）: {delay} 秒待機...\n")
                         log.flush()
                         time.sleep(delay)
                     attempt_start = log.tell()
@@ -1989,7 +1989,7 @@ class PortalState:
                         )
                         return_code = process.wait()
                     except Exception as exc:  # pragma: no cover
-                        log.write(f"\nExecution error: {exc}\n")
+                        log.write(f"\n実行エラー: {exc}\n")
                         return_code = 1
                     log.flush()
                     if return_code == 0:
@@ -2011,25 +2011,25 @@ class PortalState:
                         group_vars_text = OUTPUT_GROUP_VARS_PATH.read_text(encoding="utf-8", errors="replace") if OUTPUT_GROUP_VARS_PATH.exists() else ""
                         saved = maybe_write_failover_host_vars(self.output_root, self.repo_root, inventory_text, group_vars_text)
                         if saved:
-                            log.write("\nPortal updated failover host_vars:\n")
+                            log.write("\nポータルが failover の host_vars を更新しました:\n")
                             for rel_path in saved:
                                 log.write(f"- {rel_path}\n")
                         cloudflared_saved = maybe_write_cloudflared_host_vars(self.output_root, self.repo_root, inventory_text, group_vars_text)
                         if cloudflared_saved:
-                            log.write("\nPortal updated cloudflared host_vars:\n")
+                            log.write("\nポータルが cloudflared の host_vars を更新しました:\n")
                             for rel_path in cloudflared_saved:
                                 log.write(f"- {rel_path}\n")
                     except Exception as exc:
-                        log.write(f"\nPortal failed to update failover host_vars: {exc}\n")
+                        log.write(f"\nポータルによる failover の host_vars 更新に失敗しました: {exc}\n")
 
                 if return_code == 0 and cleanup:
                     removed = cleanup_secrets(include_persistent=False)
                     if removed:
-                        log.write("\nCleanup removed files:\n")
+                        log.write("\nクリーンアップで削除したファイル:\n")
                         for path in removed:
                             log.write(f"- {path}\n")
                     else:
-                        log.write("\nCleanup: no files removed.\n")
+                        log.write("\nクリーンアップ: 削除したファイルはありません。\n")
             job_update = read_json(job_path) or job
             job_update["status"] = "success" if return_code == 0 else "failed"
             job_update["return_code"] = return_code
@@ -2065,13 +2065,13 @@ class PortalHandler(http.server.SimpleHTTPRequestHandler):
     def _check_token(self, payload=None):
         token = self._token_required()
         if not token:
-            return False, "Upload token not set"
+            return False, "アップロードトークンが設定されていません"
         header_token = self.headers.get("X-Portal-Token", "")
         if header_token and header_token == token:
             return True, ""
         if payload and payload.get("token") == token:
             return True, ""
-        return False, "Invalid token"
+        return False, "トークンが正しくありません"
 
     def do_POST(self):
         if self.path == "/upload":
@@ -2095,7 +2095,7 @@ class PortalHandler(http.server.SimpleHTTPRequestHandler):
         if self.path == "/api/run":
             self._handle_run()
             return
-        response_json(self, 404, {"ok": False, "error": "Not found"})
+        response_json(self, 404, {"ok": False, "error": "見つかりません"})
 
     def do_GET(self):
         if self.path.startswith("/api/terraform-output"):
@@ -2112,42 +2112,42 @@ class PortalHandler(http.server.SimpleHTTPRequestHandler):
     def _handle_upload(self):
         token = self._token_required()
         if not token:
-            response_json(self, 500, {"ok": False, "error": "Upload token not set"})
+            response_json(self, 500, {"ok": False, "error": "アップロードトークンが設定されていません"})
             return
 
         content_length = int(self.headers.get("Content-Length", "0"))
         if content_length > MAX_UPLOAD_BYTES + 4096:
-            response_json(self, 413, {"ok": False, "error": "File too large"})
+            response_json(self, 413, {"ok": False, "error": "ファイルサイズが大きすぎます"})
             return
 
         content_type = self.headers.get("Content-Type", "")
         if "multipart/form-data" not in content_type:
-            response_json(self, 400, {"ok": False, "error": "Invalid content type"})
+            response_json(self, 400, {"ok": False, "error": "Content-Type が不正です"})
             return
 
         form = read_multipart_form(self, content_length, content_type)
 
         form_token = form.getfirst("token", "")
         if form_token != token:
-            response_json(self, 403, {"ok": False, "error": "Invalid token"})
+            response_json(self, 403, {"ok": False, "error": "トークンが正しくありません"})
             return
 
         target = form.getfirst("target", "")
         if target not in ALLOWED_UPLOAD_TARGETS:
-            response_json(self, 400, {"ok": False, "error": "Invalid target"})
+            response_json(self, 400, {"ok": False, "error": "アップロード先の指定が不正です"})
             return
 
         file_item = get_form_file(form, "file")
         if not file_item or not getattr(file_item, "file", None):
-            response_json(self, 400, {"ok": False, "error": "Invalid file"})
+            response_json(self, 400, {"ok": False, "error": "ファイルが不正です"})
             return
 
         data = file_item.file.read(MAX_UPLOAD_BYTES + 1)
         if not data:
-            response_json(self, 400, {"ok": False, "error": "Empty file"})
+            response_json(self, 400, {"ok": False, "error": "ファイルが空です"})
             return
         if len(data) > MAX_UPLOAD_BYTES:
-            response_json(self, 413, {"ok": False, "error": "File too large"})
+            response_json(self, 413, {"ok": False, "error": "ファイルサイズが大きすぎます"})
             return
 
         key_name = sanitize_key_name(form.getfirst("key_name", ""), ALLOWED_UPLOAD_TARGETS[target])
@@ -2186,7 +2186,7 @@ class PortalHandler(http.server.SimpleHTTPRequestHandler):
         try:
             payload = json.loads(self.rfile.read(length) or b"{}")
         except json.JSONDecodeError:
-            response_json(self, 400, {"ok": False, "error": "Invalid JSON"})
+            response_json(self, 400, {"ok": False, "error": "JSON の形式が不正です"})
             return
 
         key_name = sanitize_key_name(payload.get("key_name", ""), ALLOWED_UPLOAD_TARGETS["ec2"])
@@ -2200,7 +2200,7 @@ class PortalHandler(http.server.SimpleHTTPRequestHandler):
             cmd = ["ssh-keygen", "-t", "ed25519", "-f", str(key_path), "-N", passphrase]
             result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
             if result.returncode != 0:
-                detail = (result.stderr or result.stdout or "ssh-keygen failed").strip()
+                detail = (result.stderr or result.stdout or "ssh-keygen が失敗しました").strip()
                 response_json(self, 500, {"ok": False, "error": detail})
                 return
             os.chmod(key_path, 0o600)
@@ -2214,7 +2214,7 @@ class PortalHandler(http.server.SimpleHTTPRequestHandler):
 
         public_key = read_public_key(key_path, passphrase)
         if not public_key:
-            response_json(self, 500, {"ok": False, "error": "Public key unavailable"})
+            response_json(self, 500, {"ok": False, "error": "公開鍵を取得できませんでした"})
             return
 
         agent_error = ""
@@ -2243,12 +2243,12 @@ class PortalHandler(http.server.SimpleHTTPRequestHandler):
 
         content_length = int(self.headers.get("Content-Length", "0"))
         if content_length > MAX_UPLOAD_BYTES + 4096:
-            response_json(self, 413, {"ok": False, "error": "File too large"})
+            response_json(self, 413, {"ok": False, "error": "ファイルサイズが大きすぎます"})
             return
 
         content_type = self.headers.get("Content-Type", "")
         if "multipart/form-data" not in content_type:
-            response_json(self, 400, {"ok": False, "error": "Invalid content type"})
+            response_json(self, 400, {"ok": False, "error": "Content-Type が不正です"})
             return
 
         form = read_multipart_form(self, content_length, content_type)
@@ -2258,16 +2258,16 @@ class PortalHandler(http.server.SimpleHTTPRequestHandler):
         if file_item and getattr(file_item, "file", None):
             data = file_item.file.read(MAX_UPLOAD_BYTES + 1)
             if len(data) > MAX_UPLOAD_BYTES:
-                response_json(self, 413, {"ok": False, "error": "File too large"})
+                response_json(self, 413, {"ok": False, "error": "ファイルサイズが大きすぎます"})
                 return
             try:
                 token_value = data.decode("utf-8").strip()
             except UnicodeDecodeError:
-                response_json(self, 400, {"ok": False, "error": "Invalid token encoding"})
+                response_json(self, 400, {"ok": False, "error": "トークンの文字コードが不正です"})
                 return
 
         if not token_value:
-            response_json(self, 400, {"ok": False, "error": "Token is empty"})
+            response_json(self, 400, {"ok": False, "error": "トークンが空です"})
             return
 
         token_path = write_cloudflare_token(token_value)
@@ -2293,27 +2293,27 @@ class PortalHandler(http.server.SimpleHTTPRequestHandler):
 
         content_length = int(self.headers.get("Content-Length", "0"))
         if content_length > MAX_UPLOAD_BYTES + 4096:
-            response_json(self, 413, {"ok": False, "error": "File too large"})
+            response_json(self, 413, {"ok": False, "error": "ファイルサイズが大きすぎます"})
             return
 
         content_type = self.headers.get("Content-Type", "")
         if "multipart/form-data" not in content_type:
-            response_json(self, 400, {"ok": False, "error": "Invalid content type"})
+            response_json(self, 400, {"ok": False, "error": "Content-Type が不正です"})
             return
 
         form = read_multipart_form(self, content_length, content_type)
 
         file_item = get_form_file(form, "file")
         if file_item is None or getattr(file_item, "file", None) is None:
-            response_json(self, 400, {"ok": False, "error": "No file provided"})
+            response_json(self, 400, {"ok": False, "error": "ファイルが指定されていません"})
             return
 
         data = file_item.file.read(MAX_UPLOAD_BYTES + 1)
         if not data:
-            response_json(self, 400, {"ok": False, "error": "Empty file"})
+            response_json(self, 400, {"ok": False, "error": "ファイルが空です"})
             return
         if len(data) > MAX_UPLOAD_BYTES:
-            response_json(self, 413, {"ok": False, "error": "File too large"})
+            response_json(self, 413, {"ok": False, "error": "ファイルサイズが大きすぎます"})
             return
 
         profile = sanitize_profile_name(form.getfirst("profile", "default"), "default")
@@ -2354,7 +2354,7 @@ class PortalHandler(http.server.SimpleHTTPRequestHandler):
         try:
             payload = json.loads(self.rfile.read(length) or b"{}")
         except json.JSONDecodeError:
-            response_json(self, 400, {"ok": False, "error": "Invalid JSON"})
+            response_json(self, 400, {"ok": False, "error": "JSON の形式が不正です"})
             return
 
         files = payload.get("files")
@@ -2363,7 +2363,7 @@ class PortalHandler(http.server.SimpleHTTPRequestHandler):
         if not isinstance(secrets, dict):
             secrets = {}
         if not isinstance(files, dict) or not files:
-            response_json(self, 400, {"ok": False, "error": "No files provided"})
+            response_json(self, 400, {"ok": False, "error": "保存するファイルが指定されていません"})
             return
 
         if setup_mode == "beginner":
@@ -2374,25 +2374,25 @@ class PortalHandler(http.server.SimpleHTTPRequestHandler):
         warnings = {}
         for rel_path, content in files.items():
             if rel_path not in ALLOWED_SAVE_TARGETS:
-                errors[rel_path] = "Path not allowed"
+                errors[rel_path] = "許可されていないパスです"
                 continue
             if not isinstance(content, str):
-                errors[rel_path] = "Invalid content"
+                errors[rel_path] = "内容が不正です"
                 continue
             encoded = content.encode("utf-8")
             if len(encoded) > MAX_SAVE_BYTES:
-                errors[rel_path] = "File too large"
+                errors[rel_path] = "ファイルサイズが大きすぎます"
                 continue
             abs_path = resolve_output_path(self.state.output_root, rel_path)
             if not abs_path:
-                errors[rel_path] = "Invalid path"
+                errors[rel_path] = "パスが不正です"
                 continue
             abs_path.parent.mkdir(parents=True, exist_ok=True)
             abs_path.write_text(content, encoding="utf-8")
             saved[rel_path] = {"bytes": len(encoded)}
 
         if errors:
-            response_json(self, 400, {"ok": False, "error": "Failed to save some files", "details": errors, "saved": saved})
+            response_json(self, 400, {"ok": False, "error": "一部のファイルの保存に失敗しました", "details": errors, "saved": saved})
             return
 
         group_vars_text = files.get("ansible/group_vars/all.yml", "")
@@ -2422,8 +2422,8 @@ class PortalHandler(http.server.SimpleHTTPRequestHandler):
                 if missing:
                     warnings["cloudflared"] = {
                         "message": (
-                            "Cloudflared host_vars not generated yet. "
-                            "Run Cloudflare Apply (tf-cf-apply) then Save to generate."
+                            "cloudflared の host_vars がまだ生成されていません。"
+                            "Cloudflare Apply（tf-cf-apply）を実行してから保存すると生成されます。"
                         ),
                         "details": missing,
                     }
@@ -2461,14 +2461,14 @@ class PortalHandler(http.server.SimpleHTTPRequestHandler):
         try:
             payload = json.loads(self.rfile.read(length) or b"{}")
         except json.JSONDecodeError:
-            response_json(self, 400, {"ok": False, "error": "Invalid JSON"})
+            response_json(self, 400, {"ok": False, "error": "JSON の形式が不正です"})
             return
 
         action = payload.get("action", "")
         confirm = payload.get("confirm", "")
         cleanup = bool(payload.get("cleanup"))
         if action not in self.state.allowed_actions:
-            response_json(self, 400, {"ok": False, "error": "Action not allowed"})
+            response_json(self, 400, {"ok": False, "error": "許可されていない操作です"})
             return
 
         if action == "ansible-failover-core":
@@ -2480,16 +2480,16 @@ class PortalHandler(http.server.SimpleHTTPRequestHandler):
                 response_json(
                     self,
                     400,
-                    {"ok": False, "error": "Failover host_vars not ready. Terraform outputs/Cloudflare token are missing."},
+                    {"ok": False, "error": "failover の host_vars が未準備です。Terraform の出力または Cloudflare トークンがありません。"},
                 )
                 return
 
         if action in self.state.destructive_actions:
             if action == "tf-apply" and confirm != "APPLY":
-                response_json(self, 400, {"ok": False, "error": "Confirm word required (APPLY)"})
+                response_json(self, 400, {"ok": False, "error": "確認ワード（APPLY）の入力が必要です"})
                 return
             if action == "tf-destroy" and confirm != "DESTROY":
-                response_json(self, 400, {"ok": False, "error": "Confirm word required (DESTROY)"})
+                response_json(self, 400, {"ok": False, "error": "確認ワード（DESTROY）の入力が必要です"})
                 return
 
         if action.startswith("ansible") or action == "validate":
@@ -2510,8 +2510,8 @@ class PortalHandler(http.server.SimpleHTTPRequestHandler):
                             {
                                 "ok": False,
                                 "error": (
-                                    "Cloudflared host_vars missing. "
-                                    "Run Cloudflare Apply (tf-cf-apply) then Save. (Cloudflare適用→保存が必要です)"
+                                    "cloudflared の host_vars がありません。"
+                                    "Cloudflare Apply（tf-cf-apply）を実行してから保存してください。"
                                 ),
                                 "details": missing,
                             },
@@ -2523,7 +2523,7 @@ class PortalHandler(http.server.SimpleHTTPRequestHandler):
                 response_json(
                     self,
                     400,
-                    {'ok': False, 'error': 'terraform.tfvars not found. 先にファイル生成→保存してください。'},
+                    {'ok': False, 'error': 'terraform.tfvars が見つかりません。先にファイル生成→保存してください。'},
                 )
                 return
         if action in {'tf-cf-plan', 'tf-cf-apply', 'tf-cf-destroy'}:
@@ -2531,7 +2531,7 @@ class PortalHandler(http.server.SimpleHTTPRequestHandler):
                 response_json(
                     self,
                     400,
-                    {'ok': False, 'error': 'terraform-cloudflare.tfvars not found. 先にファイル生成→保存してください。'},
+                    {'ok': False, 'error': 'terraform-cloudflare の terraform.tfvars が見つかりません。先にファイル生成→保存してください。'},
                 )
                 return
         missing_tools = missing_tools_for_action(action)
@@ -2539,12 +2539,12 @@ class PortalHandler(http.server.SimpleHTTPRequestHandler):
             response_json(
                 self,
                 400,
-                {"ok": False, "error": f"Missing tools: {', '.join(missing_tools)} (必要ツールが見つかりません。インストールして再実行してください)"},
+                {"ok": False, "error": f"必要なツールが見つかりません: {', '.join(missing_tools)}。インストールして再実行してください。"},
             )
             return
         with self.state.lock:
             if self.state.any_running():
-                response_json(self, 409, {"ok": False, "error": "Another job is running"})
+                response_json(self, 409, {"ok": False, "error": "別のジョブが実行中です"})
                 return
             info = self.state.allowed_actions[action]
             env = dict(info.get("env", {}))
@@ -2569,7 +2569,7 @@ class PortalHandler(http.server.SimpleHTTPRequestHandler):
                     response_json(
                         self,
                         400,
-                        {"ok": False, "error": "Cloudflare API token not saved. 先にトークンを保存してください。"},
+                        {"ok": False, "error": "Cloudflare API トークンが保存されていません。先にトークンを保存してください。"},
                     )
                     return
                 env["CLOUDFLARE_API_TOKEN"] = cf_token
@@ -2683,7 +2683,7 @@ class PortalHandler(http.server.SimpleHTTPRequestHandler):
         params = parse_qs(parsed.query)
         stack = (params.get("stack", ["ec2"])[0] or "ec2").strip().lower()
         if stack not in {"ec2", "cloudflare"}:
-            response_json(self, 400, {"ok": False, "error": "Invalid stack"})
+            response_json(self, 400, {"ok": False, "error": "スタックの指定が不正です"})
             return
 
         if stack == "cloudflare":
@@ -2743,7 +2743,7 @@ class PortalHandler(http.server.SimpleHTTPRequestHandler):
             job_id = parts[2]
             job = self.state.get_job(job_id)
             if not job:
-                response_json(self, 404, {"ok": False, "error": "Job not found"})
+                response_json(self, 404, {"ok": False, "error": "ジョブが見つかりません"})
                 return
             if len(parts) == 4 and parts[3] == "logs":
                 log_path = pathlib.Path(job.get("log_path", ""))
@@ -2751,13 +2751,13 @@ class PortalHandler(http.server.SimpleHTTPRequestHandler):
                 return
             response_json(self, 200, {"ok": True, "job": job})
             return
-        response_json(self, 404, {"ok": False, "error": "Not found"})
+        response_json(self, 404, {"ok": False, "error": "見つかりません"})
 
 
 def main():
-    parser = argparse.ArgumentParser(description="edge-stack portal server")
-    parser.add_argument("--bind", default="127.0.0.1", help="Bind address")
-    parser.add_argument("--port", type=int, default=8000, help="Port")
+    parser = argparse.ArgumentParser(description="edge-stack セットアップポータルのサーバー")
+    parser.add_argument("--bind", default="127.0.0.1", help="待ち受けアドレス")
+    parser.add_argument("--port", type=int, default=8000, help="待ち受けポート")
     args = parser.parse_args()
 
     repo_root = pathlib.Path(__file__).resolve().parent.parent
@@ -2767,7 +2767,7 @@ def main():
     )
 
     with http.server.ThreadingHTTPServer((args.bind, args.port), handler) as httpd:
-        print(f"Serving portal on http://{args.bind}:{args.port}")
+        print(f"ポータルを http://{args.bind}:{args.port} で公開しています")
         httpd.serve_forever()
 
 

@@ -1,9 +1,9 @@
 ---
-- name: WireGuard configuration
+- name: WireGuard の設定
   when: wireguard_manage | default(false)
   block:
-    - name: Install WireGuard packages
-      apt:
+    - name: WireGuard パッケージを導入
+      ansible.builtin.apt:
         name:
           - wireguard
           - wireguard-tools
@@ -12,21 +12,21 @@
         update_cache: "{{ wireguard_update_cache | default(true) }}"
         cache_valid_time: "{{ (wireguard_update_cache | default(true)) | ternary(3600, omit) }}"
 
-    - name: Ensure /etc/wireguard exists
-      file:
+    - name: /etc/wireguard の存在を確認
+      ansible.builtin.file:
         path: /etc/wireguard
         state: directory
         owner: root
         group: root
         mode: "0700"
 
-    - name: Select WireGuard config list
-      set_fact:
+    - name: WireGuard の設定一覧を選択
+      ansible.builtin.set_fact:
         wireguard_items: "{{ wireguard_raw_configs | default(wireguard_configs | default([])) }}"
         wireguard_item_names: "{{ (wireguard_raw_configs | default(wireguard_configs | default([]))) | map(attribute='name') | list }}"
 
-    - name: Check whether WireGuard NAT is enabled
-      set_fact:
+    - name: WireGuard の NAT が有効かどうかを確認
+      ansible.builtin.set_fact:
         wireguard_nat_enabled: >-
           {{
             (wireguard_items | default([])
@@ -36,13 +36,13 @@
               | length) > 0
           }}
 
-    - name: Detect WireGuard NAT interface
-      set_fact:
+    - name: WireGuard の NAT インターフェースを検出
+      ansible.builtin.set_fact:
         wireguard_nat_interface: "{{ ansible_default_ipv4.interface }}"
       when: wireguard_nat_interface | default("") | length == 0
 
-    - name: Ensure ufw is installed when WireGuard NAT is enabled (optional)
-      apt:
+    - name: WireGuard の NAT が有効な場合に ufw を導入 (任意)
+      ansible.builtin.apt:
         name: ufw
         state: present
         update_cache: "{{ wireguard_update_cache | default(true) }}"
@@ -51,8 +51,8 @@
         - wireguard_ufw_manage | default(true)
         - wireguard_nat_enabled | default(false)
 
-    - name: Check ufw status (optional)
-      command: ufw status
+    - name: ufw の状態を確認 (任意)
+      ansible.builtin.command: ufw status
       register: wireguard_ufw_status
       changed_when: false
       failed_when: false
@@ -60,8 +60,8 @@
         - wireguard_ufw_manage | default(true)
         - wireguard_nat_enabled | default(false)
 
-    - name: Allow SSH before enabling ufw (optional)
-      command: ufw allow 22/tcp
+    - name: ufw を有効化する前に SSH を許可 (任意)
+      ansible.builtin.command: ufw allow 22/tcp
       register: wireguard_ufw_allow_ssh
       changed_when: false
       failed_when: false
@@ -69,8 +69,8 @@
         - wireguard_ufw_manage | default(true)
         - wireguard_nat_enabled | default(false)
 
-    - name: Allow WireGuard port via ufw (optional)
-      command: ufw allow 51820/udp
+    - name: ufw で WireGuard のポートを許可 (任意)
+      ansible.builtin.command: ufw allow 51820/udp
       register: wireguard_ufw_allow
       changed_when: false
       failed_when: false
@@ -78,20 +78,20 @@
         - wireguard_ufw_manage | default(true)
         - wireguard_nat_enabled | default(false)
 
-    - name: Check existing WireGuard configs
-      stat:
+    - name: 既存の WireGuard 設定を確認
+      ansible.builtin.stat:
         path: "/etc/wireguard/{{ item }}.conf"
       register: wg_conf_stats
       loop: "{{ wireguard_item_names }}"
 
-    - name: Warn about existing configs when overwrite is disabled
-      debug:
-        msg: "Existing /etc/wireguard/{{ item.item }}.conf found; set wireguard_allow_overwrite: true to replace"
+    - name: 上書きが無効な場合に既存設定について警告
+      ansible.builtin.debug:
+        msg: "/etc/wireguard/{{ item.item }}.conf が既に存在します。置き換えるには wireguard_allow_overwrite: true を指定してください"
       when: item.stat.exists and not (wireguard_allow_overwrite | default(false))
       loop: "{{ wg_conf_stats.results }}"
 
-    - name: Backup existing WireGuard configs before overwrite
-      copy:
+    - name: 上書き前に既存の WireGuard 設定をバックアップ
+      ansible.builtin.copy:
         src: "/etc/wireguard/{{ item.item }}.conf"
         dest: "/etc/wireguard/{{ item.item }}.conf.{{ ansible_date_time.iso8601_basic_short }}"
         remote_src: true
@@ -101,8 +101,8 @@
       when: item.stat.exists and (wireguard_allow_overwrite | default(false))
       loop: "{{ wg_conf_stats.results }}"
 
-    - name: Deploy WireGuard configs (raw)
-      copy:
+    - name: WireGuard 設定を配置 (raw)
+      ansible.builtin.copy:
         dest: "/etc/wireguard/{{ item.name }}.conf"
         content: "{{ item.content }}"
         owner: root
@@ -114,8 +114,8 @@
       when: wireguard_raw_configs is defined
       no_log: true
 
-    - name: Deploy WireGuard configs (template)
-      template:
+    - name: WireGuard 設定を配置 (テンプレート)
+      ansible.builtin.template:
         src: wg.conf.j2
         dest: "/etc/wireguard/{{ item.name }}.conf"
         owner: root
@@ -127,8 +127,8 @@
       when: wireguard_raw_configs is not defined
       no_log: true
 
-    - name: Ensure wg-quick override directory
-      file:
+    - name: wg-quick のオーバーライドディレクトリを作成
+      ansible.builtin.file:
         path: "/etc/systemd/system/wg-quick@{{ item }}.service.d"
         state: directory
         owner: root
@@ -136,8 +136,8 @@
         mode: "0755"
       loop: "{{ wireguard_item_names }}"
 
-    - name: Add wg-quick conflict override
-      copy:
+    - name: wg-quick の Conflicts オーバーライドを追加
+      ansible.builtin.copy:
         dest: "/etc/systemd/system/wg-quick@{{ item }}.service.d/override.conf"
         owner: root
         group: root
@@ -148,33 +148,33 @@
           After=network-online.target
       loop: "{{ wireguard_item_names }}"
 
-    - name: Reload systemd daemon
-      systemd:
+    - name: systemd デーモンをリロード
+      ansible.builtin.systemd_service:
         daemon_reload: true
 
-    - name: Disable non-primary WireGuard services
-      systemd:
+    - name: プライマリ以外の WireGuard サービスを無効化
+      ansible.builtin.systemd_service:
         name: "wg-quick@{{ item }}"
         enabled: false
         state: stopped
       loop: "{{ wireguard_item_names | difference([wireguard_primary]) }}"
       when: wireguard_primary is defined and wireguard_primary in wireguard_item_names
 
-    - name: Enable primary WireGuard service on boot
-      systemd:
+    - name: プライマリの WireGuard サービスを起動時に有効化
+      ansible.builtin.systemd_service:
         name: "wg-quick@{{ wireguard_primary }}"
         enabled: true
         state: started
       when: wireguard_enable_on_boot | default(false) and wireguard_primary is defined
 
-    - name: Check ufw status (optional)
-      command: ufw status
+    - name: ufw の状態を確認 (任意)
+      ansible.builtin.command: ufw status
       register: wireguard_ufw_status
       changed_when: false
       failed_when: false
 
-    - name: Allow WireGuard forward via ufw (optional)
-      command: ufw route allow in on {{ item.name }} out on {{ wireguard_nat_interface }}
+    - name: ufw で WireGuard の転送を許可 (任意)
+      ansible.builtin.command: ufw route allow in on {{ item.name }} out on {{ wireguard_nat_interface }}
       register: wireguard_ufw_route
       changed_when: false
       failed_when: false
@@ -182,8 +182,8 @@
       when:
         - wireguard_ufw_status.rc == 0
 
-    - name: Install forwarding helper when rules are provided
-      copy:
+    - name: 転送ルールが指定された場合に補助スクリプトを配置
+      ansible.builtin.copy:
         dest: /usr/local/sbin/edge-stack-forwarding.py
         owner: root
         group: root
@@ -273,8 +273,8 @@
         - wireguard_ufw_manage | default(true)
         - (wireguard_ufw_rules | default([]) | length > 0) or (wireguard_forward_rules | default([]) | length > 0)
 
-    - name: Apply forwarding rules via helper (optional)
-      command: /usr/local/sbin/edge-stack-forwarding.py
+    - name: 補助スクリプトで転送ルールを適用 (任意)
+      ansible.builtin.command: /usr/local/sbin/edge-stack-forwarding.py
       environment:
         EDGE_NAT_IF: "{{ wireguard_nat_interface | default('') }}"
         EDGE_FORWARD_RULES: "{{ wireguard_forward_rules | default([]) | to_json }}"
@@ -285,8 +285,8 @@
         - wireguard_ufw_manage | default(true)
         - (wireguard_ufw_rules | default([]) | length > 0) or (wireguard_forward_rules | default([]) | length > 0)
 
-    - name: Check ufw status after rules (optional)
-      command: ufw status
+    - name: ルール適用後に ufw の状態を確認 (任意)
+      ansible.builtin.command: ufw status
       register: wireguard_ufw_status_post
       changed_when: false
       failed_when: false
@@ -294,8 +294,8 @@
         - wireguard_ufw_manage | default(true)
         - wireguard_nat_enabled | default(false)
 
-    - name: Enable ufw when inactive (after rules)
-      command: ufw --force enable
+    - name: ufw が無効な場合に有効化 (ルール適用後)
+      ansible.builtin.command: ufw --force enable
       when:
         - wireguard_ufw_manage | default(true)
         - wireguard_nat_enabled | default(false)

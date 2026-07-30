@@ -1,155 +1,210 @@
-# P3F-Project (edge-stack IaC)
+# P3F-Project（エッジスタック IaC）
 
-IaC workspace for the on-prem + VPS + EC2 failover stack.
+オンプレ + VPS + EC2 のフェイルオーバー構成を管理する IaC ワークスペースです。
 
-## What this repo covers
+## このリポジトリの対象範囲
 
-- On-prem (Debian 12): Docker workloads, Apache, failover_core, backups.
-- VPS edge: WireGuard, FRR/BFD, Suricata (custom rules + DDoS notify), Cloudflared tunnel.
-- EC2 edge: WireGuard, Suricata (no FRR).
-- Cloudflare DNS updates via failover_core.
-- NAS backups for full system and game data.
+- オンプレ（Debian 13 / trixie）: Docker ワークロード、Apache、failover_core、バックアップ。
+- VPS エッジ: WireGuard、FRR/BFD、Suricata（カスタムルール + DDoS 通知）、Cloudflared トンネル。
+- EC2 エッジ: WireGuard、Suricata（FRR なし）。
+- failover_core による Cloudflare DNS の更新。
+- NAS へのシステム全体およびゲームデータのバックアップ。
 
-## Requirements
+## 必要なもの
 
-- Ansible (2.14+ recommended), Python3, ssh-agent.
-- Terraform (1.5+) for EC2 provisioning (optional).
-- SSH keys for on-prem, VPS, EC2 (stored under ~/.ssh on the portal host, usually /root/.ssh).
+- ansible-core 2.17 以上、Python3、ssh-agent。
+  - 2.14 / 2.15 / 2.16 は EOL のためサポート対象外です。
+- Ansible コレクション（後述の「Ansible コレクション」を参照）。`make deps` で導入します。
+- Terraform 1.9 以上（EC2 のプロビジョニングに使用、任意）。
+  - `required_version` を 1.9.0 に引き上げています。
+- オンプレ / VPS / EC2 用の SSH 鍵（ポータルホストの ~/.ssh 配下、通常は /root/.ssh に配置）。
 
-## Docs
+## Ansible コレクション
 
+必要なコレクションは `ansible/requirements.yml` に定義しています。
+
+| コレクション | バージョン |
+| --- | --- |
+| `ansible.posix` | >=1.5.0 |
+| `community.general` | >=8.0.0 |
+| `community.docker` | >=3.4.0 |
+
+導入コマンド:
+
+  make deps
+
+これは以下と同じです。
+
+  ansible-galaxy collection install -r ansible/requirements.yml
+
+注意: `ansible` バンドル版を入れている場合はこれらのコレクションが同梱されているため
+気づきにくいですが、`ansible-core` のみを入れた環境ではコレクションが無いと
+`base` / `failover_core` ロールが失敗します。デプロイ前に `make deps` を実行してください。
+
+## ドキュメント
+
+- `docs/quickstart.md`: クイックスタート手順
 - `docs/overview.md`: 構成概要/通信フロー
 - `docs/credentials_guide.md`: Cloudflare/AWS 認証情報とドメイン準備
-- `docs/operations.md`: 管理者ポータル/portctl/フェイルオーバー運用
+- `docs/operations.md`: 管理者ポータル/portctl/フェイルオーバー運用、移行手順、修正済みの既知の問題
+- `docs/cloudflared_setup.md`: Cloudflared トンネルのセットアップ
 
-## Public distribution notes
+## 公開時の注意
 
-- Keep secrets local. Do not commit `~/.config/edge-stack/ansible/host_vars/*.yml` or `~/.config/edge-stack/ansible/hosts.ini`.
-- Use example files as a starting point:
+- 秘密情報はローカルに留めてください。`~/.config/edge-stack/ansible/host_vars/*.yml` と
+  `~/.config/edge-stack/ansible/hosts.ini` はコミットしないでください。
+- 出発点としてサンプルファイルを利用してください。
   - `ansible/inventory/hosts.ini.example`
   - `ansible/host_vars/onprem-1.yml.example`
   - `ansible/host_vars/vps-1.yml.example`
   - `ansible/host_vars/ec2-1.yml.example`
-- Cloudflared tunnel setup guidance lives in `docs/cloudflared_setup.md`.
+- Cloudflared トンネルの設定手順は `docs/cloudflared_setup.md` にあります。
 
-## Required inputs (before deploy)
+## デプロイ前に用意する情報
 
-- Hosts: on-prem/VPS/EC2 IPs, SSH users, SSH key names (files live in ~/.ssh, usually /root/.ssh).
-- Cloudflare: account ID, zone name (YOUR_DOMAIN), API token via env.
-- Terraform (EC2): aws_region, instance_type, key_name, allowed_ssh_cidrs, instance_name.
+- ホスト: オンプレ/VPS/EC2 の IP、SSH ユーザー、SSH 鍵名（鍵ファイルは ~/.ssh、通常は /root/.ssh に配置）。
+- Cloudflare: アカウント ID、ゾーン名（YOUR_DOMAIN）、API トークン（環境変数で渡す）。
+- Terraform（EC2）: aws_region、instance_type、key_name、allowed_ssh_cidrs、instance_name。
   - AMI: `ami_mode=manual` なら `ami_id`、`ami_mode=auto` なら `ami_owners` + `ami_name_filter`。
-- Failover: failover_ec2_ip, failover_vps_ip, failover_dns_record_name.
-- Notifications (optional): Discord webhook (shared for DDoS + portal notifications).
-- WireGuard samples assume `10.100.0.0/24` (replace to fit your network).
-- Admin allow CIDRs should include WG/LAN; empty list blocks admin access.
-- LAN CIDRs are auto-detected on the portal host when checking status.
-- BFD uses UDP 3784/3785 on wg0; ensure it is allowed on the VPS.
-- Failback health uses TCP 18080 on the VPS; allow it (or restrict to your on-prem IP).
+- フェイルオーバー: failover_ec2_ip、failover_vps_ip、failover_dns_record_name。
+- 通知（任意）: Discord Webhook（DDoS 通知とポータル通知で共用）。
+- WireGuard のサンプルは `10.100.0.0/24` を前提にしています（環境に合わせて置換してください）。
+- 管理者用の許可 CIDR には WG/LAN を含めてください。リストが空の場合は管理画面へアクセスできません。
+- LAN の CIDR は、状態確認時にポータルホスト側で自動検出されます。
+- BFD は wg0 上で UDP 3784/3785 を使用します。VPS 側で許可してください。
+- フェイルバックのヘルスチェックは VPS の TCP 18080 を使用します。許可する（またはオンプレ IP に限定する）必要があります。
 
-## Vault secrets (host_vars/*.yml)
+## Vault で管理する秘密情報（host_vars/*.yml）
 
-- WireGuard private keys/configs.
-- Cloudflared config + credentials JSON.
-- Failover Cloudflare token / zone ID / record ID.
-- Suricata rules (if custom).
-- DDoS notify (VPS only): notify targets (uses the shared Discord webhook).
-- Admin portal credentials (required).
-- Failover AWS credentials default to profile default. If you want to keep Terraform/admin credentials separate, set failover_aws_profile to a dedicated name (e.g. failover).
+- WireGuard の秘密鍵/設定。
+- Cloudflared の設定 + credentials JSON。
+- フェイルオーバー用の Cloudflare トークン / ゾーン ID / レコード ID。
+- Suricata のルール（カスタムする場合）。
+- DDoS 通知（VPS のみ）: 通知先（共用の Discord Webhook を使用）。
+- 管理者ポータルの認証情報（必須）。
+- フェイルオーバー用の AWS 認証情報は既定でプロファイル default を使用します。Terraform/管理用の
+  認証情報と分けたい場合は、failover_aws_profile に専用の名前（例: failover）を設定してください。
 
-## Public release checklist
+## 公開リリース前チェックリスト
 
-- Keep `~/.config/edge-stack/ansible/host_vars/*.yml` and `~/.config/edge-stack/ansible/hosts.ini` out of git.
-- Keep `~/.config/edge-stack/terraform/terraform.tfvars` and `~/.config/edge-stack/terraform-cloudflare/terraform.tfvars` out of git.
-- Replace placeholder values (YOUR_*) before deploying.
-- Review portal outputs to ensure no real IPs or secrets are shown.
+- `~/.config/edge-stack/ansible/host_vars/*.yml` と `~/.config/edge-stack/ansible/hosts.ini` を git 管理外にする。
+- `~/.config/edge-stack/terraform/terraform.tfvars` と
+  `~/.config/edge-stack/terraform-cloudflare/terraform.tfvars` を git 管理外にする。
+- デプロイ前にプレースホルダ（YOUR_*）を実際の値に置き換える。
+- ポータルの出力に実 IP や秘密情報が表示されていないか確認する。
 
-## WireGuard helper (optional)
+## WireGuard ヘルパー（任意）
 
-Generate keys and a Vault-ready snippet:
+鍵と Vault にそのまま貼れるスニペットを生成します。
 
   ./scripts/wireguard_wizard.sh
 
-## AWS IAM policy (Terraform)
+## AWS IAM ポリシー（Terraform 用）
 
-Terraform needs additional EC2 read permissions to refresh state. Use a policy
-like `docs/iam_terraform_policy.json`, or attach AmazonEC2ReadOnlyAccess plus
-an EC2 write policy for create/destroy.
+Terraform が state を更新するには、追加の EC2 読み取り権限が必要です。
+`docs/iam_terraform_policy.json` のようなポリシーを使うか、AmazonEC2ReadOnlyAccess に
+作成/削除用の EC2 書き込みポリシーを併せてアタッチしてください。
 
-## Quick start (Ansible)
+## クイックスタート（Ansible）
 
-1) Run the interactive setup to generate inventory and base variables.
+0) 必要な Ansible コレクションを導入します（`ansible-core` のみの環境では必須）。
+
+  make deps
+
+1) 対話的なセットアップでインベントリと基本変数を生成します。
 
   ./setup.sh
 
-2) Create a local vault password file (not committed).
+2) ローカルに Vault パスワードファイルを作成します（コミットしないこと）。
 
   mkdir -p ~/.config/edge-stack
   chmod 700 ~/.config/edge-stack
   printf "%s\n" "YOUR_VAULT_PASSWORD" > ~/.config/edge-stack/vault_pass
   chmod 600 ~/.config/edge-stack/vault_pass
 
-3) Add SSH host keys (host_key_checking is enabled).
+3) SSH ホスト鍵を登録します（**必須**）。
+
+  `ansible.cfg` は `host_key_checking = True` です。初回接続の前に、対象ホストを
+  `~/.ssh/known_hosts` へ登録しておく必要があります。登録せずに実行すると接続に失敗します。
 
   ssh-keyscan -H <onprem_ip> >> ~/.ssh/known_hosts
   ssh-keyscan -H <vps_ip> >> ~/.ssh/known_hosts
   ssh-keyscan -H <ec2_ip> >> ~/.ssh/known_hosts
 
-4) Put secrets in Ansible Vault files (per-host).
+  既存環境で急ぎ動かしたい場合の一時的な回避策として、実行時に
+  `ANSIBLE_HOST_KEY_CHECKING=False` を付けることもできます（中間者攻撃を防げないため非推奨）。
+
+4) ホストごとの Ansible Vault ファイルに秘密情報を記入します。
 
   ansible-vault edit ~/.config/edge-stack/ansible/host_vars/onprem-1.yml
   ansible-vault edit ~/.config/edge-stack/ansible/host_vars/vps-1.yml
   ansible-vault edit ~/.config/edge-stack/ansible/host_vars/ec2-1.yml
 
-5) Apply safely with tags (examples).
+5) タグを使って安全に適用します（例）。
 
   ANSIBLE_CONFIG=./ansible.cfg ansible-playbook -i ~/.config/edge-stack/ansible/hosts.ini ansible/site.yml -l vps --tags base
   ANSIBLE_CONFIG=./ansible.cfg ansible-playbook -i ~/.config/edge-stack/ansible/hosts.ini ansible/site.yml -l vps --tags cloudflared \
     -e cloudflared_allow_overwrite=true -e cloudflared_restart_on_change=true -e cloudflared_manage_service=true
 
-6) Validate.
+6) 検証します。
 
   make validate
 
-Notes:
-- Vault password file: `~/.config/edge-stack/vault_pass` (or set `ANSIBLE_VAULT_PASSWORD_FILE`).
-- WireGuard wg0/wg1 should not be active at the same time. The failover_core script enforces this.
-- Credentials guide (JP): `docs/credentials_guide.md`
+補足:
+- 正式なプレイブックは `ansible/site.yml` です（接続待ちの `pre_tasks` を含みます）。
+  ルートの `site.yml` は互換用のラッパーで、`- import_playbook: ansible/site.yml` のみを行います。
+  以前はルート側にも同じ内容が二重管理されており、片方だけ更新される事故の原因になっていました。
+- Vault パスワードファイル: `~/.config/edge-stack/vault_pass`（または `ANSIBLE_VAULT_PASSWORD_FILE` で指定）。
+- WireGuard の wg0/wg1 を同時に有効にしないでください。failover_core のスクリプトがこれを強制します。
+- 認証情報ガイド: `docs/credentials_guide.md`
 
-## One-command workflows
+## SSH ホスト鍵チェックについて（破壊的変更）
 
-- Full deploy (Terraform + Ansible all hosts):
+以前のルートの `ansible.cfg` は `host_key_checking = False` かつ
+`ssh_args = -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null` となっており、
+README の記述（有効）と矛盾していました。現在は `ansible/ansible.cfg` と揃えて
+**`host_key_checking = True`** にし、危険な `ssh_args` を削除しています。
+
+そのため、初回接続の前に `ssh-keyscan` で `~/.ssh/known_hosts` へ登録する手順が**必須**になりました。
+既存環境をそのまま動かしていた場合、この変更によって接続が失敗するようになります。
+一時的な回避策としては `ANSIBLE_HOST_KEY_CHECKING=False` を実行時に付与できますが、
+恒久対応としては `ssh-keyscan` による登録を行ってください。
+
+## ワンコマンドのワークフロー
+
+- 全体デプロイ（Terraform + 全ホストの Ansible）:
   make deploy
 
-- Destroy EC2 resources created by Terraform:
+- Terraform が作成した EC2 リソースの削除:
   make destroy
 
-- Targeted deploys:
+- 対象を絞ったデプロイ:
   make deploy-onprem
   make deploy-vps
   make deploy-ec2
 
-## Required host variables (examples)
+## 必要なホスト変数（例）
 
-These live in ~/.config/edge-stack/ansible/host_vars/*.yml and are encrypted with Ansible Vault.
+これらは ~/.config/edge-stack/ansible/host_vars/*.yml に置き、Ansible Vault で暗号化します。
 
-- WireGuard (on-prem, VPS, EC2)
-  - wireguard_raw_configs or wireguard_configs
-  - wireguard_primary (optional)
+- WireGuard（オンプレ、VPS、EC2）
+  - wireguard_raw_configs または wireguard_configs
+  - wireguard_primary（任意）
 
-- FRR (VPS + on-prem for BFD)
-  - Use `frr_generate_config: true` plus `frr_bfd_peers` and `frr_bfd_interface`, or
-  - Provide `frr_config_content` and `frr_daemons_content` manually.
+- FRR（VPS + BFD 用にオンプレ）
+  - `frr_generate_config: true` と `frr_bfd_peers` / `frr_bfd_interface` を使う、または
+  - `frr_config_content` と `frr_daemons_content` を手動で指定する。
 
-- Suricata (VPS, EC2)
+- Suricata（VPS、EC2）
   - suricata_custom_rules_content
   - suricata_custom_rules_path
 
-- Cloudflared (VPS)
+- Cloudflared（VPS）
   - cloudflared_config_content
   - cloudflared_credentials_path
   - cloudflared_credentials_content
 
-- Failover core (on-prem)
+- failover_core（オンプレ）
   - failover_instance_id
   - failover_region
   - failover_ec2_ip
@@ -158,61 +213,87 @@ These live in ~/.config/edge-stack/ansible/host_vars/*.yml and are encrypted wit
   - failover_cf_record_id
   - failover_dns_record_name
   - failover_vps_ip
-  - failover_auto_failback ("yes" or "no")
+  - failover_auto_failback（"yes" または "no"）
   - failover_failback_request_file
-  - failover_core_state (started/stopped)
-  - failover_core_enable (true/false)
+  - failover_core_state（started/stopped）
+  - failover_core_enable（true/false）
 
-## Failover core behavior
+## failover_core の挙動
 
-- Auto-failback is controlled by failover_auto_failback.
-- Manual failback uses failover_failback_request_file; create the file to request failback.
-- Failover triggers on BFD down; failback checks the VPS health endpoint (port 18080).
-- On startup, the script reconciles wg0/wg1 and routes to VPS when startup force is enabled.
+- 自動フェイルバックは failover_auto_failback で制御します。
+- 手動フェイルバックは failover_failback_request_file を使います。このファイルを作成すると
+  フェイルバックを要求します。
+- フェイルオーバーは BFD の down で発動し、フェイルバックは VPS のヘルスチェック
+  エンドポイント（ポート 18080）で判定します。
+- 起動時、スクリプトは wg0/wg1 の状態を整合させ、起動時強制が有効な場合は VPS 側へ経路を向けます。
 
-## Backups
+## バックアップ
 
-- Full backup is optional (backup_full_enabled).
-- Game data backup runs hourly by default (backup_games_cron).
-- Adjust backup paths in ~/.config/edge-stack/ansible/group_vars/all.yml.
+- システム全体のバックアップは任意です（backup_full_enabled）。
+- ゲームデータのバックアップは既定で 1 時間ごとに実行されます（backup_games_cron）。
+- バックアップ先のパスは ~/.config/edge-stack/ansible/group_vars/all.yml で調整します。
 
-## Terraform (EC2 skeleton)
+## コンテナ関連の変更
 
-The terraform/ directory contains a minimal EC2 stack that creates a VPC
-(auto or custom CIDR), a public subnet with IGW + route table, a security
-group, optional EIP, and an optional KeyPair from a public key.
+- Web ポータルのコンテナは `debian:trixie-slim` ベースになりました。
+- プレイヤー監視（player-monitor）のコンテナは `python:3.13-slim` ベースになりました。
+- `docker-compose`（v1, Python 版）は Debian 13 で削除されたため `docker-compose-v2` に変更しました。
+  `docker_packages` の既定も `docker.io` / `docker-compose-v2` / `docker-buildx` になっています。
+
+## Terraform（EC2 スケルトン）
+
+terraform/ ディレクトリには最小構成の EC2 スタックがあり、VPC（自動またはカスタム CIDR）、
+IGW + ルートテーブル付きのパブリックサブネット、セキュリティグループ、任意の EIP、
+公開鍵から作る任意の KeyPair を作成します。
 
   cd terraform
   terraform init
   terraform plan -var-file=~/.config/edge-stack/terraform/terraform.tfvars
   terraform apply -var-file=~/.config/edge-stack/terraform/terraform.tfvars
 
-Notes:
-- `~/.config/edge-stack/terraform/terraform.tfvars` is local-only and should not be committed.
-- Set `source_dest_check = false` if the EC2 instance needs to forward traffic.
+宣言しているプロバイダのバージョン:
+- `terraform/`: aws `~> 6.0`、external `~> 2.4`、random `~> 3.9`
+  - `random` はこれまで未宣言でした（暗黙依存に頼っていたバグ）。明示宣言するよう修正しています。
+- `terraform-cloudflare/`: cloudflare `~> 5.22`、random `~> 3.9`
+  - Cloudflare プロバイダ v4 から v5 へ移行済みです。既存の state からの移行手順は
+    `docs/operations.md` を参照してください。
 
-VPS provisioning is manual by design; use Ansible to configure it.
+補足:
+- `~/.config/edge-stack/terraform/terraform.tfvars` はローカル専用で、コミットしないでください。
+- EC2 インスタンスがトラフィックを転送する必要がある場合は `source_dest_check = false` を設定してください。
 
-## Common commands
+VPS のプロビジョニングは設計上手動です。設定は Ansible で行ってください。
 
+## よく使うコマンド
+
+- make deps
 - make bootstrap
 - make validate
 - make tf-init
+- make tf-validate
 - make tf-plan
 - make tf-apply
 - make tf-destroy
+- make tf-cf-init
+- make tf-cf-validate
+- make tf-cf-plan
+- make tf-cf-apply
+- make tf-cf-destroy
 
-## Local setup portal
+## ローカルセットアップポータル
 
-An optional local/LAN portal can generate inventory files, run allowed tasks,
-and upload SSH keys. It runs with a token printed in the terminal (required for
-uploads and task execution).
+任意で使えるローカル/LAN 向けのポータルがあり、インベントリファイルの生成、許可された
+タスクの実行、SSH 鍵のアップロードが行えます。ターミナルに表示されるトークンを使って
+動作します（アップロードとタスク実行に必須）。
 
   make portal
 
-LAN access (binds to 0.0.0.0):
+LAN からアクセスする場合（0.0.0.0 でバインド）:
 
   make portal-lan
 
-Portal actions are whitelisted (Terraform/Ansible/Validate). Destructive actions
-require a confirm word. If you do not need the portal after setup, delete `portal/`.
+ポータルの操作はホワイトリスト方式です（Terraform/Ansible/Validate）。破壊的な操作には
+確認ワードの入力が必要です。セットアップ後にポータルが不要であれば `portal/` を削除してください。
+
+セットアップポータルの既定言語は日本語です（英語にも切り替えできます）。管理画面、公開ポータル、
+portctl の Web UI も日本語化されています。
